@@ -17,5 +17,11 @@ Goal: Animal Crossing-style look (toon shading, rounded models, textured terrain
 - Keep all gameplay APIs stable: `createPet(type,{equipped})`, `userData.head/animate`, `setWearables`, building positions/colliders/interactables unchanged.
 
 ## Resume notes
-- Visual overhaul Pass 1 COMPLETE (campus + pets). Auto-deploys to GitHub Pages on every push to this branch.
+- Visual overhaul Pass 1 COMPLETE (campus + pets).
+- DEPLOYMENT: GitHub Pages site does not exist yet (the early "enable" attempt failed its
+  Jekyll build and the site was removed). `.nojekyll` is now in the branch, so the fix is a
+  one-time Settings toggle: Settings → Pages → Source: "Deploy from a branch" →
+  Branch: `claude/college-pets-game-926ff0` / root → Save. After that, every push
+  auto-deploys to https://mukhan27.github.io/CollegePets/ with no workflow needed.
+  Interim play link (serves latest branch commit): https://raw.githack.com/mukhan27/CollegePets/claude/college-pets-game-926ff0/index.html
 - Next pass candidates (user to prioritize): interiors overhaul (library/dorm/bedroom toon look, warm lighting), UI reskin (AC-style rounded HUD), day/night cycle, minigame visual polish. NPC behavior stays as-is per user.
