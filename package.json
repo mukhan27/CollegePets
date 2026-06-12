@@ -1,0 +1,10 @@
+{
+  "name": "college-pets",
+  "version": "0.1.0",
+  "description": "Top-down 3D campus life game — single-player prototype",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve -l 3000 .",
+    "start:python": "python3 -m http.server 3000"
+  }
+}
