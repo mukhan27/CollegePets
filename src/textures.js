@@ -1,0 +1,279 @@
+// Procedural canvas textures + toon material helpers — the core of the v2 look.
+
+import * as THREE from 'three';
+
+// ---------------------------------------------------------- toon shading
+let gradientMap = null;
+export function toonGradient() {
+  if (gradientMap) return gradientMap;
+  // 4-step gradient for soft AC-style banding
+  const data = new Uint8Array([110, 170, 220, 255]);
+  gradientMap = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
+  gradientMap.minFilter = THREE.NearestFilter;
+  gradientMap.magFilter = THREE.NearestFilter;
+  gradientMap.needsUpdate = true;
+  return gradientMap;
+}
+
+const matCache = new Map();
+export function toonMat(color, opts = {}) {
+  const key = typeof color === 'number' && !opts.map && !opts.noCache ? color : null;
+  if (key !== null && matCache.has(key)) return matCache.get(key);
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient(), ...opts });
+  if (key !== null) matCache.set(key, m);
+  return m;
+}
+
+// ---------------------------------------------------------- canvas helpers
+function canvasTexture(w, h, draw, { repeat, anisotropy = 4 } = {}) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  if (repeat) {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeat[0], repeat[1]);
+  }
+  return tex;
+}
+
+function hex(n) { return '#' + n.toString(16).padStart(6, '0'); }
+
+// Deterministic pseudo-random so textures look the same every load.
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+// ---------------------------------------------------------- ground (painted map)
+// One big texture for the whole campus ground: grass + rounded sandy paths.
+// worldToUV must match the ground plane (220 x 160 centered at origin).
+export function campusGroundTexture(GW = 220, GH = 160) {
+  const W = 1536, H = Math.round(1536 * GH / GW);
+  const X = (wx) => (wx + GW / 2) / GW * W;
+  const Y = (wz) => (wz + GH / 2) / GH * H;
+  const S = W / GW; // world units → pixels
+
+  return canvasTexture(W, H, (ctx) => {
+    const r = rng(42);
+
+    // grass base with soft blotches
+    ctx.fillStyle = '#7cc05e';
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 380; i++) {
+      const shade = ['#86c968', '#74b856', '#8fce72', '#6fb352'][Math.floor(r() * 4)];
+      ctx.fillStyle = shade;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.ellipse(r() * W, r() * H, 18 + r() * 60, 14 + r() * 44, r() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // sandy paths — rounded strokes (AC style). Coordinates mirror world.js layout.
+    const path = (pts, width) => {
+      ctx.strokeStyle = '#e8d5a8';
+      ctx.lineWidth = width * S;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(X(pts[0][0]), Y(pts[0][1]));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i][0]), Y(pts[i][1]));
+      ctx.stroke();
+      // darker edge pass for depth
+      ctx.strokeStyle = 'rgba(160,135,90,0.25)';
+      ctx.lineWidth = (width + 0.7) * S;
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.beginPath();
+      ctx.moveTo(X(pts[0][0]), Y(pts[0][1]));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i][0]), Y(pts[i][1]));
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    };
+
+    path([[-95, 0], [95, 0]], 7);          // main horizontal
+    path([[0, -65], [0, 65]], 7);          // main vertical
+    path([[-55, -65], [-55, 65]], 6);      // west avenue
+    path([[55, -65], [55, 65]], 6);        // east avenue
+    path([[-95, -42], [95, -42]], 6);      // north walk
+    path([[-95, 42], [95, 42]], 6);        // south walk
+
+    // plaza circle around the fountain
+    ctx.fillStyle = '#e8d5a8';
+    ctx.beginPath();
+    ctx.arc(X(0), Y(0), 9 * S, 0, Math.PI * 2);
+    ctx.fill();
+
+    // speckles: pebbles on sand, grass texture dots.
+    // Sand test mirrors the path layout above (cheaper than getImageData).
+    const isSandAt = (wx, wz) =>
+      Math.abs(wz) < 3.5 || Math.abs(wx) < 3.5 ||
+      Math.abs(wx - 55) < 3 || Math.abs(wx + 55) < 3 ||
+      Math.abs(wz - 42) < 3 || Math.abs(wz + 42) < 3 ||
+      Math.hypot(wx, wz) < 9;
+    for (let i = 0; i < 5200; i++) {
+      const px = r() * W, py = r() * H;
+      const isSand = isSandAt(px / S - GW / 2, py / S - GH / 2);
+      ctx.fillStyle = isSand
+        ? (r() < 0.5 ? 'rgba(190,165,120,0.6)' : 'rgba(255,245,220,0.6)')
+        : (r() < 0.5 ? 'rgba(100,160,75,0.5)' : 'rgba(150,210,115,0.5)');
+      const sz = isSand ? 1.5 + r() * 2.5 : 1 + r() * 2;
+      ctx.beginPath();
+      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, { anisotropy: 8 });
+}
+
+// ---------------------------------------------------------- material textures
+// Near-neutral by default so the material's color tint shows true.
+export function woodPlanks(base = '#ece6da', dark = '#d8d0c0') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(7);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+    const rows = 6;
+    for (let i = 0; i < rows; i++) {
+      const y = i * H / rows;
+      ctx.fillStyle = `rgba(0,0,0,${0.06 + r() * 0.05})`;
+      ctx.fillRect(0, y, W, 3);
+      // grain
+      ctx.strokeStyle = 'rgba(80,70,55,0.15)';
+      ctx.lineWidth = 1.5;
+      for (let g = 0; g < 3; g++) {
+        ctx.beginPath();
+        const gy = y + 8 + r() * (H / rows - 14);
+        ctx.moveTo(0, gy);
+        ctx.bezierCurveTo(W * 0.3, gy + (r() - 0.5) * 8, W * 0.7, gy + (r() - 0.5) * 8, W, gy);
+        ctx.stroke();
+      }
+      // plank seam offset
+      const seam = ((i % 2) * 0.5 + r() * 0.3) * W;
+      ctx.fillStyle = 'rgba(0,0,0,0.10)';
+      ctx.fillRect(seam, y, 3, H / rows);
+    }
+    ctx.fillStyle = dark;
+    ctx.globalAlpha = 0.12;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }, { repeat: [2, 1] });
+}
+
+export function brickTexture(base = '#e0b8a0', mortar = '#f2e8da') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(13);
+    ctx.fillStyle = mortar;
+    ctx.fillRect(0, 0, W, H);
+    const bh = H / 8, bw = W / 4;
+    for (let row = 0; row < 8; row++) {
+      const off = (row % 2) * bw / 2;
+      for (let col = -1; col < 5; col++) {
+        const shades = [base, '#d8ab90', '#e6c2ac', '#d4a288'];
+        ctx.fillStyle = shades[Math.floor(r() * shades.length)];
+        ctx.beginPath();
+        ctx.roundRect(col * bw + off + 2, row * bh + 2, bw - 4, bh - 4, 3);
+        ctx.fill();
+      }
+    }
+  }, { repeat: [3, 2] });
+}
+
+export function shingleTexture(base = '#d96a55') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(23);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+    const rows = 7, sw = W / 6;
+    for (let row = 0; row < rows; row++) {
+      const y = row * H / rows;
+      const off = (row % 2) * sw / 2;
+      for (let col = -1; col < 7; col++) {
+        ctx.fillStyle = `rgba(0,0,0,${0.05 + r() * 0.08})`;
+        ctx.beginPath();
+        ctx.arc(col * sw + off + sw / 2, y + H / rows, sw / 2, Math.PI, 0);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(0, y, W, 2.5);
+    }
+  }, { repeat: [3, 2] });
+}
+
+export function awningTexture(c1 = '#e85d6a', c2 = '#fdf6ec') {
+  return canvasTexture(128, 64, (ctx, W, H) => {
+    for (let i = 0; i < 8; i++) {
+      ctx.fillStyle = i % 2 ? c1 : c2;
+      ctx.fillRect(i * W / 8, 0, W / 8, H);
+    }
+  }, { repeat: [2, 1] });
+}
+
+export function courtTexture() {
+  return canvasTexture(512, 320, (ctx, W, H) => {
+    ctx.fillStyle = '#cf8455';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#c2754a';
+    ctx.fillRect(W * 0.62, 0, W * 0.38, H);
+    ctx.strokeStyle = '#f5f0e0';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(8, 8, W - 16, H - 16);
+    ctx.beginPath(); ctx.moveTo(W / 2, 8); ctx.lineTo(W / 2, H - 8); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, 42, 0, Math.PI * 2); ctx.stroke();
+    // key + arc at hoop end
+    ctx.strokeRect(W - 110, H / 2 - 55, 102, 110);
+    ctx.beginPath(); ctx.arc(W - 110, H / 2, 55, Math.PI / 2, Math.PI * 1.5); ctx.stroke();
+  });
+}
+
+// gradient sky for the dome
+export function skyTexture(top = '#6ec1e8', horizon = '#d8f0f4') {
+  return canvasTexture(16, 256, (ctx, W, H) => {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, top);
+    g.addColorStop(0.55, '#a8ddf0');
+    g.addColorStop(1, horizon);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
+}
+
+// soft radial glow (for lamps) and round soft cloud puff
+export function glowTexture(color = '255,235,170') {
+  return canvasTexture(128, 128, (ctx, W, H) => {
+    const g = ctx.createRadialGradient(W / 2, H / 2, 4, W / 2, H / 2, W / 2);
+    g.addColorStop(0, `rgba(${color},0.85)`);
+    g.addColorStop(0.4, `rgba(${color},0.3)`);
+    g.addColorStop(1, `rgba(${color},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
+}
+
+export function cloudTexture() {
+  return canvasTexture(256, 128, (ctx, W, H) => {
+    const r = rng(99);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 7; i++) {
+      ctx.beginPath();
+      ctx.ellipse(W * 0.2 + r() * W * 0.6, H * 0.45 + (r() - 0.5) * H * 0.25,
+        20 + r() * 38, 14 + r() * 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+export function leafTexture() {
+  return canvasTexture(32, 32, (ctx, W, H) => {
+    ctx.fillStyle = '#7cb55e';
+    ctx.beginPath();
+    ctx.ellipse(W / 2, H / 2, 9, 14, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+export { hex };
