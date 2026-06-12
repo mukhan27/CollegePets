@@ -312,4 +312,7 @@ window.__cp = {
   goto: (key, sp) => switchLocation(key, sp),
   interact: (it) => runInteract(it),
   state,
+  LOCATIONS,
+  renderer,
+  redress: () => setWearables(player, state.equipped),
 };
