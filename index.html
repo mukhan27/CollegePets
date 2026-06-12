@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>College Pets</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- Rotate-device prompt (portrait only) -->
+<div id="rotate-overlay">
+  <div class="rotate-inner">
+    <div class="rotate-icon">📱↻</div>
+    <h2>Please rotate your device</h2>
+    <p>College Pets is played in landscape mode.</p>
+  </div>
+</div>
+
+<!-- Pet selection screen -->
+<div id="select-screen">
+  <h1 class="game-title">🎓 College Pets</h1>
+  <p class="subtitle">Choose your pet and start campus life!</p>
+  <div id="pet-cards"></div>
+  <div class="name-row">
+    <input id="pet-name-input" type="text" maxlength="14" placeholder="Your pet's name" autocomplete="off">
+    <button id="start-btn" class="btn btn-primary" disabled>Start College! 🎒</button>
+  </div>
+</div>
+
+<!-- In-game HUD -->
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div class="hud-pill" id="hud-identity">🐾 <span id="hud-name"></span></div>
+    <div class="hud-pill" id="hud-location">🏫 Campus</div>
+    <div class="hud-pill" id="hud-coins">🪙 <span id="coin-count">0</span></div>
+  </div>
+  <div id="joystick-zone">
+    <div id="joystick-base"><div id="joystick-knob"></div></div>
+  </div>
+  <button id="interact-btn" class="hidden"></button>
+</div>
+
+<!-- Generic modal dialog -->
+<div id="modal" class="overlay hidden">
+  <div class="panel" id="modal-panel">
+    <h2 id="modal-title"></h2>
+    <div id="modal-body"></div>
+    <div id="modal-buttons"></div>
+  </div>
+</div>
+
+<!-- Chat panel -->
+<div id="chat-panel" class="overlay hidden">
+  <div class="panel chat">
+    <div class="chat-header">
+      <span id="chat-avatar"></span>
+      <div>
+        <div id="chat-name"></div>
+        <div id="chat-sub"></div>
+      </div>
+      <button class="close-x" id="chat-close">✕</button>
+    </div>
+    <div id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" maxlength="120" placeholder="Say something…" autocomplete="off">
+      <button id="chat-send" class="btn btn-primary">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pomodoro focus lock -->
+<div id="focus-overlay" class="hidden">
+  <div class="focus-inner">
+    <div id="focus-emoji">📚</div>
+    <div id="focus-timer">25:00</div>
+    <div id="focus-label">Focus mode — screen locked</div>
+    <div id="focus-quote"></div>
+    <button id="focus-giveup">Hold to give up</button>
+  </div>
+</div>
+
+<!-- Mini-game overlay -->
+<div id="minigame-overlay" class="hidden">
+  <canvas id="minigame-canvas"></canvas>
+  <div id="minigame-hud">
+    <span id="minigame-title"></span>
+    <span id="minigame-score"></span>
+    <button id="minigame-quit" class="btn btn-small">Quit</button>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
