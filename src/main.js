@@ -24,22 +24,26 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9ed4e8);
-scene.fog = new THREE.Fog(0x9ed4e8, 90, 200);
+scene.background = new THREE.Color(0xd8f0f4);
+scene.fog = new THREE.Fog(0xd8f0f4, 90, 220);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 600);
 
-// lights
-scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x5a7a4a, 0.9));
-const sun = new THREE.DirectionalLight(0xfff2d8, 1.2);
-sun.position.set(40, 70, 30);
+// lights — warm sun + sky-tinted fill
+scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x6a9a52, 0.85));
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.45);
+sun.position.set(45, 80, 35);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
-sun.shadow.camera.left = -90; sun.shadow.camera.right = 90;
-sun.shadow.camera.top = 90; sun.shadow.camera.bottom = -90;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -95; sun.shadow.camera.right = 95;
+sun.shadow.camera.top = 95; sun.shadow.camera.bottom = -95;
+sun.shadow.bias = -0.0004;
 scene.add(sun);
 
 window.addEventListener('resize', () => {
@@ -62,7 +66,7 @@ dormCommon.camOffset = new THREE.Vector3(0, 17, 12);
 bedroom.camOffset = new THREE.Vector3(0, 14, 10);
 
 const LOCATIONS = {
-  campus: { def: campus, name: '🏫 Campus', sky: 0x9ed4e8 },
+  campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },
   library: { def: library, name: '📚 Library', sky: 0x3a3328 },
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
@@ -273,10 +277,11 @@ function tick() {
   camera.position.lerp(targetCam, Math.min(1, dt * 5));
   camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
 
-  // NPCs (campus only)
+  // NPCs + ambient world animation (campus only)
   if (currentLoc === 'campus') {
     updateNpcs(npcs, dt, t, player.position, chattingWith);
     updateNpcBubbles(npcs, camera, t);
+    if (campus.animate) campus.animate(t, dt);
   }
 
   // interaction prompt
@@ -307,4 +312,7 @@ window.__cp = {
   goto: (key, sp) => switchLocation(key, sp),
   interact: (it) => runInteract(it),
   state,
+  LOCATIONS,
+  renderer,
+  redress: () => setWearables(player, state.equipped),
 };
