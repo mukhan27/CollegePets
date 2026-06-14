@@ -46,4 +46,20 @@ export const PALETTE = {
   duckCoat: 0xfaf3dc, duckBeak: 0xf2a93b,
   hamCoat: 0xe8c08a, hamBelly: 0xf8ead0, hamEar: 0xc89a63,
   blush: 0xf2a0a0,
+
+  // library / interiors
+  libFloor: 0xe9e3d6,   // light stone tile
+  libWall: 0xede2cc,    // cream plaster
+  libBeam: 0x6f4d33,    // dark walnut beam/trim
+  shelfWood: 0x7c5436,  // walnut bookcase
+  shelfWoodDark: 0x5d3e27,
+  railWood: 0x8a623f,
+  columnWhite: 0xf3ece0,
+  brass: 0xc99a3b,
+  pendantDark: 0x3a3f45,
+  armchair: 0x6f83a6,   // dusty-blue upholstery
+  leather: 0x9a6a47,
+  rug: 0x8ba2bb,
+  rugBorder: 0x5f7088,
+  fireGlow: 0xff8a3c,
 };

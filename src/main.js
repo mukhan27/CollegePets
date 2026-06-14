@@ -13,6 +13,7 @@ import {
   openPomodoroSetup, startPomodoro,
 } from './ui.js';
 import { initMinigameUI, startBasketball, startSodaPong } from './minigames.js';
+import { createComposer } from './postfx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -46,11 +47,39 @@ sun.shadow.camera.top = 95; sun.shadow.camera.bottom = -95;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+// cool sky-bounce fill from the shadow side (no shadow) lifts dark faces
+const fill = new THREE.DirectionalLight(0xbcd6ff, 0.32);
+fill.position.set(-55, 38, -42);
+scene.add(fill);
+// warm rim/back light pops silhouettes — the AC "soft glowing edge" read
+const rim = new THREE.DirectionalLight(0xfff1de, 0.5);
+rim.position.set(-25, 26, -75);
+scene.add(rim);
+
+// ----------------------------------------------------------- post-processing
+// Quality tier chosen up front (phones get cheaper bloom + tilt-shift);
+// override at runtime with __cp.setQuality('high'|'low').
+function detectTier() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const small = Math.min(window.innerWidth, window.innerHeight) < 500;
+  const heavyDpr = window.devicePixelRatio > 2.5;
+  return mobile || small || heavyDpr ? 'low' : 'high';
+}
+const fx = createComposer(renderer, scene, camera, { tier: detectTier() });
+
+function resize() {
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  const h = window.innerHeight || document.documentElement.clientHeight;
+  if (!w || !h) return;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(w, h);
+  fx.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+// Re-fit once the canvas actually has a layout box — guards against a 0-sized
+// viewport at boot (late layout) and mobile chrome show/hide changing the height.
+new ResizeObserver(resize).observe($('game-canvas'));
 
 // ----------------------------------------------------------- locations
 const campus = buildCampus();
@@ -61,7 +90,7 @@ bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 21, 16);
-library.camOffset = new THREE.Vector3(0, 19, 13);
+library.camOffset = new THREE.Vector3(0, 24, 17);
 dormCommon.camOffset = new THREE.Vector3(0, 17, 12);
 bedroom.camOffset = new THREE.Vector3(0, 14, 10);
 
@@ -81,6 +110,8 @@ let player = null;
 let npcs = [];
 let chattingWith = null;
 let seated = false;
+let activeLevel = 0;     // which floor the player is on (multi-level locations only)
+let playerTargetY = 0;   // smoothed target elevation (stairs / mezzanine)
 
 function switchLocation(key, spawnOverride) {
   if (currentLoc) LOCATIONS[currentLoc].def.root.visible = false;
@@ -96,6 +127,7 @@ function switchLocation(key, spawnOverride) {
 
   const sp = spawnOverride || loc.def.spawn;
   player.position.set(sp.x, 0, sp.z);
+  activeLevel = 0; playerTargetY = 0; // always spawn on the ground floor
   player.rotation.y = key === 'campus' ? Math.PI : Math.PI; // face the camera-ish
   $('hud-location').textContent = loc.name;
 
@@ -119,6 +151,45 @@ function moveWithCollision(pos, dx, dz, def) {
   if (tryAxis(nx, pos.z)) pos.x = nx;
   let nz = THREE.MathUtils.clamp(pos.z + dz, b.minZ, b.maxZ);
   if (tryAxis(pos.x, nz)) pos.z = nz;
+}
+
+// Multi-level movement. Locations without `levels`/`stairs` behave exactly as
+// before (flat ground). The library adds a walkable mezzanine reached by a
+// staircase: while inside a stair zone the player is funneled along the steps
+// and lifted in Y; crossing either landing flips the active floor.
+function levelDef(def) {
+  if (def.levels) return def.levels[activeLevel] || def.levels[0];
+  return { y: 0, bounds: def.bounds, colliders: def.colliders };
+}
+function stairAt(def, x, z) {
+  if (!def.stairs) return null;
+  for (const s of def.stairs) {
+    if (x >= s.xMin && x <= s.xMax && z >= s.zMin && z <= s.zMax) return s;
+  }
+  return null;
+}
+function rampHeight(s, z) {
+  const p = THREE.MathUtils.clamp((s.zBottom - z) / (s.zBottom - s.zTop), 0, 1);
+  return s.yBottom + p * (s.yTop - s.yBottom);
+}
+function movePlayer(def, dx, dz) {
+  const pos = player.position;
+  const s = stairAt(def, pos.x, pos.z);
+  if (s) {
+    // funnel along the tread in X; move freely in Z and hand off to a floor at
+    // either landing (no Z clamp, so the player can step off onto the balcony).
+    const R = 0.7;
+    pos.x = THREE.MathUtils.clamp(pos.x + dx, s.xMin + R, s.xMax - R);
+    pos.z += dz;
+    if (pos.z < s.zTop) { activeLevel = 1; playerTargetY = s.yTop; }
+    else if (pos.z > s.zBottom) { activeLevel = 0; playerTargetY = s.yBottom; }
+    else playerTargetY = rampHeight(s, pos.z);
+    return;
+  }
+  const lvl = levelDef(def);
+  moveWithCollision(pos, dx, dz, lvl);
+  const entered = stairAt(def, pos.x, pos.z);
+  playerTargetY = entered ? rampHeight(entered, pos.z) : lvl.y;
 }
 
 // ----------------------------------------------------------- interactions
@@ -253,10 +324,8 @@ function startGame() {
      🏠 <b>Maple Dorm</b> — your customizable room`);
 }
 
-function tick() {
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
-  if (!player || !currentLoc) { renderer.render(scene, camera); return; }
+function frame(dt, t) {
+  if (!player || !currentLoc) { fx.composer.render(dt); return; }
 
   const loc = LOCATIONS[currentLoc].def;
   const uiOpen = isModalOpen();
@@ -266,11 +335,13 @@ function tick() {
     const speed = currentLoc === 'campus' ? 9 : 6;
     const dx = input.x * speed * dt;
     const dz = input.y * speed * dt;
-    moveWithCollision(player.position, dx, dz, loc);
+    movePlayer(loc, dx, dz);
     player.rotation.y = Math.atan2(input.x, input.y);
     moving = true;
   }
   player.userData.animate(t, moving);
+  // smooth elevation toward the active floor / stair height (not while seated)
+  if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
 
   // camera follow
   const targetCam = player.position.clone().add(loc.camOffset);
@@ -295,7 +366,11 @@ function tick() {
     interactBtn.classList.add('hidden');
   }
 
-  renderer.render(scene, camera);
+  fx.composer.render(dt);
+}
+
+function tick() {
+  frame(Math.min(clock.getDelta(), 0.05), clock.elapsedTime);
 }
 
 // ----------------------------------------------------------- boot
@@ -309,10 +384,17 @@ renderer.setAnimationLoop(tick);
 window.__cp = {
   get player() { return player; },
   get npcs() { return npcs; },
+  get level() { return activeLevel; },
   goto: (key, sp) => switchLocation(key, sp),
+  warp: (x, z) => { if (player) player.position.set(x, player.position.y, z); },
   interact: (it) => runInteract(it),
   state,
   LOCATIONS,
   renderer,
+  fx,
+  setQuality: (n) => fx.setQuality(n),
+  pause: () => renderer.setAnimationLoop(null),
+  resume: () => renderer.setAnimationLoop(tick),
+  step: (dt = 0.05, n = 1) => { for (let i = 0; i < n; i++) frame(dt, performance.now() / 1000); },
   redress: () => setWearables(player, state.equipped),
 };

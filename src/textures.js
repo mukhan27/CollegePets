@@ -17,9 +17,10 @@ export function toonGradient() {
 
 const matCache = new Map();
 export function toonMat(color, opts = {}) {
-  const key = typeof color === 'number' && !opts.map && !opts.noCache ? color : null;
+  const { noCache, ...matOpts } = opts; // noCache is ours, not a material property
+  const key = typeof color === 'number' && !matOpts.map && !noCache ? color : null;
   if (key !== null && matCache.has(key)) return matCache.get(key);
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient(), ...opts });
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient(), ...matOpts });
   if (key !== null) matCache.set(key, m);
   return m;
 }
@@ -274,6 +275,91 @@ export function leafTexture() {
     ctx.ellipse(W / 2, H / 2, 9, 14, 0.6, 0, Math.PI * 2);
     ctx.fill();
   });
+}
+
+// ---------------------------------------------------------- library interior
+// Aged, muted book-spine colours (Ref 3 cozy vibe).
+const BOOK_SPINES = [
+  '#8c3b3b', '#3f5e8c', '#3f7a55', '#b08a2e', '#6e4a86', '#9a5a3c',
+  '#7a2f3a', '#2f6e74', '#a8703a', '#5a6b3a', '#86402f', '#d8c9a8',
+];
+
+// One bookcase unit, mapped 1:1 onto a fixed-size shelf face (no tiling, so
+// no seam matching needed). Pass different seeds for variety between units.
+export function bookcaseTexture(seed = 5) {
+  return canvasTexture(384, 512, (ctx, W, H) => {
+    const r = rng(seed);
+    ctx.fillStyle = '#2c1f15'; // dark cabinet interior
+    ctx.fillRect(0, 0, W, H);
+    const rows = 5, rh = H / rows;
+    for (let row = 0; row < rows; row++) {
+      const shelfY = row * rh + rh - 7;
+      let x = 4 + r() * 6;
+      while (x < W - 10) {
+        const bw = 8 + r() * 18;
+        if (x + bw > W - 4) break;
+        const bh = rh * (0.6 + r() * 0.32);
+        const lean = r() < 0.12 ? (r() - 0.5) * 0.05 : 0;
+        const col = BOOK_SPINES[Math.floor(r() * BOOK_SPINES.length)];
+        ctx.save();
+        ctx.translate(x + bw / 2, shelfY);
+        ctx.rotate(lean);
+        ctx.fillStyle = col;
+        ctx.fillRect(-bw / 2, -bh, bw, bh);
+        ctx.fillStyle = 'rgba(255,255,255,0.13)';
+        ctx.fillRect(-bw / 2, -bh, 1.5, bh);           // spine highlight
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(bw / 2 - 1.5, -bh, 1.5, bh);       // spine shadow
+        if (r() < 0.5) {                                // gilt band
+          ctx.fillStyle = 'rgba(255,235,180,0.4)';
+          ctx.fillRect(-bw / 2, -bh * (0.45 + r() * 0.25), bw, 2);
+        }
+        ctx.restore();
+        x += bw + (r() < 0.1 ? 3 + r() * 5 : 0.6);
+      }
+      ctx.fillStyle = '#5d3e27';                         // wooden shelf board
+      ctx.fillRect(0, shelfY, W, 7);
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillRect(0, shelfY + 7, W, 3);
+    }
+  }, { anisotropy: 8 });
+}
+
+// Light marble/stone tile floor. 2x2 tiles with grid lines on the edges so the
+// grid stays continuous when the texture repeats.
+export function stoneFloor(base = '#e9e3d6') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(31);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 120; i++) {
+      ctx.fillStyle = `rgba(176,168,150,${0.04 + r() * 0.06})`;
+      const s = 8 + r() * 38;
+      ctx.beginPath();
+      ctx.ellipse(r() * W, r() * H, s, s * 0.7, r() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(120,112,96,0.22)';
+    ctx.lineWidth = 2;
+    for (const x of [0, W / 2, W]) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (const y of [0, H / 2, H]) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  }, { repeat: [9, 6], anisotropy: 8 });
+}
+
+// Subtle cream plaster wall.
+export function plaster(base = '#ece2cc') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(17);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${0.02 + r() * 0.03})`;
+      const s = 10 + r() * 28;
+      ctx.beginPath();
+      ctx.ellipse(r() * W, r() * H, s, s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, { repeat: [4, 3], anisotropy: 4 });
 }
 
 export { hex };

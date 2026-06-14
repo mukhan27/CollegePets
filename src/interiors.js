@@ -3,6 +3,8 @@
 
 import * as THREE from 'three';
 import { textSprite } from './world.js';
+import { PALETTE } from './palette.js';
+import { toonMat, woodPlanks, stoneFloor, plaster, bookcaseTexture, glowTexture } from './textures.js';
 
 function mat(color) { return new THREE.MeshLambertMaterial({ color }); }
 function box(w, h, d, color) {
@@ -46,77 +48,213 @@ function addExitPad(g, x, z) {
 }
 
 // ----------------------------------------------------------- library
+// A grand two-level toon library: tall open atrium (no solid ceiling so the
+// top-down camera can see in), floor-to-ceiling textured shelves, white
+// columns, a walkable back-balcony mezzanine reached by a staircase, warm
+// pendant lighting, and a cozy fireplace nook. Returns `levels` + `stairs`
+// consumed by the walkable-floor movement in main.js.
 export function buildLibrary() {
   const root = new THREE.Group();
-  const colliders = [];
+  const colliders = [];   // ground floor (level 0)
+  const colliders1 = [];  // mezzanine (level 1)
   const interactables = [];
-  const W = 42, D = 30;
-  const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { floor: 0x8a6f50, wall: 0xcdbfa4 }));
+  const seatPositions = [];
 
-  // bookshelves along back wall
-  const shelfColors = [0xa33b3b, 0x3b6ea3, 0x3ba35e, 0xc9a13b, 0x8a4ba3];
-  for (let i = 0; i < 6; i++) {
-    const shelf = box(5, 3.4, 1.2, 0x5b3c25);
-    const sx = -W / 2 + 4.5 + i * 6.5;
-    shelf.position.set(sx, 1.7, -D / 2 + 1.2);
-    root.add(shelf);
-    for (let b = 0; b < 8; b++) {
-      const bk = box(0.45, 0.9, 0.3, shelfColors[(i + b) % shelfColors.length]);
-      bk.position.set(sx - 2 + b * 0.58, 2.2 + (b % 2) * 0.9 - 0.45, -D / 2 + 1.9);
-      root.add(bk);
-    }
-    colliders.push({ x: sx, z: -D / 2 + 1.2, w: 5.2, d: 1.6 });
+  const W = 70, D = 48, WALL_H = 12, MEZZ_Y = 6;
+  const DECK_FRONT = -11; // z of the balcony's inner (railing) edge
+  const bounds = { minX: -W / 2 + 1.5, maxX: W / 2 - 1.5, minZ: -D / 2 + 1.5, maxZ: D / 2 - 1.5 };
+
+  // ---- shared toon materials ----
+  const woodMat = toonMat(PALETTE.shelfWood, { map: woodPlanks() });
+  const deckMat = toonMat(0xb88a5c, { map: woodPlanks() });
+  const deskMat = toonMat(PALETTE.wood, { map: woodPlanks() });
+  const railMat = toonMat(PALETTE.railWood);
+  const colMat = toonMat(PALETTE.columnWhite);
+  const brassMat = toonMat(PALETTE.brass);
+  const beamMat = toonMat(PALETTE.libBeam);
+  const bookMats = [bookcaseTexture(5), bookcaseTexture(11), bookcaseTexture(23)]
+    .map((map) => toonMat(0xffffff, { map }));
+  const glowTex = glowTexture('255,210,140');
+
+  const tbox = (w, h, d, m) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  // ---- shell: stone floor, 3 tall plaster walls, open front + open top ----
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
+    toonMat(PALETTE.libFloor, { map: stoneFloor() }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+  root.add(floor);
+  const wallMat = toonMat(PALETTE.libWall, { map: plaster() });
+  const back = tbox(W, WALL_H, 0.6, wallMat); back.position.set(0, WALL_H / 2, -D / 2); root.add(back);
+  for (const s of [-1, 1]) {
+    const side = tbox(0.6, WALL_H, D, wallMat); side.position.set(s * W / 2, WALL_H / 2, 0); root.add(side);
   }
 
-  // study desks with chairs — each chair is a pomodoro seat
-  const seatPositions = [];
+  // ---- shelf runs: book-spine textured faces on a wood backing ----
+  function shelfRun(x, z, len, dir, face, y0, h) {
+    const depth = 1.1, n = Math.max(1, Math.round(len / 5));
+    const g = new THREE.Group();
+    const backing = dir === 'x' ? tbox(len, h, depth, woodMat) : tbox(depth, h, len, woodMat);
+    backing.position.y = h / 2; g.add(backing);
+    for (let i = 0; i < n; i++) {
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(len / n - 0.15, h - 0.4), bookMats[i % 3]);
+      if (dir === 'x') {
+        pl.position.set(-len / 2 + (i + 0.5) * len / n, h / 2, face * (depth / 2 + 0.02));
+        if (face < 0) pl.rotation.y = Math.PI;
+      } else {
+        pl.position.set(face * (depth / 2 + 0.02), h / 2, -len / 2 + (i + 0.5) * len / n);
+        pl.rotation.y = face > 0 ? Math.PI / 2 : -Math.PI / 2;
+      }
+      g.add(pl);
+    }
+    g.position.set(x, y0, z); root.add(g);
+  }
+
+  // ground perimeter shelves (back under the balcony + both sides)
+  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, 0, 4.4);
+  colliders.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
+  shelfRun(-W / 2 + 0.9, 0, D - 4, 'z', 1, 0, 4.4);
+  shelfRun(W / 2 - 0.9, 0, D - 4, 'z', -1, 0, 4.4);
+  colliders.push({ x: -W / 2 + 1.3, z: 0, w: 1.6, d: D - 4 });
+  colliders.push({ x: W / 2 - 1.3, z: 0, w: 1.6, d: D - 4 });
+  // two free-standing double-sided stacks for depth
+  for (const sx of [-13, 13]) {
+    shelfRun(sx, -3, 9, 'z', 1, 0, 3.6);
+    shelfRun(sx, -3, 9, 'z', -1, 0, 3.6);
+    colliders.push({ x: sx, z: -3, w: 2.4, d: 9 });
+  }
+  // mezzanine upper shelves (back wall) — level 1
+  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, MEZZ_Y, 4.0);
+  colliders1.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
+
+  // ---- columns (full height) ----
+  function column(x, z, both) {
+    const g = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, WALL_H, 16), colMat);
+    shaft.position.y = WALL_H / 2; shaft.castShadow = true; g.add(shaft);
+    const base = tbox(1.5, 0.5, 1.5, colMat); base.position.y = 0.25; g.add(base);
+    const cap = tbox(1.5, 0.5, 1.5, colMat); cap.position.y = WALL_H - 0.25; g.add(cap);
+    g.position.set(x, 0, z); root.add(g);
+    colliders.push({ x, z, w: 1.6, d: 1.6 });
+    if (both) colliders1.push({ x, z, w: 1.6, d: 1.6 });
+  }
+  for (const cx of [-26, -13, 0, 13]) column(cx, DECK_FRONT, true); // balcony-edge row + railing posts
+  for (const cx of [-24, 24]) column(cx, 12, false);                // grand entrance pair
+
+  // ---- mezzanine deck + railing ----
+  const deckDepth = (D / 2 - 0.3) + DECK_FRONT;                     // back wall → DECK_FRONT
+  const deck = tbox(W - 4, 0.6, deckDepth, deckMat);
+  deck.position.set(0, MEZZ_Y - 0.3, -(D / 2 - 0.3) + deckDepth / 2);
+  root.add(deck);
+  function rail(x0, x1) {
+    const len = x1 - x0, cx = (x0 + x1) / 2;
+    const bar = tbox(len, 0.2, 0.18, railMat); bar.position.set(cx, MEZZ_Y + 0.95, DECK_FRONT); root.add(bar);
+    const bar2 = tbox(len, 0.16, 0.16, railMat); bar2.position.set(cx, MEZZ_Y + 0.4, DECK_FRONT); root.add(bar2);
+    const np = Math.max(1, Math.round(len / 2));
+    for (let i = 0; i <= np; i++) {
+      const post = tbox(0.14, 1.0, 0.14, railMat);
+      post.position.set(x0 + (i / np) * len, MEZZ_Y + 0.5, DECK_FRONT); root.add(post);
+    }
+  }
+  rail(-33, 22.5); // left of the stair mouth (stairs occupy x[24,31])
+
+  // ---- grand staircase (right): ground (z=2,y=0) up to balcony (z=-11,y=6) ----
+  const STEPS = 12, STAIR_X = 27.5;
+  for (let i = 0; i < STEPS; i++) {
+    const t = (i + 1) / STEPS, topY = t * MEZZ_Y;
+    const z = 2 - 13 * (i + 0.5) / STEPS;
+    const st = tbox(7, topY, 13 / STEPS + 0.05, deckMat);
+    st.position.set(STAIR_X, topY / 2, z); root.add(st);
+    const run = tbox(3, 0.08, 13 / STEPS + 0.05, toonMat(0xa6452f));
+    run.position.set(STAIR_X, topY + 0.05, z); root.add(run);
+  }
+  colliders.push({ x: STAIR_X, z: -4.5, w: 7, d: 11 }); // side-block; ramp logic overrides for climbing
+  const stairs = [{ xMin: 24, xMax: 31, zMin: DECK_FRONT, zMax: 2, zBottom: 2, zTop: DECK_FRONT, yBottom: 0, yTop: MEZZ_Y }];
+
+  // ---- reading desks (ground) — each chair is a pomodoro seat ----
   let seatNum = 1;
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 3; col++) {
-      const dx = -13 + col * 13;
-      const dz = -4 + row * 9;
-      const desk = box(4.4, 1.1, 2.2, 0x9a6a3f);
-      desk.position.set(dx, 0.55, dz);
-      root.add(desk);
-      const lamp = box(0.3, 0.7, 0.3, 0x2e8b57);
-      lamp.position.set(dx + 1.4, 1.45, dz - 0.5);
-      root.add(lamp);
-      const bookProp = box(0.8, 0.18, 1.1, 0xd64541);
-      bookProp.position.set(dx - 1, 1.2, dz);
-      bookProp.rotation.y = 0.4;
-      root.add(bookProp);
-      colliders.push({ x: dx, z: dz, w: 4.8, d: 2.6 });
-
-      const chairZ = dz + 2.2;
-      const chair = box(1.1, 0.55, 1.1, 0x7a5230);
-      chair.position.set(dx, 0.28, chairZ);
-      root.add(chair);
-      const chairBack = box(1.1, 1.1, 0.18, 0x7a5230);
-      chairBack.position.set(dx, 0.95, chairZ + 0.5);
-      root.add(chairBack);
-
+      const dx = -18 + col * 18, dz = 4 + row * 9;
+      const desk = tbox(4.6, 1.1, 2.4, deskMat); desk.position.set(dx, 0.55, dz); root.add(desk);
+      const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(dx + 1.5, 1.45, dz - 0.6); root.add(lampPost);
+      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
+        toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(dx + 1.5, 1.85, dz - 0.6); root.add(lampShade);
+      const bookProp = tbox(0.9, 0.18, 1.2, toonMat(0xb5462f)); bookProp.position.set(dx - 1, 1.2, dz); bookProp.rotation.y = 0.4; root.add(bookProp);
+      colliders.push({ x: dx, z: dz, w: 5.0, d: 2.8 });
+      const chairZ = dz + 2.3;
+      const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(dx, 0.28, chairZ); root.add(chair);
+      const chairBack = tbox(1.2, 1.2, 0.18, deskMat); chairBack.position.set(dx, 0.95, chairZ + 0.55); root.add(chairBack);
       seatPositions.push({ x: dx, z: chairZ });
-      interactables.push({
-        id: 'study_seat', seat: seatNum++,
-        x: dx, z: chairZ + 1.4, r: 2.0,
-        label: '🪑 Sit & study',
-        seatPos: { x: dx, z: chairZ },
-      });
+      interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: chairZ + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos: { x: dx, z: chairZ } });
     }
   }
 
-  // librarian counter
-  const counter = box(6, 1.3, 2, 0x6e5436);
-  counter.position.set(14, 0.65, 10);
-  root.add(counter);
-  colliders.push({ x: 14, z: 10, w: 6.4, d: 2.4 });
+  // ---- cozy nook (front-left); the fireplace Blender prop is placed here later ----
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 28), toonMat(PALETTE.rug));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.02, 14); root.add(rug);
+  const rugBorder = new THREE.Mesh(new THREE.RingGeometry(4.3, 4.7, 28), toonMat(PALETTE.rugBorder));
+  rugBorder.rotation.x = -Math.PI / 2; rugBorder.position.set(-25, 0.03, 14); root.add(rugBorder);
+  function armchair(x, z, ry) {
+    const g = new THREE.Group();
+    const seat = tbox(1.8, 0.7, 1.8, toonMat(PALETTE.leather)); seat.position.y = 0.55; g.add(seat);
+    const backr = tbox(1.8, 1.3, 0.4, toonMat(PALETTE.leather)); backr.position.set(0, 1.2, -0.7); g.add(backr);
+    for (const ax of [-1, 1]) { const arm = tbox(0.35, 0.6, 1.6, toonMat(PALETTE.leather)); arm.position.set(ax * 0.9, 0.85, 0); g.add(arm); }
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    colliders.push({ x, z, w: 2, d: 2 });
+  }
+  armchair(-27, 12, 0.5); armchair(-22, 16, -0.6);
+  const lampPole = tbox(0.16, 3.2, 0.16, brassMat); lampPole.position.set(-19, 1.6, 11); root.add(lampPole);
+  const floorShade = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.0, 16), toonMat(0xf3e3b8, { emissive: 0x6a5a30 }));
+  floorShade.position.set(-19, 3.4, 11); root.add(floorShade);
+  function plant(x, z) {
+    const g = new THREE.Group();
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 0.8, 12), toonMat(0xb5703f)); pot.position.y = 0.4; g.add(pot);
+    const foliage = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), toonMat(0x4f8a45)); foliage.position.y = 1.4; g.add(foliage);
+    g.position.set(x, 0, z); root.add(g); colliders.push({ x, z, w: 1, d: 1 });
+  }
+  plant(-31, 9); plant(-31, 19);
+  // fireplace anchor against the left wall (Blender prop placed in Phase 3)
+  const fireAnchor = { x: -32.5, z: 14 };
+  colliders.push({ x: -32.5, z: 14, w: 3.2, d: 4.5 });
 
+  // ---- librarian counter (front-right) ----
+  const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
+  const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
+  colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
+
+  // ---- ceiling beam ring + pendant lamps + warm fill lights ----
+  const bbeam = tbox(W - 2, 0.5, 0.6, beamMat); bbeam.position.set(0, WALL_H - 0.6, -D / 2 + 0.5); root.add(bbeam);
+  for (const s of [-1, 1]) { const sb = tbox(0.6, 0.5, D - 2, beamMat); sb.position.set(s * (W / 2 - 0.5), WALL_H - 0.6, 0); root.add(sb); }
+  function pendant(x, z) {
+    const rod = tbox(0.06, 3, 0.06, beamMat); rod.position.set(x, 9.5, z); root.add(rod);
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.8, 16), toonMat(PALETTE.pendantDark)); shade.position.set(x, 8, z); root.add(shade);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), toonMat(0xfff2c8, { emissive: 0xffcf7a })); bulb.position.set(x, 7.7, z); root.add(bulb);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    spr.scale.set(3, 3, 1); spr.position.set(x, 7.7, z); root.add(spr);
+  }
+  for (const [px, pz] of [[-18, 4], [0, 4], [18, 4], [-18, 13], [0, 13], [18, 13]]) pendant(px, pz);
+  // warm point-lights (no shadows; only lit when the library root is visible)
+  function warmLight(x, y, z, intensity, dist) { const L = new THREE.PointLight(0xffd29a, intensity, dist, 2); L.position.set(x, y, z); root.add(L); }
+  warmLight(0, 8, 8, 50, 44); warmLight(-18, 8, 8, 26, 30); warmLight(18, 8, 8, 26, 30);
+  warmLight(-26, 4.5, 14, 34, 24);  // nook glow
+  warmLight(0, 8, -14, 26, 36);     // balcony glow
+
+  // ---- exit + spawn ----
   addExitPad(root, 0, D / 2 - 2);
-  interactables.push({ id: 'exit_library', x: 0, z: D / 2 - 2, r: 2.2, label: '🚪 Leave Library' });
+  interactables.push({ id: 'exit_library', x: 0, z: D / 2 - 2, r: 2.4, label: '🚪 Leave Library' });
+  const spawn = { x: 0, z: D / 2 - 6 };
 
-  const spawn = { x: 0, z: D / 2 - 4 };
-  return { root, colliders, interactables, bounds, spawn, seatPositions };
+  // The balcony is a back strip. Bounds reach to the front, but an atrium "void"
+  // collider blocks everything past the deck edge except the stair mouth (x[24,31]),
+  // so the player walks the deck and can only leave it down the stairs.
+  const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
+  colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
+  const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
+  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor };
 }
 
 // ----------------------------------------------------- dorm common room
