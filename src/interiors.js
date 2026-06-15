@@ -5,6 +5,30 @@ import * as THREE from 'three';
 import { textSprite } from './world.js';
 import { PALETTE } from './palette.js';
 import { toonMat, woodPlanks, stoneFloor, plaster, bookcaseTexture, glowTexture } from './textures.js';
+import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
+
+// Blender-authored hero props (glTF). Loaded async, re-materialised with the
+// game's toon shading (by each mesh's base/emissive colour) so they stay
+// consistent with the procedural world, then dropped into `parent`.
+const gltfLoader = new GLTFLoader();
+function loadProp(parent, url, { x, y = 0, z, ry = 0, scale = 1 }) {
+  gltfLoader.load(url, (gltf) => {
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.receiveShadow = true;
+      const src = o.material;
+      const color = src && src.color ? src.color.getHex() : 0xb0a080;
+      const emissive = src && src.emissive ? src.emissive.getHex() : 0;
+      const opts = { noCache: true };
+      if (emissive) { opts.emissive = emissive; opts.emissiveIntensity = Math.max(1, src.emissiveIntensity || 1); }
+      o.material = toonMat(color, opts);
+    });
+    gltf.scene.position.set(x, y, z);
+    gltf.scene.rotation.y = ry;
+    gltf.scene.scale.setScalar(scale);
+    parent.add(gltf.scene);
+  }, undefined, (err) => console.warn('[prop] failed to load', url, err));
+}
 
 function mat(color) { return new THREE.MeshLambertMaterial({ color }); }
 function box(w, h, d, color) {
@@ -227,9 +251,14 @@ export function buildLibrary() {
     g.position.set(x, 0, z); root.add(g); colliders.push({ x, z, w: 1, d: 1 });
   }
   plant(-31, 9); plant(-31, 19);
-  // fireplace anchor against the left wall (Blender prop placed in Phase 3)
+  // ---- Blender hero props (async glTF; colliders added now so gameplay is stable) ----
   const fireAnchor = { x: -32.5, z: 14 };
-  colliders.push({ x: -32.5, z: 14, w: 3.2, d: 4.5 });
+  colliders.push({ x: -33.6, z: 14, w: 1.6, d: 3.4 });  // fireplace (against left wall)
+  colliders.push({ x: -29, z: 18.5, w: 1.4, d: 1.4 });  // globe
+  colliders.push({ x: -31, z: 9.5, w: 1.2, d: 1.2 });   // gramophone
+  loadProp(root, 'assets/fireplace.glb', { x: -33.7, z: 14, ry: -Math.PI / 2, scale: 1 });
+  loadProp(root, 'assets/globe.glb', { x: -29, z: 18.5, ry: 0.5, scale: 1 });
+  loadProp(root, 'assets/gramophone.glb', { x: -31, z: 9.5, ry: 0.8, scale: 1 });
 
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
@@ -258,6 +287,8 @@ export function buildLibrary() {
   warmLight(0, 8, 8, 50, 44); warmLight(-18, 8, 8, 26, 30); warmLight(18, 8, 8, 26, 30);
   warmLight(-26, 4.5, 14, 34, 24);  // nook glow
   warmLight(0, 8, -14, 26, 36);     // balcony glow
+  const fireGlow = new THREE.PointLight(0xff8a3c, 26, 16, 2); // fireplace
+  fireGlow.position.set(-32, 1.8, 14); root.add(fireGlow);
 
   // ---- exit + spawn ----
   addExitPad(root, 0, D / 2 - 2);
