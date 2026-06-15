@@ -90,9 +90,10 @@ bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 21, 16);
-library.camOffset = new THREE.Vector3(0, 24, 17);
-dormCommon.camOffset = new THREE.Vector3(0, 17, 12);
-bedroom.camOffset = new THREE.Vector3(0, 14, 10);
+// interiors: closer + shallower so the camera sits below the ceilings
+library.camOffset = new THREE.Vector3(0, 9, 13);
+dormCommon.camOffset = new THREE.Vector3(0, 5, 11);
+bedroom.camOffset = new THREE.Vector3(0, 4.5, 9);
 
 const LOCATIONS = {
   campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },
@@ -254,13 +255,15 @@ window.addEventListener('keydown', (e) => {
 
 // ----------------------------------------------------------- studying
 function beginStudy(it) {
+  const floorY = it.seatPos.y || 0; // seats can be on the mezzanine
   openPomodoroSetup((minutes) => {
     seated = true;
-    player.position.set(it.seatPos.x, 0.45, it.seatPos.z);
+    player.position.set(it.seatPos.x, floorY + 0.45, it.seatPos.z);
     player.rotation.y = Math.PI; // face the desk
     startPomodoro(minutes, () => {
       seated = false;
-      player.position.set(it.seatPos.x, 0, it.seatPos.z + 1.6);
+      player.position.set(it.seatPos.x, floorY, it.seatPos.z + 1.6);
+      playerTargetY = floorY; // hold the floor height after standing up
     });
   });
 }
@@ -342,6 +345,8 @@ function frame(dt, t) {
   player.userData.animate(t, moving);
   // smooth elevation toward the active floor / stair height (not while seated)
   if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
+  // hide a multi-floor ceiling while upstairs so the raised camera sees the balcony
+  if (loc.ceiling) loc.ceiling.visible = activeLevel === 0;
 
   // camera follow
   const targetCam = player.position.clone().add(loc.camOffset);

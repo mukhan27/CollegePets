@@ -13,15 +13,16 @@ function box(w, h, d, color) {
   return m;
 }
 
-// Room shell: floor + 3 visible walls (front wall omitted so the tilted
-// top-down camera can always see inside).
-function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8 } = {}) {
+// Room shell: floor + 3 visible walls (front wall omitted so the camera can
+// always see inside) + a ceiling (the closer/lower interior camera sits below
+// it, so it reads as an enclosed room rather than floating walls).
+function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8, ceiling = 0xe3d9c2 } = {}) {
   const g = new THREE.Group();
   const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(floor));
   f.rotation.x = -Math.PI / 2;
   f.receiveShadow = true;
   g.add(f);
-  const wallH = 5;
+  const wallH = 7;
   const back = box(w, wallH, 0.4, wall);
   back.position.set(0, wallH / 2, -d / 2);
   g.add(back);
@@ -30,6 +31,11 @@ function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8 } = {}) {
     side.position.set(s * w / 2, wallH / 2, 0);
     g.add(side);
   }
+  // ceiling — softly self-lit so it doesn't read as a dark slab
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(w, 0.4, d),
+    new THREE.MeshLambertMaterial({ color: ceiling, emissive: 0x2a2419 }));
+  ceil.position.set(0, wallH, 0);
+  g.add(ceil);
   return g;
 }
 
@@ -174,24 +180,28 @@ export function buildLibrary() {
   colliders.push({ x: STAIR_X, z: -4.5, w: 7, d: 11 }); // side-block; ramp logic overrides for climbing
   const stairs = [{ xMin: 24, xMax: 31, zMin: DECK_FRONT, zMax: 2, zBottom: 2, zTop: DECK_FRONT, yBottom: 0, yTop: MEZZ_Y }];
 
-  // ---- reading desks (ground) — each chair is a pomodoro seat ----
+  // ---- reading desks — each chair is a pomodoro seat (works on either floor) ----
   let seatNum = 1;
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 3; col++) {
-      const dx = -18 + col * 18, dz = 4 + row * 9;
-      const desk = tbox(4.6, 1.1, 2.4, deskMat); desk.position.set(dx, 0.55, dz); root.add(desk);
-      const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(dx + 1.5, 1.45, dz - 0.6); root.add(lampPost);
-      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
-        toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(dx + 1.5, 1.85, dz - 0.6); root.add(lampShade);
-      const bookProp = tbox(0.9, 0.18, 1.2, toonMat(0xb5462f)); bookProp.position.set(dx - 1, 1.2, dz); bookProp.rotation.y = 0.4; root.add(bookProp);
-      colliders.push({ x: dx, z: dz, w: 5.0, d: 2.8 });
-      const chairZ = dz + 2.3;
-      const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(dx, 0.28, chairZ); root.add(chair);
-      const chairBack = tbox(1.2, 1.2, 0.18, deskMat); chairBack.position.set(dx, 0.95, chairZ + 0.55); root.add(chairBack);
-      seatPositions.push({ x: dx, z: chairZ });
-      interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: chairZ + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos: { x: dx, z: chairZ } });
-    }
+  function readingDesk(dx, dz, floorY, cl) {
+    const y = floorY;
+    const desk = tbox(4.6, 1.1, 2.4, deskMat); desk.position.set(dx, y + 0.55, dz); root.add(desk);
+    const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(dx + 1.5, y + 1.45, dz - 0.6); root.add(lampPost);
+    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
+      toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(dx + 1.5, y + 1.85, dz - 0.6); root.add(lampShade);
+    const bookProp = tbox(0.9, 0.18, 1.2, toonMat(0xb5462f)); bookProp.position.set(dx - 1, y + 1.2, dz); bookProp.rotation.y = 0.4; root.add(bookProp);
+    cl.push({ x: dx, z: dz, w: 5.0, d: 2.8 });
+    const chairZ = dz + 2.3;
+    const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(dx, y + 0.28, chairZ); root.add(chair);
+    const chairBack = tbox(1.2, 1.2, 0.18, deskMat); chairBack.position.set(dx, y + 0.95, chairZ + 0.55); root.add(chairBack);
+    const seatPos = { x: dx, z: chairZ, y: floorY };
+    seatPositions.push(seatPos);
+    interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: chairZ + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
   }
+  // ground floor: 2x3 grid
+  for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++) readingDesk(-18 + col * 18, 4 + row * 9, 0, colliders);
+  // mezzanine: two reading tables on the balcony
+  readingDesk(-14, -17, MEZZ_Y, colliders1);
+  readingDesk(14, -17, MEZZ_Y, colliders1);
 
   // ---- cozy nook (front-left); the fireplace Blender prop is placed here later ----
   const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 28), toonMat(PALETTE.rug));
@@ -226,11 +236,17 @@ export function buildLibrary() {
   const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
   colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
 
-  // ---- ceiling beam ring + pendant lamps + warm fill lights ----
+  // ---- ceiling (coffered) + beams + pendant lamps + warm fill lights ----
+  // The solid ceiling is hidden while the player is up on the balcony (main.js
+  // toggles def.ceiling by level) so the higher camera can still see the deck.
+  const ceiling = tbox(W, 0.5, D, toonMat(PALETTE.libWall, { emissive: 0x2a2419 }));
+  ceiling.position.set(0, WALL_H + 0.25, 0); root.add(ceiling);
   const bbeam = tbox(W - 2, 0.5, 0.6, beamMat); bbeam.position.set(0, WALL_H - 0.6, -D / 2 + 0.5); root.add(bbeam);
   for (const s of [-1, 1]) { const sb = tbox(0.6, 0.5, D - 2, beamMat); sb.position.set(s * (W / 2 - 0.5), WALL_H - 0.6, 0); root.add(sb); }
+  // a few cross-beams for a coffered read
+  for (const bz of [-12, 0, 12]) { const cb = tbox(W - 2, 0.4, 0.5, beamMat); cb.position.set(0, WALL_H - 0.5, bz); root.add(cb); }
   function pendant(x, z) {
-    const rod = tbox(0.06, 3, 0.06, beamMat); rod.position.set(x, 9.5, z); root.add(rod);
+    const rod = tbox(0.06, 4, 0.06, beamMat); rod.position.set(x, 10, z); root.add(rod);
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.8, 16), toonMat(PALETTE.pendantDark)); shade.position.set(x, 8, z); root.add(shade);
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), toonMat(0xfff2c8, { emissive: 0xffcf7a })); bulb.position.set(x, 7.7, z); root.add(bulb);
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -254,7 +270,7 @@ export function buildLibrary() {
   const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
   colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
   const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
-  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor };
+  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor, ceiling };
 }
 
 // ----------------------------------------------------- dorm common room
