@@ -37,16 +37,15 @@ function box(w, h, d, color) {
   return m;
 }
 
-// Room shell: floor + 3 visible walls (front wall omitted so the camera can
-// always see inside) + a ceiling (the closer/lower interior camera sits below
-// it, so it reads as an enclosed room rather than floating walls).
-function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8, ceiling = 0xe3d9c2 } = {}) {
+// Room shell: floor + 3 visible walls (front wall + open top so the top-down
+// camera can always see inside).
+function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8 } = {}) {
   const g = new THREE.Group();
   const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(floor));
   f.rotation.x = -Math.PI / 2;
   f.receiveShadow = true;
   g.add(f);
-  const wallH = 7;
+  const wallH = 5;
   const back = box(w, wallH, 0.4, wall);
   back.position.set(0, wallH / 2, -d / 2);
   g.add(back);
@@ -55,11 +54,6 @@ function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8, ceiling = 0xe3d9c2 
     side.position.set(s * w / 2, wallH / 2, 0);
     g.add(side);
   }
-  // ceiling — softly self-lit so it doesn't read as a dark slab
-  const ceil = new THREE.Mesh(new THREE.BoxGeometry(w, 0.4, d),
-    new THREE.MeshLambertMaterial({ color: ceiling, emissive: 0x2a2419 }));
-  ceil.position.set(0, wallH, 0);
-  g.add(ceil);
   return g;
 }
 
@@ -265,15 +259,13 @@ export function buildLibrary() {
   const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
   colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
 
-  // ---- ceiling (coffered) + beams + pendant lamps + warm fill lights ----
-  // The solid ceiling is hidden while the player is up on the balcony (main.js
-  // toggles def.ceiling by level) so the higher camera can still see the deck.
-  const ceiling = tbox(W, 0.5, D, toonMat(PALETTE.libWall, { emissive: 0x2a2419 }));
-  ceiling.position.set(0, WALL_H + 0.25, 0); root.add(ceiling);
-  const bbeam = tbox(W - 2, 0.5, 0.6, beamMat); bbeam.position.set(0, WALL_H - 0.6, -D / 2 + 0.5); root.add(bbeam);
-  for (const s of [-1, 1]) { const sb = tbox(0.6, 0.5, D - 2, beamMat); sb.position.set(s * (W / 2 - 0.5), WALL_H - 0.6, 0); root.add(sb); }
-  // a few cross-beams for a coffered read
-  for (const bz of [-12, 0, 12]) { const cb = tbox(W - 2, 0.4, 0.5, beamMat); cb.position.set(0, WALL_H - 0.5, bz); root.add(cb); }
+  // ---- open rafter ceiling + pendant lamps + warm fill lights ----
+  // No solid slab — it would block the shared top-down camera. Instead a raised
+  // grid of rafters the pendants hang from, so the lights read as hung, not floating.
+  const bbeam = tbox(W - 2, 0.5, 0.6, beamMat); bbeam.position.set(0, WALL_H - 0.5, -D / 2 + 0.5); root.add(bbeam);
+  for (const s of [-1, 1]) { const sb = tbox(0.6, 0.5, D - 2, beamMat); sb.position.set(s * (W / 2 - 0.5), WALL_H - 0.5, 0); root.add(sb); }
+  for (const bz of [-20, -12, -4, 4, 12, 20]) { const cb = tbox(W - 2, 0.4, 0.45, beamMat); cb.position.set(0, WALL_H - 0.55, bz); root.add(cb); }
+  for (const bx of [-18, 18]) { const lb = tbox(0.45, 0.4, D - 4, beamMat); lb.position.set(bx, WALL_H - 0.7, 0); root.add(lb); }
   function pendant(x, z) {
     const rod = tbox(0.06, 4, 0.06, beamMat); rod.position.set(x, 10, z); root.add(rod);
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.8, 16), toonMat(PALETTE.pendantDark)); shade.position.set(x, 8, z); root.add(shade);
@@ -301,7 +293,7 @@ export function buildLibrary() {
   const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
   colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
   const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
-  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor, ceiling };
+  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor };
 }
 
 // ----------------------------------------------------- dorm common room

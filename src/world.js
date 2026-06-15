@@ -433,23 +433,45 @@ export function buildCampus() {
   let s = 12345;
   const rand = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   const spots = [];
-  while (spots.length < 1700) {
+  while (spots.length < 2700) {
     const wx = -105 + rand() * 210, wz = -75 + rand() * 150;
     if (!isSand(wx, wz) && !insideBuilding(wx, wz)) spots.push([wx, wz]);
   }
 
-  const tuftGeo = new THREE.ConeGeometry(0.16, 0.55, 4);
-  const tufts = new THREE.InstancedMesh(tuftGeo, toonMat(P.grassDark, { noCache: true }), 1400);
+  // animated grass: instanced blade-tufts swayed by a GPU wind function (uTime),
+  // so the lawn ripples instead of reading as flat green.
+  const GRASS_N = 2400;
+  const grassMat = toonMat(P.grass, { noCache: true });
+  grassMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    grassMat.userData.shader = shader;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', [
+        '#include <begin_vertex>',
+        '#ifdef USE_INSTANCING',
+        '  vec3 gWP = instanceMatrix[3].xyz;',
+        '#else',
+        '  vec3 gWP = vec3(0.0);',
+        '#endif',
+        'float blade = max(transformed.y + 0.45, 0.0);',          // 0 at base, ~0.9 at tip
+        'float wv = uTime * 1.7 + gWP.x * 0.25 + gWP.z * 0.25;',   // per-tuft phase
+        'transformed.x += (sin(wv) * 0.11 + sin(wv * 2.3) * 0.04) * blade;',
+        'transformed.z += cos(wv * 0.9) * 0.07 * blade;',
+      ].join('\n'));
+  };
+  const tuftGeo = new THREE.ConeGeometry(0.13, 0.9, 4);
+  const tufts = new THREE.InstancedMesh(tuftGeo, grassMat, GRASS_N);
   const dummy = new THREE.Object3D();
   const tuftColor = new THREE.Color();
-  for (let i = 0; i < 1400; i++) {
+  for (let i = 0; i < GRASS_N; i++) {
     const [wx, wz] = spots[i];
-    dummy.position.set(wx, 0.22, wz);
-    dummy.rotation.set((rand() - 0.5) * 0.4, rand() * Math.PI, (rand() - 0.5) * 0.4);
-    dummy.scale.setScalar(0.7 + rand() * 0.8);
+    dummy.position.set(wx, 0.42, wz);
+    dummy.rotation.set((rand() - 0.5) * 0.3, rand() * Math.PI, (rand() - 0.5) * 0.3);
+    dummy.scale.setScalar(0.7 + rand() * 0.9);
     dummy.updateMatrix();
     tufts.setMatrixAt(i, dummy.matrix);
-    tufts.setColorAt(i, tuftColor.setHex(P.grassDark).offsetHSL(0, 0, (rand() - 0.5) * 0.1));
+    tufts.setColorAt(i, tuftColor.setHex(rand() < 0.5 ? P.grass : P.grassLight).offsetHSL(0, (rand() - 0.5) * 0.05, (rand() - 0.5) * 0.12));
   }
   root.add(tufts);
 
@@ -458,7 +480,7 @@ export function buildCampus() {
     new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: null }), 300);
   const fc = new THREE.Color();
   for (let i = 0; i < 300; i++) {
-    const [wx, wz] = spots[1400 + (i % 300)];
+    const [wx, wz] = spots[2400 + (i % 300)];
     dummy.position.set(wx + (rand() - 0.5), 0.18, wz + (rand() - 0.5));
     dummy.rotation.set(0, rand() * Math.PI, 0);
     dummy.scale.setScalar(0.8 + rand() * 0.5);
@@ -480,6 +502,7 @@ export function buildCampus() {
 
   // per-frame ambient animation (clouds, splash, leaves)
   function animate(t, dt) {
+    if (grassMat.userData.shader) grassMat.userData.shader.uniforms.uTime.value = t;
     for (const c of clouds) {
       c.sprite.position.x += c.speed * dt;
       if (c.sprite.position.x > 160) c.sprite.position.x = -160;

@@ -90,10 +90,10 @@ bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 21, 16);
-// interiors: closer + shallower so the camera sits below the ceilings
-library.camOffset = new THREE.Vector3(0, 9, 13);
-dormCommon.camOffset = new THREE.Vector3(0, 5, 11);
-bedroom.camOffset = new THREE.Vector3(0, 4.5, 9);
+// interiors use the same camera framing as the outdoor campus
+library.camOffset = new THREE.Vector3(0, 21, 16);
+dormCommon.camOffset = new THREE.Vector3(0, 21, 16);
+bedroom.camOffset = new THREE.Vector3(0, 21, 16);
 
 const LOCATIONS = {
   campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },
@@ -345,8 +345,6 @@ function frame(dt, t) {
   player.userData.animate(t, moving);
   // smooth elevation toward the active floor / stair height (not while seated)
   if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
-  // hide a multi-floor ceiling while upstairs so the raised camera sees the balcony
-  if (loc.ceiling) loc.ceiling.visible = activeLevel === 0;
 
   // camera follow
   const targetCam = player.position.clone().add(loc.camOffset);
