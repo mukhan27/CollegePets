@@ -107,8 +107,11 @@ export function buildLibrary() {
   };
 
   // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
+  // Tint kept desaturated/neutral so the plank texture reads as natural walnut
+  // hardwood — the old 0xc89060 was an orange boost that, stacked with the warm
+  // ambient + point lights, made the floor look red.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
-    toonMat(0xc89060, { map: hardwoodFloor() }));
+    toonMat(0xb7a890, { map: hardwoodFloor() }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
   root.add(floor);
   const wallMat = toonMat(PALETTE.libWall, { map: plaster() });
@@ -185,8 +188,12 @@ export function buildLibrary() {
   shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, MEZZ_Y, 4.0);
   colliders1.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
 
-  // ---- columns (full height) ----
-  function column(x, z, both, h = WALL_H) {
+  // ---- columns ----
+  // Columns rise to COL_H (well above the 12-tall walls) so their caps climb out
+  // of the top of frame and fade into the dark open atrium — the player only ever
+  // sees smooth shafts, never a flat capped top.
+  const COL_H = 20;
+  function column(x, z, both, h = COL_H) {
     const g = new THREE.Group();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, h, 16), colMat);
     shaft.position.y = h / 2; shaft.castShadow = true; g.add(shaft);
@@ -197,9 +204,10 @@ export function buildLibrary() {
     colliders.push({ x, z, w: 1.6, d: 1.6 });
     if (both) colliders1.push({ x, z, w: 1.6, d: 1.6 });
   }
-  // deck-support posts (stop at the balcony so their tops don't poke up on level 2)
-  for (const cx of [-26, -13, 0, 13]) column(cx, DECK_FRONT, true, 6.6);
-  for (const cx of [-24, 24]) column(cx, 12, false); // grand entrance pair (full height)
+  // balcony-edge colonnade — full height so the ground-floor view never catches
+  // their tops (they pass up through the deck and read as columns on the mezzanine)
+  for (const cx of [-26, -13, 0, 13]) column(cx, DECK_FRONT, true);
+  for (const cx of [-24, 24]) column(cx, 12, false); // grand entrance pair
 
   // ---- mezzanine deck + railing ----
   const deckDepth = (D / 2 - 0.3) + DECK_FRONT;                     // back wall → DECK_FRONT
@@ -249,8 +257,54 @@ export function buildLibrary() {
     seatPositions.push(seatPos);
     interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: chairZ + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
   }
-  // ground floor: 2x3 grid
-  for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++) readingDesk(-18 + col * 18, 4 + row * 9, 0, colliders);
+  // A single chair that registers itself as a pomodoro seat. `face` is the
+  // y-rotation the player takes when seated; the chair back, approach pad and
+  // step-back point are all derived from it, so seats can face any direction.
+  function addSeat(x, z, floorY, face) {
+    const fx = Math.sin(face), fz = Math.cos(face); // unit "facing" vector
+    const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(x, floorY + 0.28, z); root.add(chair);
+    const chairBack = tbox(1.2, 1.2, 0.18, deskMat);
+    chairBack.position.set(x - fx * 0.55, floorY + 0.95, z - fz * 0.55); // behind the sitter
+    chairBack.rotation.y = face; root.add(chairBack);
+    const seatPos = { x, z, y: floorY };
+    seatPositions.push(seatPos);
+    interactables.push({
+      id: 'study_seat', seat: seatNum++,
+      x: x - fx * 1.5, z: z - fz * 1.5, r: 2.0, // approach pad on the open side
+      label: '🪑 Sit & study', seatPos, face,
+      stepBack: { x: x - fx * 1.6, z: z - fz * 1.6 },
+    });
+  }
+
+  // A long communal table: a row of three chairs down each side (six seats),
+  // facing in across the tabletop. Shared lamps + books run down the centre.
+  function longTable(cx, cz, floorY, cl) {
+    const len = 16, y = floorY;
+    const top = tbox(len, 1.1, 3, deskMat); top.position.set(cx, y + 0.55, cz); root.add(top);
+    groundShadow(cx, cz, len + 3, 6.5, y + 0.02);
+    const bookCols = [0xb5462f, 0x3a6f9a, 0x4f8a45];
+    [-5.5, 0, 5.5].forEach((ox) => {
+      const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(cx + ox, y + 1.45, cz); root.add(lampPost);
+      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
+        toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(cx + ox, y + 1.85, cz); root.add(lampShade);
+    });
+    [-4, 1, 5].forEach((ox, i) => {
+      const book = tbox(0.9, 0.18, 1.2, toonMat(bookCols[i % 3]));
+      book.position.set(cx + ox, y + 1.2, cz + (i % 2 ? 0.6 : -0.6)); book.rotation.y = 0.4; root.add(book);
+    });
+    cl.push({ x: cx, z: cz, w: len + 0.4, d: 3 });
+    for (const ox of [-5.5, 0, 5.5]) {
+      addSeat(cx + ox, cz + 2.6, floorY, Math.PI); // near side, faces table (-z)
+      addSeat(cx + ox, cz - 2.6, floorY, 0);        // far side, faces table (+z)
+    }
+  }
+
+  // ground floor: two long communal tables down the centre, plus a quiet
+  // single carrel tucked to either side for solo studying
+  longTable(-2, 7, 0, colliders);
+  longTable(-2, 15, 0, colliders);
+  readingDesk(-20, 6, 0, colliders);
+  readingDesk(18, 6, 0, colliders);
   // mezzanine: two reading tables on the balcony
   readingDesk(-14, -17, MEZZ_Y, colliders1);
   readingDesk(14, -17, MEZZ_Y, colliders1);
@@ -296,10 +350,11 @@ export function buildLibrary() {
   groundShadow(21, 19, 8.5, 3.6);
   colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
 
-  // ---- pendant lamps + warm fill lights (no ceiling/rafters; the low camera
-  // keeps the lamp rod-tops and column caps above the top of frame) ----
+  // ---- pendant lamps + warm fill lights (no ceiling/rafters; the rods run up
+  // past the top of frame so only the hanging shade/glow is ever in view) ----
   function pendant(x, z) {
-    const rod = tbox(0.06, 4, 0.06, beamMat); rod.position.set(x, 10, z); root.add(rod);
+    // rod spans y≈8 → 20 (top out of sight), shade + bulb hang at a cozy height
+    const rod = tbox(0.06, 12, 0.06, beamMat); rod.position.set(x, 14, z); root.add(rod);
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.8, 16), toonMat(PALETTE.pendantDark)); shade.position.set(x, 8, z); root.add(shade);
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), toonMat(0xfff2c8, { emissive: 0xffcf7a })); bulb.position.set(x, 7.7, z); root.add(bulb);
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));

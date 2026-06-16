@@ -260,10 +260,11 @@ function beginStudy(it) {
   openPomodoroSetup((minutes) => {
     seated = true;
     player.position.set(it.seatPos.x, floorY + 0.45, it.seatPos.z);
-    player.rotation.y = Math.PI; // face the desk
+    player.rotation.y = it.face ?? Math.PI; // face the desk/table
     startPomodoro(minutes, () => {
       seated = false;
-      player.position.set(it.seatPos.x, floorY, it.seatPos.z + 1.6);
+      const back = it.stepBack || { x: it.seatPos.x, z: it.seatPos.z + 1.6 };
+      player.position.set(back.x, floorY, back.z);
       playerTargetY = floorY; // hold the floor height after standing up
     });
   });
