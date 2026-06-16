@@ -99,9 +99,14 @@ library.camOffset = new THREE.Vector3(0, 11, 18);
 dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
 bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
+// Per-location colour mood (exposure + tilt-shift grade). The library is graded
+// darker, warmer and more vignetted for a cosy, candle-lit feel; everywhere
+// else uses the bright default.
+const DEFAULT_MOOD = { exposure: 1.12, vignette: 0.42, warmth: 0.022, saturation: 1.12 };
 const LOCATIONS = {
   campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },
-  library: { def: library, name: '📚 Library', sky: 0x3a3328 },
+  library: { def: library, name: '📚 Library', sky: 0x2a2018,
+    mood: { exposure: 0.95, vignette: 0.55, warmth: 0.045, saturation: 1.06 } },
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
@@ -129,6 +134,14 @@ function switchLocation(key, spawnOverride) {
   scene.fog.color.set(loc.sky);
   scene.fog.near = key === 'campus' ? 90 : 1000;
   scene.fog.far = key === 'campus' ? 200 : 2000;
+
+  // apply the location's colour mood (exposure + grade)
+  const mood = loc.mood || DEFAULT_MOOD;
+  renderer.toneMappingExposure = mood.exposure;
+  const gu = fx.passes.grade.uniforms;
+  gu.vignetteStrength.value = mood.vignette;
+  gu.warmth.value = mood.warmth;
+  gu.saturation.value = mood.saturation;
 
   const sp = spawnOverride || loc.def.spawn;
   player.position.set(sp.x, 0, sp.z);
@@ -361,6 +374,8 @@ function frame(dt, t) {
     updateNpcs(npcs, dt, t, player.position, chattingWith);
     updateNpcBubbles(npcs, camera, t);
     if (campus.animate) campus.animate(t, dt);
+  } else if (loc.animate) {
+    loc.animate(t, dt); // interior ambient animation (e.g. the fireplace flicker)
   }
 
   // interaction prompt

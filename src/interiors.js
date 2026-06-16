@@ -83,6 +83,7 @@ export function buildLibrary() {
   const colliders1 = [];  // mezzanine (level 1)
   const interactables = [];
   const seatPositions = [];
+  const flames = [];      // animated fireplace tongues (driven by `animate`)
 
   // Walls rise to the full column height so the columns never poke up above the
   // wall line (which looked wrong) and the wall tops stay above the camera frame.
@@ -119,6 +120,20 @@ export function buildLibrary() {
     const knob = cyl(0.15, 0.15, 0.13, 10, m); knob.position.y = h * 0.6; g.add(knob);
     const foot = cyl(0.1, 0.07, 0.12, 10, m); foot.position.y = 0.06; g.add(foot);
     g.position.set(x, baseY, z); return g;
+  }
+  // classic green banker's lamp: brass base + stem, a horizontal green shade
+  // with brass end-rims, and a warm glowing underside (its top surface sits on
+  // the desk at world height `y`)
+  const lampGreenMat = toonMat(0x1d6b43);
+  const lampGlowMat = toonMat(0xfff0c4, { emissive: 0xffd98c, emissiveIntensity: 0.7 });
+  function bankerLamp(x, y, z) {
+    const g = new THREE.Group();
+    const base = cyl(0.24, 0.28, 0.07, 16, brassMat); base.position.y = 0.035; g.add(base);
+    const stem = cyl(0.045, 0.06, 0.52, 8, brassMat); stem.position.y = 0.32; g.add(stem);
+    const shade = cyl(0.21, 0.21, 0.95, 18, lampGreenMat); shade.rotation.z = Math.PI / 2; shade.position.y = 0.64; g.add(shade);
+    for (const ex of [-0.49, 0.49]) { const rim = cyl(0.215, 0.215, 0.04, 18, brassMat); rim.rotation.z = Math.PI / 2; rim.position.set(ex, 0.64, 0); g.add(rim); }
+    const glow = tbox(0.82, 0.05, 0.3, lampGlowMat); glow.position.y = 0.5; g.add(glow);
+    g.position.set(x, y, z); root.add(g);
   }
 
   // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
@@ -292,10 +307,7 @@ export function buildLibrary() {
     for (const lx of [-(len / 2 - 0.7), 0, len / 2 - 0.7]) for (const lz of [-(w / 2 - 0.45), w / 2 - 0.45]) root.add(turnedLeg(cx + lx, y, cz + lz, 0.84, deskMat));
     const stretch = tbox(len - 1.6, 0.13, 0.16, deskMat); stretch.position.set(cx, y + 0.32, cz); root.add(stretch);
     groundShadow(cx, cz, len + 3, 6.5, y + 0.02);
-    [-5.5, 0, 5.5].forEach((ox) => {
-      const lampPost = cyl(0.06, 0.08, 0.7, 8, brassMat); lampPost.position.set(cx + ox, y + 1.35, cz); root.add(lampPost);
-      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.3, 14), toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(cx + ox, y + 1.7, cz); root.add(lampShade);
-    });
+    [-5.5, 5.5].forEach((ox) => bankerLamp(cx + ox, y + 1.09, cz));
     const bookCols = [0xb5462f, 0x3a6f9a, 0x4f8a45];
     [-4, 1, 5].forEach((ox, i) => { const book = tbox(0.9, 0.18, 1.2, toonMat(bookCols[i % 3])); book.position.set(cx + ox, y + 1.18, cz + (i % 2 ? 0.6 : -0.6)); book.rotation.y = 0.4; root.add(book); });
     cl.push({ x: cx, z: cz, w: len + 0.4, d: w });
@@ -317,8 +329,7 @@ export function buildLibrary() {
     const apB = tbox(4.4, 0.4, 0.12, deskMat); apB.position.set(dx, y + 0.74, dz - 1.0); root.add(apB);
     for (const xx of [2.0, -2.0]) { const a = tbox(0.12, 0.4, 2.0, deskMat); a.position.set(dx + xx, y + 0.74, dz); root.add(a); }
     for (const lx of [-2.0, 2.0]) for (const lz of [-0.95, 0.95]) root.add(turnedLeg(dx + lx, y, dz + lz, 0.84, deskMat));
-    const lp = cyl(0.05, 0.07, 0.6, 8, brassMat); lp.position.set(dx + 1.5, y + 1.3, dz - 0.6); root.add(lp);
-    const ls = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.28, 14), toonMat(0x2e6f4f, { emissive: 0x123a26 })); ls.position.set(dx + 1.5, y + 1.6, dz - 0.6); root.add(ls);
+    bankerLamp(dx + 1.4, y + 1.09, dz - 0.5);
     const bk = tbox(0.85, 0.16, 1.1, toonMat(0x46532f)); bk.position.set(dx - 1.3, y + 1.16, dz - 0.2); bk.rotation.y = 0.3; root.add(bk);
     groundShadow(dx, dz, 5.4, 3.0, y + 0.02);
     if (carrel) {
@@ -519,6 +530,21 @@ export function buildLibrary() {
   loadProp(root, 'assets/gramophone.glb', { x: -31, z: 9.5, ry: 0.8, scale: 1 });
   groundShadow(-33.4, 14, 2, 3.6); groundShadow(-29, 18.5, 2, 2); groundShadow(-31, 9.5, 1.8, 1.8);
 
+  // animated fire in the hearth (the fireplace sits on the left wall, opening +x)
+  const fireMat = (c, e) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: 1.0, gradientMap: null });
+  const fireGroup = new THREE.Group();
+  const logs = tbox(0.5, 0.25, 1.3, toonMat(0x3a2114)); logs.position.y = -0.1; fireGroup.add(logs);
+  const embers = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 1.2), fireMat(0xff7a2e, 0xff5a1e)); embers.position.y = 0.04; fireGroup.add(embers);
+  const fcols = [[0xff4d1a, 0xff3a10], [0xff8a2e, 0xff6a1e], [0xffb648, 0xff9a2e], [0xffd86a, 0xffc24a]];
+  for (let i = 0; i < 8; i++) {
+    const [c, e] = fcols[i % fcols.length];
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5 + (i % 3) * 0.12, 8), fireMat(c, e));
+    fl.position.set(0.04 * ((i % 2) ? 1 : -1), 0.28, -0.5 + i * 0.14);
+    fireGroup.add(fl);
+    flames.push({ mesh: fl, baseY: 0.28, phase: i * 1.6, speed: 6 + i * 0.5 });
+  }
+  fireGroup.position.set(-32.9, 0.55, 14); root.add(fireGroup);
+
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
   const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
@@ -529,7 +555,7 @@ export function buildLibrary() {
   bookStack(22.6, 1.5, 18.7, 3, -0.3);
   candle(23.7, 1.5, 19.4, false);
   // scatter a few books + an open book on the communal tables
-  for (const [cx, cz] of [[-2, 7], [-2, 15]]) {
+  for (const [cx, cz] of [[-2, 7], [-2, 14]]) {
     openBook(cx + 4.5, 1.12, cz - 0.3, 0.2);
     bookStack(cx - 6.0, 1.12, cz + 0.4, 2, 0.4);
   }
@@ -556,8 +582,20 @@ export function buildLibrary() {
   warmLight(0, 8, 20, 22, 32);      // entrance / spawn area
   warmLight(-26, 4.5, 14, 26, 24);  // nook glow
   warmLight(0, 7, -16, 16, 30);     // balcony glow (kept off the column at z=-11)
-  const fireGlow = new THREE.PointLight(0xff7a2e, 7, 10, 2); // fireplace (gentle)
+  const fireGlow = new THREE.PointLight(0xff7a2e, 9, 12, 2); // fireplace (flickers via animate)
   fireGlow.position.set(-32, 1.4, 14); root.add(fireGlow);
+
+  // per-frame ambient animation (called by main.js while the library is active):
+  // licking flames + a flickering hearth glow for a living fire.
+  function animate(t) {
+    for (const f of flames) {
+      const s = 0.7 + 0.5 * Math.abs(Math.sin(t * f.speed + f.phase));
+      f.mesh.scale.set(0.85 + 0.2 * Math.sin(t * f.speed * 1.4 + f.phase), s, 0.85 + 0.2 * Math.cos(t * f.speed + f.phase));
+      f.mesh.material.emissiveIntensity = 0.85 + 0.5 * Math.sin(t * f.speed + f.phase);
+      f.mesh.position.y = f.baseY + (s - 1) * 0.18;
+    }
+    fireGlow.intensity = 9 * (0.82 + 0.16 * Math.sin(t * 11) + 0.07 * Math.sin(t * 27));
+  }
 
   // ---- exit + spawn ----
   addExitPad(root, 0, D / 2 - 2);
@@ -570,7 +608,7 @@ export function buildLibrary() {
   const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
   colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
   const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
-  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor };
+  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor, animate };
 }
 
 // ----------------------------------------------------- dorm common room
