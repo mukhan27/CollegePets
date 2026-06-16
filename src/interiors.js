@@ -180,33 +180,78 @@ export function buildLibrary() {
     archedWindow(W / 2 - 0.4, z, -Math.PI / 2);    // right wall, faces -x
   }
 
-  // ---- shelf runs: book-spine textured faces on a wood backing ----
-  function shelfRun(x, z, len, dir, face, y0, h) {
-    const depth = 1.1, n = Math.max(1, Math.round(len / 5));
+  // ---- bookcases: a real carcass (base plinth + crown molding + side pilasters
+  // + bay mullions) framing recessed book-spine faces, with books on top. opts:
+  // { both } double-sided (free-standing), { arch } arched tops on each bay. ----
+  function shelfRun(x, z, len, dir, face, y0, h, opts = {}) {
+    const depth = 1.1;
     const g = new THREE.Group();
-    const backing = dir === 'x' ? tbox(len, h, depth, woodMat) : tbox(depth, h, len, woodMat);
-    backing.position.y = h / 2; g.add(backing);
-    for (let i = 0; i < n; i++) {
-      const pl = new THREE.Mesh(new THREE.PlaneGeometry(len / n - 0.15, h - 0.4), bookMats[i % 3]);
-      if (dir === 'x') {
-        pl.position.set(-len / 2 + (i + 0.5) * len / n, h / 2, face * (depth / 2 + 0.02));
-        if (face < 0) pl.rotation.y = Math.PI;
-      } else {
-        pl.position.set(face * (depth / 2 + 0.02), h / 2, -len / 2 + (i + 0.5) * len / n);
-        pl.rotation.y = face > 0 ? Math.PI / 2 : -Math.PI / 2;
+    const dark = toonMat(0x4a3322);
+    const faces = opts.both ? [1, -1] : [face];
+
+    // centred (depth-symmetric) box — carcass + mouldings
+    const cbox = (u, yy, du, dy, dv, m) => {
+      const b = dir === 'x' ? tbox(du, dy, dv, m) : tbox(dv, dy, du, m);
+      b.position.set(dir === 'x' ? u : 0, yy, dir === 'x' ? 0 : u); g.add(b);
+    };
+    // box pushed to a front face (f = ±1)
+    const fbox = (f, u, yy, dz, du, dy, dv, m) => {
+      const b = dir === 'x' ? tbox(du, dy, dv, m) : tbox(dv, dy, du, m);
+      b.position.set(dir === 'x' ? u : f * dz, yy, dir === 'x' ? f * dz : u); g.add(b);
+    };
+
+    cbox(0, h / 2, len, h, depth * 0.82, woodMat);                 // carcass
+    cbox(0, 0.28, len + 0.25, 0.56, depth + 0.28, dark);           // base plinth
+    cbox(0, h - 0.18, len + 0.22, 0.4, depth + 0.3, woodMat);      // crown (lower)
+    cbox(0, h + 0.06, len + 0.4, 0.26, depth + 0.46, dark);        // crown (cap)
+    cbox(-len / 2 + 0.12, h / 2, 0.24, h, depth + 0.16, woodMat);  // end pilasters
+    cbox(len / 2 - 0.12, h / 2, 0.24, h, depth + 0.16, woodMat);
+
+    const n = Math.max(1, Math.round(len / 4.5));
+    const bw = len / n;
+    for (const f of faces) {
+      for (let i = 0; i < n; i++) {
+        const u = -len / 2 + (i + 0.5) * bw;
+        const pl = new THREE.Mesh(new THREE.PlaneGeometry(bw - 0.34, h - 1.2), bookMats[(i + (f < 0 ? 1 : 0)) % 3]);
+        const dz = depth / 2 - 0.06;
+        if (dir === 'x') { pl.position.set(u, h / 2 - 0.05, f * dz); if (f < 0) pl.rotation.y = Math.PI; }
+        else { pl.position.set(f * dz, h / 2 - 0.05, u); pl.rotation.y = f > 0 ? Math.PI / 2 : -Math.PI / 2; }
+        g.add(pl);
+        if (i > 0) fbox(f, -len / 2 + i * bw, h / 2, depth / 2 - 0.03, 0.14, h - 0.7, 0.14, woodMat); // mullion
+        if (opts.arch) {                                            // thin arched header per bay
+          const r = Math.min(bw - 0.6, 1.5) / 2;
+          const arc = new THREE.Mesh(new THREE.RingGeometry(Math.max(0.08, r - 0.12), r, 14, 1, 0, Math.PI), dark);
+          const dz2 = depth / 2 - 0.02;
+          if (dir === 'x') { arc.position.set(u, h - 1.55, f * dz2); if (f < 0) arc.rotation.y = Math.PI; }
+          else { arc.position.set(f * dz2, h - 1.55, u); arc.rotation.y = f > 0 ? Math.PI / 2 : -Math.PI / 2; }
+          g.add(arc);
+        }
       }
-      g.add(pl);
     }
+
+    // a few books stacked/leaning on top of the crown for a lived-in feel
+    const topY = h + 0.25, bookCols = [0x5e2b2b, 0x33445e, 0x2f5742, 0x8a6a24, 0x6e4230];
+    const clusters = Math.max(1, Math.floor(len / 10));
+    for (let c = 0; c < clusters; c++) {
+      const u = -len / 2 + (c + 0.6) * (len / clusters);
+      for (let b = 0; b < 3; b++) {
+        const bk = tbox(0.7, 0.15, 1.0, toonMat(bookCols[(c * 3 + b) % bookCols.length]));
+        if (dir === 'x') { bk.position.set(u + b * 0.05, topY + b * 0.15, 0); bk.rotation.y = 0.18 * b; }
+        else { bk.position.set(0, topY + b * 0.15, u + b * 0.05); bk.rotation.y = Math.PI / 2 + 0.18 * b; }
+        g.add(bk);
+      }
+    }
+
     g.position.set(x, y0, z); root.add(g);
   }
 
   // ground perimeter shelves (back under the balcony + both sides)
-  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, 0, 4.4);
+  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, 0, 4.4, { arch: true });
   colliders.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
   // left wall: split into two runs leaving a gap (z[10,18]) for the fireplace nook
-  shelfRun(-W / 2 + 0.9, -6, 32, 'z', 1, 0, 4.4);
-  shelfRun(-W / 2 + 0.9, 20, 4, 'z', 1, 0, 4.4);
-  shelfRun(W / 2 - 0.9, 0, D - 4, 'z', -1, 0, 4.4);
+  shelfRun(-W / 2 + 0.9, -6, 32, 'z', 1, 0, 4.4, { arch: true });
+  shelfRun(-W / 2 + 0.9, 20, 4, 'z', 1, 0, 4.4, { arch: true });
+  shelfRun(W / 2 - 0.9, 0, D - 4, 'z', -1, 0, 4.4, { arch: true });
   colliders.push({ x: -W / 2 + 1.3, z: 0, w: 1.6, d: D - 4 });
   colliders.push({ x: W / 2 - 1.3, z: 0, w: 1.6, d: D - 4 });
   groundShadow(0, -D / 2 + 1.3, W - 2, 3.2);
@@ -214,13 +259,12 @@ export function buildLibrary() {
   groundShadow(W / 2 - 1.3, 0, 3.2, D - 2);
   // two free-standing double-sided stacks for depth
   for (const sx of [-13, 13]) {
-    shelfRun(sx, -3, 9, 'z', 1, 0, 3.6);
-    shelfRun(sx, -3, 9, 'z', -1, 0, 3.6);
+    shelfRun(sx, -3, 9, 'z', 1, 0, 3.6, { both: true });
     groundShadow(sx, -3, 3.4, 10);
     colliders.push({ x: sx, z: -3, w: 2.4, d: 9 });
   }
   // mezzanine upper shelves (back wall) — level 1
-  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, MEZZ_Y, 4.0);
+  shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, MEZZ_Y, 4.0, { arch: true });
   colliders1.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
 
   // ---- columns ----

@@ -362,10 +362,12 @@ function makeLibraryExterior(b) {
   g.add(sign);
 
   g.position.set(x, 0, z);
-  // enter-point sits out at the foot of the steps so the prompt is easy to find
+  // doorWorld is the spawn-back point on the lawn; `enter` centres the prompt
+  // over the whole approach (steps + porch) so it never drops out at the door
   const doorWorld = new THREE.Vector3(x, 0, z + porchFront + 2.5);
+  const enter = new THREE.Vector3(x, 0, z + d / 2 + 5);
   const collider = { x, z, w: w + 1.4, d: d + 1.4 };
-  return { group: g, doorWorld, collider };
+  return { group: g, doorWorld, enter, enterR: 6, collider };
 }
 
 // ----------------------------------------------------------- campus
@@ -424,7 +426,7 @@ export function buildCampus() {
   // ---- buildings (positions & footprints identical to v1) ----
   const buildings = [
     { id: 'library', x: -58, z: -36, w: 42, h: 18, d: 26, color: P.wallCream, roofColor: P.roofTeal,
-      label: '📚 Library', prompt: '📚 Enter Library', enterR: 4.5 },
+      label: '📚 Library', prompt: '📚 Enter Library' },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
     { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: P.wallBlue, roofColor: P.roofNavy,
@@ -446,7 +448,8 @@ export function buildCampus() {
     colliders.push(built.collider);
     doors[b.id] = built.doorWorld;
     if (b.prompt) {
-      interactables.push({ id: b.id, x: built.doorWorld.x, z: built.doorWorld.z, r: b.enterR || 3.2, label: b.prompt });
+      const e = built.enter || built.doorWorld;
+      interactables.push({ id: b.id, x: e.x, z: e.z, r: built.enterR || b.enterR || 3.2, label: b.prompt });
     }
   }
 
