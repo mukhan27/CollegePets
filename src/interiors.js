@@ -109,6 +109,17 @@ export function buildLibrary() {
     mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   };
+  // small mesh helpers (used by furniture + props throughout)
+  const cyl = (rt, rb, h, n, m) => { const me = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), m); me.castShadow = true; return me; };
+  const sph = (r, m) => { const me = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m); me.castShadow = true; return me; };
+  // a lathe-turned tapered leg with a knob + foot, base sitting at `baseY`
+  function turnedLeg(x, baseY, z, h, m) {
+    const g = new THREE.Group();
+    const shaft = cyl(0.09, 0.13, h, 10, m); shaft.position.y = h / 2; g.add(shaft);
+    const knob = cyl(0.15, 0.15, 0.13, 10, m); knob.position.y = h * 0.6; g.add(knob);
+    const foot = cyl(0.1, 0.07, 0.12, 10, m); foot.position.y = 0.06; g.add(foot);
+    g.position.set(x, baseY, z); return g;
+  }
 
   // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
   // Neutral tint over the (now cooler) oak texture so the warm lights warm it
@@ -245,75 +256,88 @@ export function buildLibrary() {
   colliders.push({ x: STAIR_X, z: -4.5, w: 7, d: 11 }); // side-block; ramp logic overrides for climbing
   const stairs = [{ xMin: 24, xMax: 31, zMin: DECK_FRONT, zMax: 2, zBottom: 2, zTop: DECK_FRONT, yBottom: 0, yTop: MEZZ_Y }];
 
-  // ---- reading desks — each chair is a pomodoro seat (works on either floor) ----
+  // ---- seating + desks — each chair is a pomodoro study seat ----
   let seatNum = 1;
-  function readingDesk(dx, dz, floorY, cl) {
-    const y = floorY;
-    const desk = tbox(4.6, 1.1, 2.4, deskMat); desk.position.set(dx, y + 0.55, dz); root.add(desk);
-    groundShadow(dx, dz + 1, 6.5, 4.5, y + 0.02);
-    const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(dx + 1.5, y + 1.45, dz - 0.6); root.add(lampPost);
-    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
-      toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(dx + 1.5, y + 1.85, dz - 0.6); root.add(lampShade);
-    const bookProp = tbox(0.9, 0.18, 1.2, toonMat(0xb5462f)); bookProp.position.set(dx - 1, y + 1.2, dz); bookProp.rotation.y = 0.4; root.add(bookProp);
-    cl.push({ x: dx, z: dz, w: 5.0, d: 2.8 });
-    const chairZ = dz + 2.3;
-    const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(dx, y + 0.28, chairZ); root.add(chair);
-    const chairBack = tbox(1.2, 1.2, 0.18, deskMat); chairBack.position.set(dx, y + 0.95, chairZ + 0.55); root.add(chairBack);
-    const seatPos = { x: dx, z: chairZ, y: floorY };
-    seatPositions.push(seatPos);
-    interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: chairZ + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
-  }
-  // A single chair that registers itself as a pomodoro seat. `face` is the
-  // y-rotation the player takes when seated; the chair back, approach pad and
-  // step-back point are all derived from it, so seats can face any direction.
+  // A proper little chair (seat + four turned legs + a slatted, round-railed
+  // back) that registers itself as a study seat facing `face`.
   function addSeat(x, z, floorY, face) {
-    const fx = Math.sin(face), fz = Math.cos(face); // unit "facing" vector
-    const chair = tbox(1.2, 0.55, 1.2, deskMat); chair.position.set(x, floorY + 0.28, z); root.add(chair);
-    const chairBack = tbox(1.2, 1.2, 0.18, deskMat);
-    chairBack.position.set(x - fx * 0.55, floorY + 0.95, z - fz * 0.55); // behind the sitter
-    chairBack.rotation.y = face; root.add(chairBack);
-    const seatPos = { x, z, y: floorY };
-    seatPositions.push(seatPos);
+    const fx = Math.sin(face), fz = Math.cos(face);
+    const m = deskMat;
+    const seat = tbox(1.1, 0.16, 1.1, m); seat.position.set(x, floorY + 0.5, z); root.add(seat);
+    for (const sx of [-0.45, 0.45]) for (const sz of [-0.45, 0.45]) {
+      const leg = cyl(0.06, 0.06, 0.5, 8, m); leg.position.set(x + sx, floorY + 0.25, z + sz); root.add(leg);
+    }
+    const back = new THREE.Group();
+    const panel = tbox(1.1, 0.62, 0.08, m); panel.position.y = floorY + 0.92; back.add(panel);
+    const rail = cyl(0.07, 0.07, 1.1, 10, m); rail.rotation.z = Math.PI / 2; rail.position.y = floorY + 1.26; back.add(rail);
+    back.position.set(x - fx * 0.5, 0, z - fz * 0.5); back.rotation.y = face; root.add(back);
+    seatPositions.push({ x, z, y: floorY });
     interactables.push({
       id: 'study_seat', seat: seatNum++,
       x: x - fx * 1.5, z: z - fz * 1.5, r: 2.0, // approach pad on the open side
-      label: '🪑 Sit & study', seatPos, face,
+      label: '🪑 Sit & study', seatPos: { x, z, y: floorY }, face,
       stepBack: { x: x - fx * 1.6, z: z - fz * 1.6 },
     });
   }
 
-  // A long communal table: a row of three chairs down each side (six seats),
-  // facing in across the tabletop. Shared lamps + books run down the centre.
+  // A communal long table: planked top with a bull-nose lip, an inset apron,
+  // six lathe-turned legs joined by a stretcher, green banker's lamps + books,
+  // and three chairs down each side.
   function longTable(cx, cz, floorY, cl) {
-    const len = 16, y = floorY;
-    const top = tbox(len, 1.1, 3, deskMat); top.position.set(cx, y + 0.55, cz); root.add(top);
+    const len = 16, w = 3, y = floorY;
+    const top = tbox(len, 0.18, w, deskMat); top.position.set(cx, y + 1.0, cz); root.add(top);
+    const lip = tbox(len + 0.3, 0.08, w + 0.3, deskMat); lip.position.set(cx, y + 0.92, cz); root.add(lip);
+    for (const zz of [w / 2 - 0.25, -(w / 2 - 0.25)]) { const a = tbox(len - 1.4, 0.3, 0.12, deskMat); a.position.set(cx, y + 0.74, cz + zz); root.add(a); }
+    for (const xx of [len / 2 - 0.6, -(len / 2 - 0.6)]) { const a = tbox(0.12, 0.3, w - 0.6, deskMat); a.position.set(cx + xx, y + 0.74, cz); root.add(a); }
+    for (const lx of [-(len / 2 - 0.7), 0, len / 2 - 0.7]) for (const lz of [-(w / 2 - 0.45), w / 2 - 0.45]) root.add(turnedLeg(cx + lx, y, cz + lz, 0.84, deskMat));
+    const stretch = tbox(len - 1.6, 0.13, 0.16, deskMat); stretch.position.set(cx, y + 0.32, cz); root.add(stretch);
     groundShadow(cx, cz, len + 3, 6.5, y + 0.02);
-    const bookCols = [0xb5462f, 0x3a6f9a, 0x4f8a45];
     [-5.5, 0, 5.5].forEach((ox) => {
-      const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(cx + ox, y + 1.45, cz); root.add(lampPost);
-      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
-        toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(cx + ox, y + 1.85, cz); root.add(lampShade);
+      const lampPost = cyl(0.06, 0.08, 0.7, 8, brassMat); lampPost.position.set(cx + ox, y + 1.35, cz); root.add(lampPost);
+      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.3, 14), toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(cx + ox, y + 1.7, cz); root.add(lampShade);
     });
-    [-4, 1, 5].forEach((ox, i) => {
-      const book = tbox(0.9, 0.18, 1.2, toonMat(bookCols[i % 3]));
-      book.position.set(cx + ox, y + 1.2, cz + (i % 2 ? 0.6 : -0.6)); book.rotation.y = 0.4; root.add(book);
-    });
-    cl.push({ x: cx, z: cz, w: len + 0.4, d: 3 });
-    for (const ox of [-5.5, 0, 5.5]) {
-      addSeat(cx + ox, cz + 2.6, floorY, Math.PI); // near side, faces table (-z)
-      addSeat(cx + ox, cz - 2.6, floorY, 0);        // far side, faces table (+z)
-    }
+    const bookCols = [0xb5462f, 0x3a6f9a, 0x4f8a45];
+    [-4, 1, 5].forEach((ox, i) => { const book = tbox(0.9, 0.18, 1.2, toonMat(bookCols[i % 3])); book.position.set(cx + ox, y + 1.18, cz + (i % 2 ? 0.6 : -0.6)); book.rotation.y = 0.4; root.add(book); });
+    cl.push({ x: cx, z: cz, w: len + 0.4, d: w });
+    for (const ox of [-5.5, 0, 5.5]) { addSeat(cx + ox, cz + 2.6, floorY, Math.PI); addSeat(cx + ox, cz - 2.6, floorY, 0); }
   }
 
-  // ground floor: two long communal tables down the centre, plus a quiet
-  // single carrel tucked to either side for solo studying
+  // An antique pine writing desk: planked top with a lip, two knobbed drawers
+  // either side of a kneehole, and turned legs. `carrel` adds privacy side
+  // panels + a back hutch with little books → an individual study compartment.
+  function writingDesk(dx, dz, floorY, cl, carrel = false) {
+    const y = floorY, zf = dz + 1.0;
+    const top = tbox(4.4, 0.16, 2.2, deskMat); top.position.set(dx, y + 1.0, dz); root.add(top);
+    const lip = tbox(4.6, 0.07, 2.35, deskMat); lip.position.set(dx, y + 0.93, dz); root.add(lip);
+    for (const sxn of [-1, 1]) {
+      const drawer = tbox(1.3, 0.52, 0.12, deskMat); drawer.position.set(dx + sxn * 1.35, y + 0.66, zf); root.add(drawer);
+      const seam = tbox(1.15, 0.02, 0.14, toonMat(0x6e4a24)); seam.position.set(dx + sxn * 1.35, y + 0.66, zf + 0.005); root.add(seam);
+      for (const dyv of [0.78, 0.54]) { const knob = sph(0.07, brassMat); knob.position.set(dx + sxn * 1.35, y + dyv, zf + 0.12); root.add(knob); }
+    }
+    const apB = tbox(4.4, 0.4, 0.12, deskMat); apB.position.set(dx, y + 0.74, dz - 1.0); root.add(apB);
+    for (const xx of [2.0, -2.0]) { const a = tbox(0.12, 0.4, 2.0, deskMat); a.position.set(dx + xx, y + 0.74, dz); root.add(a); }
+    for (const lx of [-2.0, 2.0]) for (const lz of [-0.95, 0.95]) root.add(turnedLeg(dx + lx, y, dz + lz, 0.84, deskMat));
+    const lp = cyl(0.05, 0.07, 0.6, 8, brassMat); lp.position.set(dx + 1.5, y + 1.3, dz - 0.6); root.add(lp);
+    const ls = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.28, 14), toonMat(0x2e6f4f, { emissive: 0x123a26 })); ls.position.set(dx + 1.5, y + 1.6, dz - 0.6); root.add(ls);
+    const bk = tbox(0.85, 0.16, 1.1, toonMat(0x46532f)); bk.position.set(dx - 1.3, y + 1.16, dz - 0.2); bk.rotation.y = 0.3; root.add(bk);
+    groundShadow(dx, dz, 5.4, 3.0, y + 0.02);
+    if (carrel) {
+      for (const xx of [2.3, -2.3]) { const p = tbox(0.1, 1.5, 2.4, deskMat); p.position.set(dx + xx, y + 1.85, dz); root.add(p); }
+      const hutch = tbox(4.7, 1.6, 0.12, deskMat); hutch.position.set(dx, y + 1.9, dz - 1.15); root.add(hutch);
+      const shelf = tbox(4.3, 0.1, 0.5, deskMat); shelf.position.set(dx, y + 2.1, dz - 0.95); root.add(shelf);
+      [0x5e2b2b, 0x33445e, 0x8a6a24].forEach((c, i) => { const mb = tbox(0.5, 0.5, 0.2, toonMat(c)); mb.position.set(dx - 1.4 + i * 1.4, y + 2.4, dz - 0.95); root.add(mb); });
+      cl.push({ x: dx, z: dz - 0.2, w: 5.0, d: 3.0 });
+    } else {
+      cl.push({ x: dx, z: dz, w: 4.8, d: 2.4 });
+    }
+    addSeat(dx, dz + 2.4, floorY, Math.PI);
+  }
+
+  // first floor: communal long tables
   longTable(-2, 7, 0, colliders);
-  longTable(-2, 15, 0, colliders);
-  readingDesk(-20, 6, 0, colliders);
-  readingDesk(18, 6, 0, colliders);
-  // mezzanine: two reading tables on the balcony
-  readingDesk(-14, -17, MEZZ_Y, colliders1);
-  readingDesk(14, -17, MEZZ_Y, colliders1);
+  longTable(-2, 16, 0, colliders);
+  // second floor (mezzanine): a row of individual study carrels along the wall
+  for (const cx of [-22, -11, 0, 11, 20]) writingDesk(cx, -18, MEZZ_Y, colliders1, true);
 
   // ============================================================ cozy details
   // A kit of small rounded props + soft furniture to give the room character
@@ -321,8 +345,6 @@ export function buildLibrary() {
   const leatherMat = toonMat(PALETTE.leather, { map: fabricTexture('#7a4f33') });
   const blueMat = toonMat(PALETTE.armchair, { map: fabricTexture('#5e6e8c') });
   const walnut = toonMat(0x5a3d28);
-  const cyl = (rt, rb, h, n, m) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), m);
-  const sph = (r, m) => new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m);
 
   // soft tufted armchair: rounded cushion + rolled arms/back, little wooden feet
   function armchair(x, z, ry, mat = leatherMat) {
@@ -397,9 +419,11 @@ export function buildLibrary() {
     const g = new THREE.Group();
     const stick = cyl(0.07, 0.09, 0.45, 10, toonMat(0xefe6cf)); stick.position.y = 0.22; g.add(stick);
     const dish = cyl(0.16, 0.16, 0.05, 12, brassMat); dish.position.y = 0; g.add(dish);
-    const flame = sph(0.06, toonMat(0xffd27a, { emissive: 0xffb13c })); flame.scale.y = 1.6; flame.position.y = 0.52; g.add(flame);
+    // small, dim flame (emissiveIntensity < 1 keeps it under the bloom threshold
+    // so it reads as a soft glow instead of a blown-out blob)
+    const flame = sph(0.045, toonMat(0xffcaa0, { emissive: 0xff9d4a, emissiveIntensity: 0.55 })); flame.scale.y = 1.5; flame.position.y = 0.5; g.add(flame);
     g.position.set(x, y, z); root.add(g);
-    if (lit) { const L = new THREE.PointLight(0xffb86a, 5, 5.5, 2); L.position.set(x, y + 0.7, z); root.add(L); }
+    if (lit) { const L = new THREE.PointLight(0xffb86a, 1.4, 3.2, 2); L.position.set(x, y + 0.6, z); root.add(L); }
   }
   function vaseFlowers(x, y, z) {
     const g = new THREE.Group();
