@@ -111,10 +111,10 @@ export function buildLibrary() {
   };
 
   // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
-  // Warm honey-oak tint — golden rather than the old orange 0xc89060 (which,
-  // stacked with the warm lights, read red). Cozy without going saturated.
+  // Neutral tint over the (now cooler) oak texture so the warm lights warm it
+  // up to a natural honey-oak rather than pushing it red.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
-    toonMat(0xc6a172, { map: hardwoodFloor() }));
+    toonMat(0xb9ac96, { map: hardwoodFloor() }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
   root.add(floor);
   const wallMat = toonMat(0xddc9a4, { map: plaster() }); // warm tan plaster (cozier than cream)
@@ -315,31 +315,175 @@ export function buildLibrary() {
   readingDesk(-14, -17, MEZZ_Y, colliders1);
   readingDesk(14, -17, MEZZ_Y, colliders1);
 
-  // ---- cozy nook (front-left); the fireplace Blender prop is placed here later ----
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 28),
-    toonMat(PALETTE.rug, { map: rugTexture(`#${PALETTE.rug.toString(16)}`, `#${PALETTE.rugBorder.toString(16)}`) }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.02, 14); root.add(rug);
+  // ============================================================ cozy details
+  // A kit of small rounded props + soft furniture to give the room character
+  // and that lived-in, Animal-Crossing warmth (rather than bare boxes).
   const leatherMat = toonMat(PALETTE.leather, { map: fabricTexture('#7a4f33') });
-  function armchair(x, z, ry) {
+  const blueMat = toonMat(PALETTE.armchair, { map: fabricTexture('#5e6e8c') });
+  const walnut = toonMat(0x5a3d28);
+  const cyl = (rt, rb, h, n, m) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), m);
+  const sph = (r, m) => new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m);
+
+  // soft tufted armchair: rounded cushion + rolled arms/back, little wooden feet
+  function armchair(x, z, ry, mat = leatherMat) {
     const g = new THREE.Group();
-    const seat = tbox(1.8, 0.7, 1.8, leatherMat); seat.position.y = 0.55; g.add(seat);
-    const backr = tbox(1.8, 1.3, 0.4, leatherMat); backr.position.set(0, 1.2, -0.7); g.add(backr);
-    for (const ax of [-1, 1]) { const arm = tbox(0.35, 0.6, 1.6, leatherMat); arm.position.set(ax * 0.9, 0.85, 0); g.add(arm); }
+    const base = tbox(1.9, 0.45, 1.9, mat); base.position.y = 0.5; g.add(base);
+    const cushion = cyl(0.85, 0.85, 0.4, 18, mat); cushion.scale.z = 0.95; cushion.position.set(0, 0.82, 0.1); g.add(cushion);
+    const back = tbox(1.85, 1.35, 0.45, mat); back.position.set(0, 1.25, -0.78); g.add(back);
+    const backRoll = cyl(0.28, 0.28, 1.85, 14, mat); backRoll.rotation.z = Math.PI / 2; backRoll.position.set(0, 1.9, -0.78); g.add(backRoll);
+    for (const ax of [-1, 1]) {
+      const arm = tbox(0.45, 0.7, 1.7, mat); arm.position.set(ax * 0.92, 0.95, 0); g.add(arm);
+      const roll = cyl(0.26, 0.26, 1.7, 14, mat); roll.rotation.x = Math.PI / 2; roll.position.set(ax * 0.92, 1.32, 0); g.add(roll);
+      for (const fz of [-0.7, 0.7]) { const foot = cyl(0.12, 0.1, 0.3, 8, walnut); foot.position.set(ax * 0.8, 0.15, fz); g.add(foot); }
+    }
     g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
-    groundShadow(x, z, 2.8, 2.8);
-    colliders.push({ x, z, w: 2, d: 2 });
+    groundShadow(x, z, 3, 3); colliders.push({ x, z, w: 2.2, d: 2.2 });
   }
-  armchair(-27, 12, 0.5); armchair(-22, 16, -0.6);
-  const lampPole = tbox(0.16, 3.2, 0.16, brassMat); lampPole.position.set(-19, 1.6, 11); root.add(lampPole);
-  const floorShade = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.0, 16), toonMat(0xf3e3b8, { emissive: 0x6a5a30 }));
-  floorShade.position.set(-19, 3.4, 11); root.add(floorShade);
-  function plant(x, z) {
+
+  // chesterfield-ish sofa: three seat + back cushions, rolled arms
+  function sofa(x, z, ry, mat = leatherMat) {
     const g = new THREE.Group();
-    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 0.8, 12), toonMat(0xb5703f)); pot.position.y = 0.4; g.add(pot);
-    const foliage = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), toonMat(0x4f8a45)); foliage.position.y = 1.4; g.add(foliage);
-    g.position.set(x, 0, z); root.add(g); colliders.push({ x, z, w: 1, d: 1 });
+    const base = tbox(4.4, 0.45, 1.9, mat); base.position.y = 0.5; g.add(base);
+    for (const cx of [-1.35, 0, 1.35]) {
+      const seat = tbox(1.28, 0.4, 1.6, mat); seat.position.set(cx, 0.82, 0.12); g.add(seat);
+      const back = tbox(1.28, 1.05, 0.45, mat); back.position.set(cx, 1.3, -0.72); g.add(back);
+    }
+    const backRoll = cyl(0.26, 0.26, 4.4, 14, mat); backRoll.rotation.z = Math.PI / 2; backRoll.position.set(0, 1.92, -0.72); g.add(backRoll);
+    for (const ax of [-1, 1]) {
+      const arm = tbox(0.45, 0.8, 1.9, mat); arm.position.set(ax * 2.0, 1.0, 0); g.add(arm);
+      const roll = cyl(0.28, 0.28, 1.9, 14, mat); roll.rotation.x = Math.PI / 2; roll.position.set(ax * 2.0, 1.4, 0); g.add(roll);
+    }
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    groundShadow(x, z, 5.2, 3);
+    const a = Math.abs(Math.sin(ry)); // swap footprint axes as the sofa rotates
+    colliders.push({ x, z, w: 4.6 * (1 - a) + 2.2 * a, d: 2.2 * (1 - a) + 4.6 * a });
   }
-  plant(-31, 9); plant(-31, 19);
+
+  // round pedestal coffee table with turned legs
+  function roundTable(x, z, r = 1.3, h = 1.0) {
+    const g = new THREE.Group();
+    const top = cyl(r, r, 0.16, 24, deskMat); top.position.y = h; g.add(top);
+    const apron = cyl(r - 0.15, r - 0.15, 0.18, 24, deskMat); apron.position.y = h - 0.16; g.add(apron);
+    for (const a of [0, 1, 2, 3]) {
+      const lx = Math.cos(a * Math.PI / 2) * (r - 0.4), lz = Math.sin(a * Math.PI / 2) * (r - 0.4);
+      const leg = cyl(0.1, 0.14, h - 0.2, 10, walnut); leg.position.set(lx, (h - 0.2) / 2, lz); g.add(leg);
+    }
+    g.position.set(x, 0, z); root.add(g);
+    groundShadow(x, z, r * 2.4, r * 2.4); colliders.push({ x, z, w: r * 2, d: r * 2 });
+  }
+
+  // little props ---------------------------------------------------------
+  const SPINE = [0x5e2b2b, 0x33445e, 0x2f5742, 0x8a6a24, 0x6e4230, 0x46532f, 0x3d2f24];
+  function bookStack(x, y, z, n = 3, rot = 0) {
+    const g = new THREE.Group();
+    let yy = 0;
+    for (let i = 0; i < n; i++) {
+      const w = 0.95 - i * 0.07, d = 1.25 - i * 0.06, h = 0.16 + (i % 2) * 0.05;
+      const bk = tbox(w, h, d, toonMat(SPINE[(i * 3 + 1) % SPINE.length]));
+      bk.position.set((i % 2 ? 0.06 : -0.05), yy + h / 2, (i % 2 ? -0.04 : 0.05));
+      bk.rotation.y = (i % 2 ? 0.12 : -0.08); g.add(bk); yy += h;
+    }
+    g.position.set(x, y, z); g.rotation.y = rot; root.add(g);
+  }
+  function openBook(x, y, z, rot = 0) {
+    const g = new THREE.Group();
+    for (const s of [-1, 1]) {
+      const page = tbox(0.7, 0.04, 1.0, toonMat(0xf2e9d0)); page.position.set(s * 0.36, 0, 0); page.rotation.z = s * 0.12; g.add(page);
+    }
+    const spine = tbox(0.12, 0.08, 1.0, toonMat(0x6e4230)); g.add(spine);
+    g.position.set(x, y + 0.04, z); g.rotation.y = rot; root.add(g);
+  }
+  function candle(x, y, z, lit = true) {
+    const g = new THREE.Group();
+    const stick = cyl(0.07, 0.09, 0.45, 10, toonMat(0xefe6cf)); stick.position.y = 0.22; g.add(stick);
+    const dish = cyl(0.16, 0.16, 0.05, 12, brassMat); dish.position.y = 0; g.add(dish);
+    const flame = sph(0.06, toonMat(0xffd27a, { emissive: 0xffb13c })); flame.scale.y = 1.6; flame.position.y = 0.52; g.add(flame);
+    g.position.set(x, y, z); root.add(g);
+    if (lit) { const L = new THREE.PointLight(0xffb86a, 5, 5.5, 2); L.position.set(x, y + 0.7, z); root.add(L); }
+  }
+  function vaseFlowers(x, y, z) {
+    const g = new THREE.Group();
+    const vase = cyl(0.18, 0.13, 0.5, 12, toonMat(0xcfe1ea)); vase.position.y = 0.25; g.add(vase);
+    const blooms = [0xf2728c, 0xf7c948, 0xffffff, 0xc084e0];
+    blooms.forEach((c, i) => {
+      const a = i / blooms.length * Math.PI * 2;
+      const stem = cyl(0.02, 0.02, 0.5, 6, toonMat(0x4f8a45)); stem.position.set(Math.cos(a) * 0.1, 0.7, Math.sin(a) * 0.1); stem.rotation.z = Math.cos(a) * 0.25; g.add(stem);
+      const flower = sph(0.12, toonMat(c)); flower.position.set(Math.cos(a) * 0.22, 0.95, Math.sin(a) * 0.22); g.add(flower);
+    });
+    g.position.set(x, y, z); root.add(g);
+  }
+  function pottedPlant(x, z, tall = false) {
+    const g = new THREE.Group();
+    const pot = cyl(0.5, 0.4, 0.8, 12, toonMat(0xb5703f)); pot.position.y = 0.4; g.add(pot);
+    if (tall) {
+      const trunk = cyl(0.12, 0.16, 2.2, 8, walnut); trunk.position.y = 1.6; g.add(trunk);
+      for (const [fx, fy, fz, r] of [[0, 3.0, 0, 1.0], [0.5, 2.6, 0.3, 0.7], [-0.5, 2.7, -0.2, 0.7]]) {
+        const f = sph(r, toonMat(0x4f8a45)); f.position.set(fx, fy, fz); g.add(f);
+      }
+    } else {
+      const f = sph(0.9, toonMat(0x4f8a45)); f.scale.y = 1.1; f.position.y = 1.4; g.add(f);
+      const f2 = sph(0.55, toonMat(0x5fa052)); f2.position.set(0.4, 1.7, 0.2); g.add(f2);
+    }
+    g.position.set(x, 0, z); root.add(g);
+    groundShadow(x, z, 1.6, 1.6); colliders.push({ x, z, w: 1.1, d: 1.1 });
+  }
+  function framedPicture(x, y, z, ry, w = 2.0, h = 2.6, art = 0x6b5536) {
+    const g = new THREE.Group();
+    const frame = tbox(w + 0.25, h + 0.25, 0.14, toonMat(0x7a5a2c)); g.add(frame);
+    const inner = tbox(w + 0.05, h + 0.05, 0.16, brassMat); g.add(inner);
+    const canvas = tbox(w, h, 0.18, toonMat(art)); canvas.position.z = 0.02; g.add(canvas);
+    g.position.set(x, y, z); g.rotation.y = ry; root.add(g);
+  }
+  function libraryLadder(x, z, ry) {
+    const g = new THREE.Group();
+    for (const s of [-0.45, 0.45]) { const rail = cyl(0.07, 0.07, 5.2, 8, walnut); rail.position.set(s, 2.6, 0); rail.rotation.x = 0.12; g.add(rail); }
+    for (let i = 0; i < 7; i++) { const rung = cyl(0.05, 0.05, 0.9, 8, walnut); rung.rotation.z = Math.PI / 2; rung.position.set(0, 0.6 + i * 0.7, -0.07 * i + 0.2); g.add(rung); }
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    colliders.push({ x, z, w: 1.1, d: 0.8 });
+  }
+  function grandClock(x, z, ry) {
+    const g = new THREE.Group();
+    const body = tbox(1.2, 5.2, 0.8, walnut); body.position.y = 2.6; g.add(body);
+    const hood = tbox(1.4, 0.6, 0.95, walnut); hood.position.y = 5.2; g.add(hood);
+    const face = cyl(0.45, 0.45, 0.06, 20, toonMat(0xf0e6c8)); face.rotation.x = Math.PI / 2; face.position.set(0, 4.2, 0.43); g.add(face);
+    const h1 = tbox(0.05, 0.3, 0.02, walnut); h1.position.set(0, 4.32, 0.47); g.add(h1);
+    const h2 = tbox(0.22, 0.05, 0.02, walnut); h2.position.set(0.09, 4.2, 0.47); g.add(h2);
+    const pend = sph(0.16, brassMat); pend.position.set(0, 2.0, 0.3); g.add(pend);
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    groundShadow(x, z, 1.8, 1.4); colliders.push({ x, z, w: 1.4, d: 1.0 });
+  }
+
+  // ---- cozy fireside nook (front-left), arranged around a patterned rug ----
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(6, 32),
+    toonMat(PALETTE.rug, { map: rugTexture(`#${PALETTE.rug.toString(16)}`, `#${PALETTE.rugBorder.toString(16)}`) }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.02, 13); root.add(rug);
+  // seats angled to face the fireplace/rug focal point (≈ -30,13)
+  sofa(-20.5, 13, -Math.PI / 2);                 // faces the fireplace (-x)
+  armchair(-25.5, 7.5, -0.69, blueMat);          // angled in toward the fire
+  armchair(-25.5, 18.5, -2.46);
+  roundTable(-27, 13, 1.2, 0.95);
+  vaseFlowers(-27, 1.02, 13);
+  bookStack(-26.4, 0.95, 13.7, 3, 0.6);
+  openBook(-27.6, 0.95, 12.4, -0.4);
+  // floor reading lamp beside an armchair
+  const lampPole = cyl(0.1, 0.14, 3.2, 10, brassMat); lampPole.position.set(-20.5, 1.6, 8); root.add(lampPole);
+  const floorShade = new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.95, 18), toonMat(0xf3e3b8, { emissive: 0x6a5a30 }));
+  floorShade.position.set(-20.5, 3.35, 8); root.add(floorShade);
+  // greenery + a couple of books spilled on the rug for that lived-in feel
+  pottedPlant(-32, 5, true); pottedPlant(-31, 20);
+  pottedPlant(15, 21); pottedPlant(-2, -9, true);
+  bookStack(-23, 0.02, 16.5, 4, 0.3);
+  candle(-27.7, 0.95, 13.6, true);
+
+  // ---- wall art, a grandfather clock and a rolling ladder for character ----
+  for (const [pz, art] of [[-9, 0x5b6e52], [5, 0x6b4f6e]]) {
+    framedPicture(-W / 2 + 0.5, 8.5, pz, Math.PI / 2, 2.0, 2.6, art);   // left wall
+  }
+  for (const [pz, art] of [[-9, 0x6b5536], [6, 0x4a5e6e]]) {
+    framedPicture(W / 2 - 0.5, 8.5, pz, -Math.PI / 2, 2.0, 2.6, art);   // right wall
+  }
+  grandClock(28, 22, -2.4);
+  libraryLadder(-9, -21.6, Math.PI);
   // ---- Blender hero props (async glTF; colliders added now so gameplay is stable) ----
   const fireAnchor = { x: -32.5, z: 14 };
   colliders.push({ x: -33.6, z: 14, w: 1.6, d: 3.4 });  // fireplace (against left wall)
@@ -355,6 +499,15 @@ export function buildLibrary() {
   const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
   groundShadow(21, 19, 8.5, 3.6);
   colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
+  // counter dressing: a ledger, stacked returns and a candle
+  openBook(20.2, 1.5, 18.6, 0.15);
+  bookStack(22.6, 1.5, 18.7, 3, -0.3);
+  candle(23.7, 1.5, 19.4, false);
+  // scatter a few books + an open book on the communal tables
+  for (const [cx, cz] of [[-2, 7], [-2, 15]]) {
+    openBook(cx + 4.5, 1.12, cz - 0.3, 0.2);
+    bookStack(cx - 6.0, 1.12, cz + 0.4, 2, 0.4);
+  }
 
   // ---- pendant lamps + warm fill lights (no ceiling/rafters; the rods run up
   // past the top of frame so only the hanging shade/glow is ever in view) ----

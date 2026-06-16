@@ -380,21 +380,24 @@ export function softShadow() {
 }
 
 // Warm hardwood floorboards (cozier than marble for a library).
-export function hardwoodFloor(base = '#b07a48') {
+export function hardwoodFloor(base = '#94795a') {
   return canvasTexture(256, 256, (ctx, W, H) => {
     const r = rng(53);
     ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
     const planks = 5, ph = H / planks;
+    // cooler, more neutral oak boards — the old palette was orange-heavy and
+    // read red under the warm library lights
+    const tones = ['#9f8460', '#937a58', '#a98e68', '#8a7250', '#b0936f'];
     for (let i = 0; i < planks; i++) {
       const y = i * ph;
-      ctx.fillStyle = ['#b07a48', '#a87040', '#bb8755', '#a16a3c'][Math.floor(r() * 4)];
+      ctx.fillStyle = tones[Math.floor(r() * tones.length)];
       ctx.fillRect(0, y + 1, W, ph - 2);
-      ctx.strokeStyle = 'rgba(80,50,28,0.16)'; ctx.lineWidth = 1;
-      for (let gg = 0; gg < 5; gg++) {
+      ctx.strokeStyle = 'rgba(70,52,32,0.18)'; ctx.lineWidth = 1;
+      for (let gg = 0; gg < 6; gg++) {
         ctx.beginPath(); const gy = y + r() * ph;
         ctx.moveTo(0, gy); ctx.bezierCurveTo(W * 0.3, gy + (r() - 0.5) * 6, W * 0.7, gy + (r() - 0.5) * 6, W, gy); ctx.stroke();
       }
-      ctx.fillStyle = 'rgba(40,24,12,0.38)'; ctx.fillRect(0, y, W, 2);            // board seam
+      ctx.fillStyle = 'rgba(38,26,14,0.40)'; ctx.fillRect(0, y, W, 2);            // board seam
       ctx.fillRect(((i % 2) * 0.5 + 0.25) * W, y, 2, ph);                          // staggered end joint
     }
   }, { repeat: [9, 7], anisotropy: 8 });
