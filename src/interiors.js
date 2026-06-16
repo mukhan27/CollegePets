@@ -84,7 +84,9 @@ export function buildLibrary() {
   const interactables = [];
   const seatPositions = [];
 
-  const W = 70, D = 48, WALL_H = 12, MEZZ_Y = 6;
+  // Walls rise to the full column height so the columns never poke up above the
+  // wall line (which looked wrong) and the wall tops stay above the camera frame.
+  const W = 70, D = 48, WALL_H = 20, MEZZ_Y = 6;
   const DECK_FRONT = -11; // z of the balcony's inner (railing) edge
   const bounds = { minX: -W / 2 + 1.5, maxX: W / 2 - 1.5, minZ: -D / 2 + 1.5, maxZ: D / 2 - 1.5 };
 
@@ -93,7 +95,9 @@ export function buildLibrary() {
   const deckMat = toonMat(0xb88a5c, { map: woodPlanks() });
   const deskMat = toonMat(PALETTE.wood, { map: woodPlanks() });
   const railMat = toonMat(PALETTE.railWood);
-  const colMat = toonMat(PALETTE.columnWhite);
+  // warm ivory (not pure white) so the tall columns read cozy and don't clip to
+  // a blown-out white under the warm lamps
+  const colMat = toonMat(0xe7d8bd);
   const brassMat = toonMat(PALETTE.brass);
   const beamMat = toonMat(PALETTE.libBeam);
   const bookMats = [bookcaseTexture(5), bookcaseTexture(11), bookcaseTexture(23)]
@@ -107,14 +111,13 @@ export function buildLibrary() {
   };
 
   // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
-  // Tint kept desaturated/neutral so the plank texture reads as natural walnut
-  // hardwood — the old 0xc89060 was an orange boost that, stacked with the warm
-  // ambient + point lights, made the floor look red.
+  // Warm honey-oak tint — golden rather than the old orange 0xc89060 (which,
+  // stacked with the warm lights, read red). Cozy without going saturated.
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
-    toonMat(0xb7a890, { map: hardwoodFloor() }));
+    toonMat(0xc6a172, { map: hardwoodFloor() }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
   root.add(floor);
-  const wallMat = toonMat(PALETTE.libWall, { map: plaster() });
+  const wallMat = toonMat(0xddc9a4, { map: plaster() }); // warm tan plaster (cozier than cream)
   const back = tbox(W, WALL_H, 0.6, wallMat); back.position.set(0, WALL_H / 2, -D / 2); root.add(back);
   for (const s of [-1, 1]) {
     const side = tbox(0.6, WALL_H, D, wallMat); side.position.set(s * W / 2, WALL_H / 2, 0); root.add(side);
@@ -128,16 +131,19 @@ export function buildLibrary() {
   }
 
   // ---- tall arched windows high on the side walls (daylight + character) ----
-  const glassMat = new THREE.MeshToonMaterial({ color: 0xcfe6f2, emissive: 0x8ab6d8, emissiveIntensity: 0.8 });
+  // warm golden-hour glass (was a cool blue that gave a harsh daylight cast)
+  const glassMat = new THREE.MeshToonMaterial({ color: 0xf4e7c6, emissive: 0xe7c382, emissiveIntensity: 0.5 });
   function archedWindow(wallX, z, ry) {
     const g = new THREE.Group();
-    const w = 3.2, yBot = 4.6, yTop = 9.0, midY = (yBot + yTop) / 2, hh = yTop - yBot;
+    // tall windows that climb the upper wall (above the shelves) so the raised
+    // 20-tall walls read as grand library glazing instead of blank plaster
+    const w = 3.4, yBot = 4.6, yTop = 14.5, midY = (yBot + yTop) / 2, hh = yTop - yBot;
     const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), glassMat); pane.position.y = midY; g.add(pane);
     const arch = new THREE.Mesh(new THREE.CircleGeometry(w / 2, 18, 0, Math.PI), glassMat); arch.position.y = yTop; g.add(arch);
     // wood frame + muntins
     const fr = (gw, gh, gy) => { const b = tbox(gw, gh, 0.18, railMat); b.position.set(0, gy, -0.05); g.add(b); };
     fr(w + 0.5, 0.3, yBot - 0.15); fr(0.18, hh + w / 2 + 0.3, midY + w / 4);
-    for (const my of [yBot + hh * 0.34, yBot + hh * 0.68]) { const m = tbox(w, 0.12, 0.16, railMat); m.position.set(0, my, 0.02); g.add(m); }
+    for (const f of [0.25, 0.5, 0.75]) { const m = tbox(w, 0.12, 0.16, railMat); m.position.set(0, yBot + hh * f, 0.02); g.add(m); }
     g.position.set(wallX, 0, z); g.rotation.y = ry; root.add(g);
   }
   for (const z of [-16, -2, 12]) {
@@ -192,7 +198,7 @@ export function buildLibrary() {
   // Columns rise to COL_H (well above the 12-tall walls) so their caps climb out
   // of the top of frame and fade into the dark open atrium — the player only ever
   // sees smooth shafts, never a flat capped top.
-  const COL_H = 20;
+  const COL_H = WALL_H;
   function column(x, z, both, h = COL_H) {
     const g = new THREE.Group();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, h, 16), colMat);
@@ -361,14 +367,17 @@ export function buildLibrary() {
     spr.scale.set(3, 3, 1); spr.position.set(x, 7.7, z); root.add(spr);
   }
   for (const [px, pz] of [[-18, 4], [0, 4], [18, 4], [-18, 13], [0, 13], [18, 13]]) pendant(px, pz);
-  // gentle warm ambient lifts the whole room (cozy, not dim) — library-only
-  root.add(new THREE.AmbientLight(0xffe4c0, 0.55));
-  // warm point-lights (no shadows; only lit when the library root is visible)
+  // gentle warm ambient — kept low so the lamps read as cozy pools of light
+  // rather than a flat, evenly-bright room
+  root.add(new THREE.AmbientLight(0xffe0b6, 0.4));
+  // warm point-lights (no shadows; only lit when the library root is visible).
+  // Intensities pulled well down from the old values — the previous lights were
+  // bright enough to blow a white column into a glowing beam under bloom.
   function warmLight(x, y, z, intensity, dist) { const L = new THREE.PointLight(0xffd29a, intensity, dist, 2); L.position.set(x, y, z); root.add(L); }
-  warmLight(0, 8, 8, 72, 48); warmLight(-18, 8, 8, 40, 34); warmLight(18, 8, 8, 40, 34);
-  warmLight(0, 8, 20, 40, 34);      // entrance / spawn area
-  warmLight(-26, 4.5, 14, 46, 26);  // nook glow
-  warmLight(0, 8, -14, 40, 38);     // balcony glow
+  warmLight(0, 8, 8, 34, 46); warmLight(-18, 8, 8, 22, 32); warmLight(18, 8, 8, 22, 32);
+  warmLight(0, 8, 20, 22, 32);      // entrance / spawn area
+  warmLight(-26, 4.5, 14, 26, 24);  // nook glow
+  warmLight(0, 7, -16, 16, 30);     // balcony glow (kept off the column at z=-11)
   const fireGlow = new THREE.PointLight(0xff7a2e, 7, 10, 2); // fireplace (gentle)
   fireGlow.position.set(-32, 1.4, 14); root.add(fireGlow);
 

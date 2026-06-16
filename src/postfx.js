@@ -92,8 +92,10 @@ const GradeShader = {
 
 // Per-tier tuning. `low` keeps the same look but cheaper kernels / half-res bloom.
 const TIERS = {
-  high: { pixelRatio: 2, bloomStrength: 0.42, bloomRadius: 0.6, blur: 3.0 },
-  low:  { pixelRatio: 1, bloomStrength: 0.34, bloomRadius: 0.5, blur: 2.0 },
+  high: { pixelRatio: 2,   bloomStrength: 0.42, bloomRadius: 0.6, blur: 3.0 },
+  // `low` used to render at pixelRatio 1, which looked very soft/blurry on
+  // high-DPR phones. 1.5 keeps it sharp while staying cheaper than full 2x.
+  low:  { pixelRatio: 1.5, bloomStrength: 0.34, bloomRadius: 0.5, blur: 2.0 },
 };
 
 // Build the composer. Returns helpers the host (main.js) drives each frame / on resize.
@@ -103,7 +105,9 @@ export function createComposer(renderer, scene, camera, { tier = 'high' } = {}) 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  const bloom = new UnrealBloomPass(size.clone(), 0.42, 0.6, 0.88); // strength, radius, threshold
+  // threshold raised to 1.0 so only genuinely emissive things (lamp bulbs/glow
+  // sprites) bloom — a brightly-lit white column no longer flares into a beam
+  const bloom = new UnrealBloomPass(size.clone(), 0.42, 0.6, 1.0); // strength, radius, threshold
   composer.addPass(bloom);
 
   const grade = new ShaderPass(GradeShader);

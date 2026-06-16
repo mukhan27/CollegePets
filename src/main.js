@@ -60,6 +60,9 @@ scene.add(rim);
 // Quality tier chosen up front (phones get cheaper bloom + tilt-shift);
 // override at runtime with __cp.setQuality('high'|'low').
 function detectTier() {
+  // explicit override for testing, e.g. open the page with ?q=high (or ?q=low)
+  const forced = new URLSearchParams(location.search).get('q');
+  if (forced === 'high' || forced === 'low') return forced;
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
   const small = Math.min(window.innerWidth, window.innerHeight) < 500;
   const heavyDpr = window.devicePixelRatio > 2.5;

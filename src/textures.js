@@ -280,9 +280,12 @@ export function leafTexture() {
 
 // ---------------------------------------------------------- library interior
 // Aged, muted book-spine colours (Ref 3 cozy vibe).
+// Muted, leather-bound vintage spines — deep maroons, forest greens, navy,
+// walnut and aged-gold/parchment — for a cozy antique-library read (no neons).
 const BOOK_SPINES = [
-  '#8c3b3b', '#3f5e8c', '#3f7a55', '#b08a2e', '#6e4a86', '#9a5a3c',
-  '#7a2f3a', '#2f6e74', '#a8703a', '#5a6b3a', '#86402f', '#d8c9a8',
+  '#5e2b2b', '#33445e', '#2f5742', '#8a6a24', '#473352', '#6e4230',
+  '#5a2730', '#2f5559', '#7a5230', '#46532f', '#5e3424', '#b3a07a',
+  '#3d2f24', '#704029', '#274038', '#8a7a4a',
 ];
 
 // One bookcase unit, mapped 1:1 onto a fixed-size shelf face (no tiling, so
