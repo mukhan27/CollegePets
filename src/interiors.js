@@ -333,9 +333,10 @@ export function buildLibrary() {
     addSeat(dx, dz + 2.4, floorY, Math.PI);
   }
 
-  // first floor: communal long tables
+  // first floor: communal long tables (kept clear of the spawn at z≈18 so the
+  // player doesn't materialise inside a table's collider)
   longTable(-2, 7, 0, colliders);
-  longTable(-2, 16, 0, colliders);
+  longTable(-2, 14, 0, colliders);
   // second floor (mezzanine): a row of individual study carrels along the wall
   for (const cx of [-22, -11, 0, 11, 20]) writingDesk(cx, -18, MEZZ_Y, colliders1, true);
 
