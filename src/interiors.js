@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { textSprite } from './world.js';
 import { PALETTE } from './palette.js';
-import { toonMat, woodPlanks, stoneFloor, plaster, bookcaseTexture, glowTexture, softShadow } from './textures.js';
+import { toonMat, woodPlanks, plaster, bookcaseTexture, glowTexture, softShadow, hardwoodFloor, fabricTexture, rugTexture } from './textures.js';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
 
 // Blender-authored hero props (glTF). Loaded async, re-materialised with the
@@ -106,9 +106,9 @@ export function buildLibrary() {
     return mesh;
   };
 
-  // ---- shell: stone floor, 3 tall plaster walls, open front + open top ----
+  // ---- shell: warm hardwood floor, 3 tall plaster walls, open front + open top ----
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
-    toonMat(PALETTE.libFloor, { map: stoneFloor() }));
+    toonMat(0xc89060, { map: hardwoodFloor() }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
   root.add(floor);
   const wallMat = toonMat(PALETTE.libWall, { map: plaster() });
@@ -165,7 +165,9 @@ export function buildLibrary() {
   // ground perimeter shelves (back under the balcony + both sides)
   shelfRun(0, -D / 2 + 0.9, W - 4, 'x', 1, 0, 4.4);
   colliders.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
-  shelfRun(-W / 2 + 0.9, 0, D - 4, 'z', 1, 0, 4.4);
+  // left wall: split into two runs leaving a gap (z[10,18]) for the fireplace nook
+  shelfRun(-W / 2 + 0.9, -6, 32, 'z', 1, 0, 4.4);
+  shelfRun(-W / 2 + 0.9, 20, 4, 'z', 1, 0, 4.4);
   shelfRun(W / 2 - 0.9, 0, D - 4, 'z', -1, 0, 4.4);
   colliders.push({ x: -W / 2 + 1.3, z: 0, w: 1.6, d: D - 4 });
   colliders.push({ x: W / 2 - 1.3, z: 0, w: 1.6, d: D - 4 });
@@ -184,19 +186,20 @@ export function buildLibrary() {
   colliders1.push({ x: 0, z: -D / 2 + 1.3, w: W - 4, d: 1.6 });
 
   // ---- columns (full height) ----
-  function column(x, z, both) {
+  function column(x, z, both, h = WALL_H) {
     const g = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, WALL_H, 16), colMat);
-    shaft.position.y = WALL_H / 2; shaft.castShadow = true; g.add(shaft);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, h, 16), colMat);
+    shaft.position.y = h / 2; shaft.castShadow = true; g.add(shaft);
     const base = tbox(1.5, 0.5, 1.5, colMat); base.position.y = 0.25; g.add(base);
-    const cap = tbox(1.5, 0.5, 1.5, colMat); cap.position.y = WALL_H - 0.25; g.add(cap);
+    const cap = tbox(1.5, 0.5, 1.5, colMat); cap.position.y = h - 0.25; g.add(cap);
     g.position.set(x, 0, z); root.add(g);
     groundShadow(x, z, 3.2, 3.2);
     colliders.push({ x, z, w: 1.6, d: 1.6 });
     if (both) colliders1.push({ x, z, w: 1.6, d: 1.6 });
   }
-  for (const cx of [-26, -13, 0, 13]) column(cx, DECK_FRONT, true); // balcony-edge row + railing posts
-  for (const cx of [-24, 24]) column(cx, 12, false);                // grand entrance pair
+  // deck-support posts (stop at the balcony so their tops don't poke up on level 2)
+  for (const cx of [-26, -13, 0, 13]) column(cx, DECK_FRONT, true, 6.6);
+  for (const cx of [-24, 24]) column(cx, 12, false); // grand entrance pair (full height)
 
   // ---- mezzanine deck + railing ----
   const deckDepth = (D / 2 - 0.3) + DECK_FRONT;                     // back wall → DECK_FRONT
@@ -253,15 +256,15 @@ export function buildLibrary() {
   readingDesk(14, -17, MEZZ_Y, colliders1);
 
   // ---- cozy nook (front-left); the fireplace Blender prop is placed here later ----
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 28), toonMat(PALETTE.rug));
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 28),
+    toonMat(PALETTE.rug, { map: rugTexture(`#${PALETTE.rug.toString(16)}`, `#${PALETTE.rugBorder.toString(16)}`) }));
   rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.02, 14); root.add(rug);
-  const rugBorder = new THREE.Mesh(new THREE.RingGeometry(4.3, 4.7, 28), toonMat(PALETTE.rugBorder));
-  rugBorder.rotation.x = -Math.PI / 2; rugBorder.position.set(-25, 0.03, 14); root.add(rugBorder);
+  const leatherMat = toonMat(PALETTE.leather, { map: fabricTexture('#7a4f33') });
   function armchair(x, z, ry) {
     const g = new THREE.Group();
-    const seat = tbox(1.8, 0.7, 1.8, toonMat(PALETTE.leather)); seat.position.y = 0.55; g.add(seat);
-    const backr = tbox(1.8, 1.3, 0.4, toonMat(PALETTE.leather)); backr.position.set(0, 1.2, -0.7); g.add(backr);
-    for (const ax of [-1, 1]) { const arm = tbox(0.35, 0.6, 1.6, toonMat(PALETTE.leather)); arm.position.set(ax * 0.9, 0.85, 0); g.add(arm); }
+    const seat = tbox(1.8, 0.7, 1.8, leatherMat); seat.position.y = 0.55; g.add(seat);
+    const backr = tbox(1.8, 1.3, 0.4, leatherMat); backr.position.set(0, 1.2, -0.7); g.add(backr);
+    for (const ax of [-1, 1]) { const arm = tbox(0.35, 0.6, 1.6, leatherMat); arm.position.set(ax * 0.9, 0.85, 0); g.add(arm); }
     g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
     groundShadow(x, z, 2.8, 2.8);
     colliders.push({ x, z, w: 2, d: 2 });
@@ -303,11 +306,14 @@ export function buildLibrary() {
     spr.scale.set(3, 3, 1); spr.position.set(x, 7.7, z); root.add(spr);
   }
   for (const [px, pz] of [[-18, 4], [0, 4], [18, 4], [-18, 13], [0, 13], [18, 13]]) pendant(px, pz);
+  // gentle warm ambient lifts the whole room (cozy, not dim) — library-only
+  root.add(new THREE.AmbientLight(0xffe4c0, 0.55));
   // warm point-lights (no shadows; only lit when the library root is visible)
   function warmLight(x, y, z, intensity, dist) { const L = new THREE.PointLight(0xffd29a, intensity, dist, 2); L.position.set(x, y, z); root.add(L); }
-  warmLight(0, 8, 8, 50, 44); warmLight(-18, 8, 8, 26, 30); warmLight(18, 8, 8, 26, 30);
-  warmLight(-26, 4.5, 14, 34, 24);  // nook glow
-  warmLight(0, 8, -14, 26, 36);     // balcony glow
+  warmLight(0, 8, 8, 72, 48); warmLight(-18, 8, 8, 40, 34); warmLight(18, 8, 8, 40, 34);
+  warmLight(0, 8, 20, 40, 34);      // entrance / spawn area
+  warmLight(-26, 4.5, 14, 46, 26);  // nook glow
+  warmLight(0, 8, -14, 40, 38);     // balcony glow
   const fireGlow = new THREE.PointLight(0xff7a2e, 7, 10, 2); // fireplace (gentle)
   fireGlow.position.set(-32, 1.4, 14); root.add(fireGlow);
 

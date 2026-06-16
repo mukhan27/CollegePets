@@ -89,7 +89,7 @@ const bedroom = buildBedroom();
 bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
-campus.camOffset = new THREE.Vector3(0, 21, 16);
+campus.camOffset = new THREE.Vector3(0, 14, 23); // cozier 3/4 angle to match the interiors
 // interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
 // caps aren't visible — they rise out of frame — and gives the warm AC feel)
 library.camOffset = new THREE.Vector3(0, 11, 18);

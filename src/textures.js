@@ -376,4 +376,50 @@ export function softShadow() {
   });
 }
 
+// Warm hardwood floorboards (cozier than marble for a library).
+export function hardwoodFloor(base = '#b07a48') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(53);
+    ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+    const planks = 5, ph = H / planks;
+    for (let i = 0; i < planks; i++) {
+      const y = i * ph;
+      ctx.fillStyle = ['#b07a48', '#a87040', '#bb8755', '#a16a3c'][Math.floor(r() * 4)];
+      ctx.fillRect(0, y + 1, W, ph - 2);
+      ctx.strokeStyle = 'rgba(80,50,28,0.16)'; ctx.lineWidth = 1;
+      for (let gg = 0; gg < 5; gg++) {
+        ctx.beginPath(); const gy = y + r() * ph;
+        ctx.moveTo(0, gy); ctx.bezierCurveTo(W * 0.3, gy + (r() - 0.5) * 6, W * 0.7, gy + (r() - 0.5) * 6, W, gy); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(40,24,12,0.38)'; ctx.fillRect(0, y, W, 2);            // board seam
+      ctx.fillRect(((i % 2) * 0.5 + 0.25) * W, y, 2, ph);                          // staggered end joint
+    }
+  }, { repeat: [9, 7], anisotropy: 8 });
+}
+
+// Subtle woven fabric / leather grain for upholstery.
+export function fabricTexture(base = '#7a4f33') {
+  return canvasTexture(128, 128, (ctx, W, H) => {
+    const r = rng(61);
+    ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < W; i += 4) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(i, 0, 2, H); }
+    for (let j = 0; j < H; j += 4) { ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.fillRect(0, j, W, 2); }
+    for (let i = 0; i < 500; i++) { ctx.fillStyle = `rgba(0,0,0,${r() * 0.05})`; ctx.fillRect(r() * W, r() * H, 2, 2); }
+  }, { repeat: [2, 2] });
+}
+
+// Woven round rug with concentric borders + a centre medallion.
+export function rugTexture(base = '#8ba2bb', border = '#5f7088') {
+  return canvasTexture(256, 256, (ctx, W, H) => {
+    const r = rng(71);
+    ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 2600; i++) { ctx.fillStyle = `rgba(255,255,255,${r() * 0.06})`; ctx.fillRect(r() * W, r() * H, 2, 1); }
+    for (let i = 0; i < 2600; i++) { ctx.fillStyle = `rgba(0,0,0,${r() * 0.06})`; ctx.fillRect(r() * W, r() * H, 1, 2); }
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 12; ctx.beginPath(); ctx.arc(W / 2, H / 2, W * 0.45, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(W / 2, H / 2, W * 0.38, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(W / 2, H / 2, W * 0.16, 0, Math.PI * 2); ctx.stroke();
+  });
+}
+
 export { hex };
