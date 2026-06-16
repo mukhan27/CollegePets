@@ -93,6 +93,15 @@ bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 12, 19); // closer 3/4 angle, matched to the interior view
+// Ground elevation field: the player rises up the library steps onto its raised
+// stone porch (building sits at -58,-36; porch top = 1.4) instead of clipping
+// through them. 0 everywhere else.
+campus.groundHeight = (x, z) => {
+  if (x < -67 || x > -49) return 0;          // outside the porch width
+  if (z <= -17) return 1.4;                   // up on the porch
+  if (z >= -13.6) return 0;                    // lawn in front of the steps
+  return 1.4 * (z + 13.6) / (-17 + 13.6);      // ramp up the steps
+};
 // interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
 // caps aren't visible — they rise out of frame — and gives the warm AC feel)
 library.camOffset = new THREE.Vector3(0, 11, 18);
@@ -209,7 +218,9 @@ function movePlayer(def, dx, dz) {
   const lvl = levelDef(def);
   moveWithCollision(pos, dx, dz, lvl);
   const entered = stairAt(def, pos.x, pos.z);
-  playerTargetY = entered ? rampHeight(entered, pos.z) : lvl.y;
+  if (entered) playerTargetY = rampHeight(entered, pos.z);
+  else if (def.groundHeight) playerTargetY = lvl.y + def.groundHeight(pos.x, pos.z);
+  else playerTargetY = lvl.y;
 }
 
 // How far (0..1) the camera can sit along the player→desired-camera line before
