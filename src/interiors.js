@@ -11,14 +11,43 @@ function box(w, h, d, color) {
   return m;
 }
 
+// A hardwood-plank floor: alternating warm-brown boards with thin darker
+// seams between them so it reads clearly as wood (not a flat red slab).
+function woodFloor(w, d, tones = [0x7d5f3a, 0x6b4f2e]) {
+  const g = new THREE.Group();
+  const plankW = 1.5;
+  const cols = Math.ceil(w / plankW);
+  for (let i = 0; i < cols; i++) {
+    const x = -w / 2 + plankW / 2 + i * plankW;
+    const plank = new THREE.Mesh(
+      new THREE.PlaneGeometry(plankW - 0.08, d),
+      mat(tones[i % tones.length]),
+    );
+    plank.rotation.x = -Math.PI / 2;
+    plank.position.set(x, 0.01, 0);
+    plank.receiveShadow = true;
+    g.add(plank);
+  }
+  // dark base plane fills the seams so no background shows through
+  const base = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(0x3a2c1a));
+  base.rotation.x = -Math.PI / 2;
+  base.receiveShadow = true;
+  g.add(base);
+  return g;
+}
+
 // Room shell: floor + 3 visible walls (front wall omitted so the tilted
 // top-down camera can always see inside).
-function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8 } = {}) {
+function makeRoom(w, d, { floor = 0x9a8467, wall = 0xd8cdb8, hardwood = false } = {}) {
   const g = new THREE.Group();
-  const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(floor));
-  f.rotation.x = -Math.PI / 2;
-  f.receiveShadow = true;
-  g.add(f);
+  if (hardwood) {
+    g.add(woodFloor(w, d));
+  } else {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(floor));
+    f.rotation.x = -Math.PI / 2;
+    f.receiveShadow = true;
+    g.add(f);
+  }
   const wallH = 5;
   const back = box(w, wallH, 0.4, wall);
   back.position.set(0, wallH / 2, -d / 2);
@@ -52,7 +81,39 @@ export function buildLibrary() {
   const interactables = [];
   const W = 42, D = 30;
   const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { floor: 0x8a6f50, wall: 0xcdbfa4 }));
+  root.add(makeRoom(W, D, { hardwood: true, wall: 0xcdbfa4 }));
+
+  const seatPositions = [];
+  let seatNum = 1;
+
+  // A reusable chair that records itself as a pomodoro study seat. `face` is
+  // the y-rotation the player takes when seated (default π = facing -z), and
+  // the approach pad / step-back point are derived from the facing direction.
+  function addStudySeat(x, z, face = Math.PI) {
+    const chair = box(1.1, 0.55, 1.1, 0x7a5230);
+    chair.position.set(x, 0.28, z);
+    root.add(chair);
+    // chair back sits behind the seated player (opposite the facing direction)
+    const bx = x - Math.sin(face) * 0.5;
+    const bz = z - Math.cos(face) * 0.5;
+    const chairBack = box(1.1, 1.1, 0.18, 0x7a5230);
+    chairBack.position.set(bx, 0.95, bz);
+    chairBack.rotation.y = face;
+    root.add(chairBack);
+
+    // approach pad / step-back point are on the open side, opposite the table
+    const ax = x - Math.sin(face) * 1.4;
+    const az = z - Math.cos(face) * 1.4;
+    seatPositions.push({ x, z });
+    interactables.push({
+      id: 'study_seat', seat: seatNum++,
+      x: ax, z: az, r: 2.0,
+      label: '🪑 Sit & study',
+      seatPos: { x, z },
+      face,
+      stepBack: { x: x - Math.sin(face) * 1.6, z: z - Math.cos(face) * 1.6 },
+    });
+  }
 
   // bookshelves along back wall
   const shelfColors = [0xa33b3b, 0x3b6ea3, 0x3ba35e, 0xc9a13b, 0x8a4ba3];
@@ -69,48 +130,114 @@ export function buildLibrary() {
     colliders.push({ x: sx, z: -D / 2 + 1.2, w: 5.2, d: 1.6 });
   }
 
-  // study desks with chairs — each chair is a pomodoro seat
-  const seatPositions = [];
-  let seatNum = 1;
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 3; col++) {
-      const dx = -13 + col * 13;
-      const dz = -4 + row * 9;
-      const desk = box(4.4, 1.1, 2.2, 0x9a6a3f);
-      desk.position.set(dx, 0.55, dz);
-      root.add(desk);
-      const lamp = box(0.3, 0.7, 0.3, 0x2e8b57);
-      lamp.position.set(dx + 1.4, 1.45, dz - 0.5);
-      root.add(lamp);
-      const bookProp = box(0.8, 0.18, 1.1, 0xd64541);
-      bookProp.position.set(dx - 1, 1.2, dz);
-      bookProp.rotation.y = 0.4;
-      root.add(bookProp);
-      colliders.push({ x: dx, z: dz, w: 4.8, d: 2.6 });
-
-      const chairZ = dz + 2.2;
-      const chair = box(1.1, 0.55, 1.1, 0x7a5230);
-      chair.position.set(dx, 0.28, chairZ);
-      root.add(chair);
-      const chairBack = box(1.1, 1.1, 0.18, 0x7a5230);
-      chairBack.position.set(dx, 0.95, chairZ + 0.5);
-      root.add(chairBack);
-
-      seatPositions.push({ x: dx, z: chairZ });
-      interactables.push({
-        id: 'study_seat', seat: seatNum++,
-        x: dx, z: chairZ + 1.4, r: 2.0,
-        label: '🪑 Sit & study',
-        seatPos: { x: dx, z: chairZ },
-      });
-    }
+  // Tall white pillars. They run from the floor up past the top of the
+  // camera frustum (height 22, well above the camera at y≈19) so the player
+  // never sees their caps — only smooth columns rising out of sight.
+  const PILLAR_H = 22;
+  function addPillar(x, z) {
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.7, 0.8, PILLAR_H, 16),
+      mat(0xf2ede2),
+    );
+    col.position.set(x, PILLAR_H / 2, z);
+    col.castShadow = true;
+    root.add(col);
+    // a little skirting trim at the base for a finished look
+    const base = box(2, 0.5, 2, 0xe4ddcd);
+    base.position.set(x, 0.25, z);
+    root.add(base);
+    colliders.push({ x, z, w: 2, d: 2 });
+  }
+  for (const px of [-14, 14]) {
+    for (const pz of [-9, 5]) addPillar(px, pz);
   }
 
-  // librarian counter
+  // Hanging pendant lights. The rod climbs up out of view (top at y=18) while
+  // the glowing shade hangs at a comfortable height over the tables.
+  function addPendant(x, z) {
+    const rod = box(0.12, 13, 0.12, 0x2c2c2c);
+    rod.position.set(x, 13.5, z); // spans y≈7 → 20, top out of sight
+    root.add(rod);
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.9, 0.9, 16, 1, true),
+      new THREE.MeshLambertMaterial({ color: 0x2c2c2c, side: THREE.DoubleSide }),
+    );
+    shade.position.set(x, 7.2, z);
+    root.add(shade);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 12, 12),
+      new THREE.MeshLambertMaterial({ color: 0xfff4cf, emissive: 0xffe9a8 }),
+    );
+    bulb.position.set(x, 6.9, z);
+    root.add(bulb);
+    const glow = new THREE.PointLight(0xffe9b0, 0.5, 16);
+    glow.position.set(x, 6.9, z);
+    root.add(glow);
+  }
+  // pendants strung over the two communal tables, plus the side reading nooks
+  for (const pz of [-8, 0]) {
+    addPendant(-6.5, pz);
+    addPendant(0.5, pz);
+  }
+  addPendant(-17, 0.5);
+  addPendant(17, 0.5);
+
+  // Long communal tables down the middle, with a row of seats on each side.
+  function addLongTable(cx, cz) {
+    const len = 14;
+    const top = box(len, 0.3, 3, 0x8a5a32);
+    top.position.set(cx, 1.15, cz);
+    root.add(top);
+    // two stretcher legs
+    for (const s of [-1, 1]) {
+      const leg = box(0.5, 1.1, 2.6, 0x6e4626);
+      leg.position.set(cx + s * (len / 2 - 0.8), 0.55, cz);
+      root.add(leg);
+    }
+    // a few book props scattered along the table
+    for (const bx of [-5, -1, 4]) {
+      const bookProp = box(0.8, 0.18, 1.1, [0x3b6ea3, 0x3ba35e, 0xc9a13b][(bx + 6) % 3]);
+      bookProp.position.set(cx + bx, 1.4, cz + (bx % 2 ? 0.4 : -0.4));
+      bookProp.rotation.y = 0.4;
+      root.add(bookProp);
+    }
+    colliders.push({ x: cx, z: cz, w: len + 0.4, d: 3 });
+
+    // three seats per side; near side faces -z, far side faces +z
+    const seatXs = [cx - 4.5, cx, cx + 4.5];
+    for (const sx of seatXs) {
+      addStudySeat(sx, cz + 2.3, Math.PI);  // near side, faces table (-z)
+      addStudySeat(sx, cz - 2.3, 0);         // far side, faces table (+z)
+    }
+  }
+  addLongTable(-3, -8);
+  addLongTable(-3, 0);
+
+  // Quiet single carrels tucked against the side walls.
+  function addCarrel(x, z, face) {
+    // desk pushed against the wall, in front of the seat
+    const desk = box(3, 1.1, 2.2, 0x9a6a3f);
+    const ddx = Math.sin(face) * 1.6; // desk sits in the facing direction
+    const ddz = Math.cos(face) * 1.6;
+    desk.position.set(x + ddx, 0.55, z + ddz);
+    desk.rotation.y = face;
+    root.add(desk);
+    const lamp = box(0.3, 0.7, 0.3, 0x2e8b57);
+    lamp.position.set(x + ddx, 1.45, z + ddz);
+    root.add(lamp);
+    colliders.push({ x: x + ddx, z: z + ddz, w: 2.8, d: 2.8 });
+    addStudySeat(x, z, face);
+  }
+  addCarrel(-18.5, -3, -Math.PI / 2); // left wall, faces -x
+  addCarrel(-18.5, 4, -Math.PI / 2);
+  addCarrel(18.5, -3, Math.PI / 2);   // right wall, faces +x
+  addCarrel(18.5, 4, Math.PI / 2);
+
+  // librarian counter (front-right corner)
   const counter = box(6, 1.3, 2, 0x6e5436);
-  counter.position.set(14, 0.65, 10);
+  counter.position.set(13, 0.65, 11);
   root.add(counter);
-  colliders.push({ x: 14, z: 10, w: 6.4, d: 2.4 });
+  colliders.push({ x: 13, z: 11, w: 6.4, d: 2.4 });
 
   addExitPad(root, 0, D / 2 - 2);
   interactables.push({ id: 'exit_library', x: 0, z: D / 2 - 2, r: 2.2, label: '🚪 Leave Library' });
