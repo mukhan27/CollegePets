@@ -125,7 +125,7 @@ export function buildLibrary() {
   // with brass end-rims, and a warm glowing underside (its top surface sits on
   // the desk at world height `y`)
   const lampGreenMat = toonMat(0x1d6b43);
-  const lampGlowMat = toonMat(0xfff0c4, { emissive: 0xffd98c, emissiveIntensity: 0.7 });
+  const lampGlowMat = toonMat(0xf6e6bd, { emissive: 0xe9c98a, emissiveIntensity: 0.32 });
   function bankerLamp(x, y, z) {
     const g = new THREE.Group();
     const base = cyl(0.24, 0.28, 0.07, 16, brassMat); base.position.y = 0.035; g.add(base);
@@ -422,7 +422,7 @@ export function buildLibrary() {
   function openBook(x, y, z, rot = 0) {
     const g = new THREE.Group();
     for (const s of [-1, 1]) {
-      const page = tbox(0.7, 0.04, 1.0, toonMat(0xf2e9d0)); page.position.set(s * 0.36, 0, 0); page.rotation.z = s * 0.12; g.add(page);
+      const page = tbox(0.7, 0.04, 1.0, toonMat(0xe4d8bd)); page.position.set(s * 0.36, 0, 0); page.rotation.z = s * 0.12; g.add(page);
     }
     const spine = tbox(0.12, 0.08, 1.0, toonMat(0x6e4230)); g.add(spine);
     g.position.set(x, y + 0.04, z); g.rotation.y = rot; root.add(g);
@@ -530,20 +530,22 @@ export function buildLibrary() {
   loadProp(root, 'assets/gramophone.glb', { x: -31, z: 9.5, ry: 0.8, scale: 1 });
   groundShadow(-33.4, 14, 2, 3.6); groundShadow(-29, 18.5, 2, 2); groundShadow(-31, 9.5, 1.8, 1.8);
 
-  // animated fire in the hearth (the fireplace sits on the left wall, opening +x)
+  // animated fire — tucked back inside the firebox recess (fireplace is on the
+  // left wall opening +x), as a compact 3D mound rather than a flat slab
   const fireMat = (c, e) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: 1.0, gradientMap: null });
   const fireGroup = new THREE.Group();
-  const logs = tbox(0.5, 0.25, 1.3, toonMat(0x3a2114)); logs.position.y = -0.1; fireGroup.add(logs);
-  const embers = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 1.2), fireMat(0xff7a2e, 0xff5a1e)); embers.position.y = 0.04; fireGroup.add(embers);
+  const logs = tbox(0.6, 0.22, 0.95, toonMat(0x3a2114)); logs.position.y = -0.08; fireGroup.add(logs);
+  const embers = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.8), fireMat(0xff7a2e, 0xff5a1e)); embers.position.y = 0.05; fireGroup.add(embers);
   const fcols = [[0xff4d1a, 0xff3a10], [0xff8a2e, 0xff6a1e], [0xffb648, 0xff9a2e], [0xffd86a, 0xffc24a]];
   for (let i = 0; i < 8; i++) {
     const [c, e] = fcols[i % fcols.length];
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5 + (i % 3) * 0.12, 8), fireMat(c, e));
-    fl.position.set(0.04 * ((i % 2) ? 1 : -1), 0.28, -0.5 + i * 0.14);
+    const mid = 1 - Math.abs(i - 3.5) / 3.5; // taller in the centre → mound shape
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42 + mid * 0.32, 8), fireMat(c, e));
+    fl.position.set((i % 3 - 1) * 0.13, 0.22 + mid * 0.1, -0.3 + (i % 4) * 0.2);
     fireGroup.add(fl);
-    flames.push({ mesh: fl, baseY: 0.28, phase: i * 1.6, speed: 6 + i * 0.5 });
+    flames.push({ mesh: fl, baseY: fl.position.y, phase: i * 1.6, speed: 6 + i * 0.5 });
   }
-  fireGroup.position.set(-32.9, 0.55, 14); root.add(fireGroup);
+  fireGroup.position.set(-33.45, 0.5, 14); root.add(fireGroup);
 
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
@@ -577,11 +579,13 @@ export function buildLibrary() {
   // warm point-lights (no shadows; only lit when the library root is visible).
   // Intensities pulled well down from the old values — the previous lights were
   // bright enough to blow a white column into a glowing beam under bloom.
+  // Higher + gentler than before: keeping them well above the furniture stops a
+  // bright hotspot from blooming on the desks/lamps right beneath them.
   function warmLight(x, y, z, intensity, dist) { const L = new THREE.PointLight(0xffd29a, intensity, dist, 2); L.position.set(x, y, z); root.add(L); }
-  warmLight(0, 8, 8, 34, 46); warmLight(-18, 8, 8, 22, 32); warmLight(18, 8, 8, 22, 32);
-  warmLight(0, 8, 20, 22, 32);      // entrance / spawn area
-  warmLight(-26, 4.5, 14, 26, 24);  // nook glow
-  warmLight(0, 7, -16, 16, 30);     // balcony glow (kept off the column at z=-11)
+  warmLight(0, 10, 9, 28, 42); warmLight(-18, 10, 9, 18, 32); warmLight(18, 10, 9, 18, 32);
+  warmLight(0, 9, 20, 20, 32);      // entrance / spawn area
+  warmLight(-26, 5, 14, 24, 24);    // nook glow
+  warmLight(0, 8, -16, 16, 30);     // balcony glow (kept off the column at z=-11)
   const fireGlow = new THREE.PointLight(0xff7a2e, 9, 12, 2); // fireplace (flickers via animate)
   fireGlow.position.set(-32, 1.4, 14); root.add(fireGlow);
 
