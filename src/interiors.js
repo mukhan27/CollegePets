@@ -11,10 +11,12 @@ import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
 // game's toon shading (by each mesh's base/emissive colour) so they stay
 // consistent with the procedural world, then dropped into `parent`.
 const gltfLoader = new GLTFLoader();
-function loadProp(parent, url, { x, y = 0, z, ry = 0, scale = 1 }) {
+function loadProp(parent, url, { x, y = 0, z, ry = 0, scale = 1, onMesh } = {}) {
   gltfLoader.load(url, (gltf) => {
+    const drop = [];
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
+      if (onMesh && onMesh(o) === false) { drop.push(o); return; }
       o.castShadow = true; o.receiveShadow = true;
       const src = o.material;
       const color = src && src.color ? src.color.getHex() : 0xb0a080;
@@ -23,6 +25,7 @@ function loadProp(parent, url, { x, y = 0, z, ry = 0, scale = 1 }) {
       if (emissive) { opts.emissive = emissive; opts.emissiveIntensity = 0.45; } // gentle glow, not a blowout
       o.material = toonMat(color, opts);
     });
+    for (const o of drop) if (o.parent) o.parent.remove(o);
     gltf.scene.position.set(x, y, z);
     gltf.scene.rotation.y = ry;
     gltf.scene.scale.setScalar(scale);
@@ -525,27 +528,37 @@ export function buildLibrary() {
   colliders.push({ x: -33.6, z: 14, w: 1.6, d: 3.4 });  // fireplace (against left wall)
   colliders.push({ x: -29, z: 18.5, w: 1.4, d: 1.4 });  // globe
   colliders.push({ x: -31, z: 9.5, w: 1.2, d: 1.2 });   // gramophone
-  loadProp(root, 'assets/fireplace.glb', { x: -33.7, z: 14, ry: -Math.PI / 2, scale: 1 });
+  loadProp(root, 'assets/fireplace.glb', { x: -33.7, z: 14, ry: -Math.PI / 2, scale: 1,
+    onMesh: (o) => {
+      // drop the model's built-in (static) fire/log glow so our animated flames
+      // are the only fire in the hearth
+      const n = (o.name || '').toLowerCase();
+      const src = o.material;
+      const emissive = src && src.emissive ? src.emissive.getHex() : 0;
+      if (/fire|flame|ember|log|glow|light/.test(n) || emissive) return false;
+    } });
   loadProp(root, 'assets/globe.glb', { x: -29, z: 18.5, ry: 0.5, scale: 1 });
   loadProp(root, 'assets/gramophone.glb', { x: -31, z: 9.5, ry: 0.8, scale: 1 });
   groundShadow(-33.4, 14, 2, 3.6); groundShadow(-29, 18.5, 2, 2); groundShadow(-31, 9.5, 1.8, 1.8);
 
   // animated fire — tucked back inside the firebox recess (fireplace is on the
   // left wall opening +x), as a compact 3D mound rather than a flat slab
-  const fireMat = (c, e) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: 1.0, gradientMap: null });
+  const fireMat = (c, e) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: 0.8, gradientMap: null });
   const fireGroup = new THREE.Group();
-  const logs = tbox(0.6, 0.22, 0.95, toonMat(0x3a2114)); logs.position.y = -0.08; fireGroup.add(logs);
-  const embers = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.8), fireMat(0xff7a2e, 0xff5a1e)); embers.position.y = 0.05; fireGroup.add(embers);
-  const fcols = [[0xff4d1a, 0xff3a10], [0xff8a2e, 0xff6a1e], [0xffb648, 0xff9a2e], [0xffd86a, 0xffc24a]];
-  for (let i = 0; i < 8; i++) {
-    const [c, e] = fcols[i % fcols.length];
-    const mid = 1 - Math.abs(i - 3.5) / 3.5; // taller in the centre → mound shape
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42 + mid * 0.32, 8), fireMat(c, e));
-    fl.position.set((i % 3 - 1) * 0.13, 0.22 + mid * 0.1, -0.3 + (i % 4) * 0.2);
+  const logs = tbox(0.62, 0.22, 0.95, toonMat(0x3a2114)); logs.position.y = -0.08; fireGroup.add(logs);
+  const embers = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.12, 0.82), fireMat(0xd83a12, 0xb82808)); embers.position.y = 0.06; fireGroup.add(embers);
+  // rich reds at the base → warm oranges toward the tips (no pale yellow that
+  // washes out to white under bloom)
+  const fcols = [[0xd2300e, 0xa82006], [0xf25216, 0xd2300e], [0xff7a26, 0xe24f14], [0xff9a36, 0xff6a1e]];
+  for (let i = 0; i < 9; i++) {
+    const mid = 1 - Math.abs(i - 4) / 4; // taller in the centre → mound shape
+    const [c, e] = fcols[Math.min(3, Math.round((1 - mid) * 3 + (i % 2) * 0.5))];
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.34 + mid * 0.34, 8), fireMat(c, e));
+    fl.position.set((i % 3 - 1) * 0.14, 0.18 + mid * 0.12, -0.32 + (i % 4) * 0.21);
     fireGroup.add(fl);
     flames.push({ mesh: fl, baseY: fl.position.y, phase: i * 1.6, speed: 6 + i * 0.5 });
   }
-  fireGroup.position.set(-33.45, 0.5, 14); root.add(fireGroup);
+  fireGroup.position.set(-33.4, 0.5, 14); root.add(fireGroup);
 
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
@@ -595,7 +608,7 @@ export function buildLibrary() {
     for (const f of flames) {
       const s = 0.7 + 0.5 * Math.abs(Math.sin(t * f.speed + f.phase));
       f.mesh.scale.set(0.85 + 0.2 * Math.sin(t * f.speed * 1.4 + f.phase), s, 0.85 + 0.2 * Math.cos(t * f.speed + f.phase));
-      f.mesh.material.emissiveIntensity = 0.85 + 0.5 * Math.sin(t * f.speed + f.phase);
+      f.mesh.material.emissiveIntensity = 0.55 + 0.28 * Math.abs(Math.sin(t * f.speed + f.phase)); // stays warm, never washes to white
       f.mesh.position.y = f.baseY + (s - 1) * 0.18;
     }
     fireGlow.intensity = 9 * (0.82 + 0.16 * Math.sin(t * 11) + 0.07 * Math.sin(t * 27));
@@ -611,6 +624,10 @@ export function buildLibrary() {
   // so the player walks the deck and can only leave it down the stairs.
   const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
   colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
+  // close the two slivers of open air either side of the stair mouth (x[24,31]),
+  // so you can only step off the balcony down the stairs — not into the void
+  colliders1.push({ x: 23.25, z: -4.5, w: 1.6, d: 13 }); // between deck edge and stair (x[22.5,24])
+  colliders1.push({ x: 31.5, z: -4.5, w: 1.4, d: 13 });  // right of the stair (x[31,32])
   const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
   return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor, animate };
 }
