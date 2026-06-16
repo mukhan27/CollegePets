@@ -8,6 +8,7 @@ import { PALETTE as P } from './palette.js';
 import {
   toonMat, campusGroundTexture, woodPlanks, brickTexture, shingleTexture,
   awningTexture, courtTexture, skyTexture, glowTexture, cloudTexture, leafTexture,
+  plaster,
 } from './textures.js';
 
 export function textSprite(text, { size = 28, color = '#ffffff', bg = 'rgba(20,32,44,0.75)' } = {}) {
@@ -281,6 +282,84 @@ function makeBuilding(b) {
   return { group: g, doorWorld, collider };
 }
 
+// A grand library exterior that matches the interior: warm plaster hall, tall
+// arched windows in two storeys, a columned portico with a pediment, and a
+// stone plinth + steps. Big enough to read as the cavernous interior's shell.
+function makeLibraryExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshToonMaterial({ color: 0xe7d8bd, map: plaster() });
+  const stoneMat = toonMat(0xccbd9c);
+  const trimMat = toonMat(0xf2ece0);              // warm ivory — matches interior columns
+  const glassMat = new THREE.MeshToonMaterial({ color: P.glass, emissive: 0x2a4a55 });
+  const Y = 1.4; // top of the stone plinth (the building's ground line)
+
+  g.add(mesh(new THREE.BoxGeometry(w + 1.4, Y, d + 1.4), stoneMat, 0, Y / 2, 0));
+  const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, Y + h / 2, 0);
+  body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.9, 0.9, d + 0.9), trimMat, 0, Y + h, 0)); // cornice
+  const roof = gableRoof(w, d, b.roofColor, { pitch: 0.42 }); roof.position.y = Y + h + 0.45; g.add(roof);
+
+  // a tall arched window (faces +z; ry rotates it onto the side walls)
+  function archWindow(px, py, pz, ry, ww = 2.6, wh = 4.2) {
+    const grp = new THREE.Group();
+    grp.add(mesh(new THREE.BoxGeometry(ww + 0.5, wh + 0.4, 0.18), trimMat, 0, 0, 0, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww, wh, 0.24), glassMat, 0, 0, 0.05, false));
+    const top = new THREE.Mesh(new THREE.CircleGeometry(ww / 2, 16, 0, Math.PI), glassMat); top.position.set(0, wh / 2, 0.06); grp.add(top);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(ww / 2, ww / 2 + 0.26, 16, 1, 0, Math.PI), trimMat); ring.position.set(0, wh / 2, 0.05); grp.add(ring);
+    grp.add(mesh(new THREE.BoxGeometry(0.12, wh, 0.26), trimMat, 0, 0, 0.07, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww, 0.12, 0.26), trimMat, 0, 0, 0.07, false));
+    grp.position.set(px, py, pz); grp.rotation.y = ry; g.add(grp);
+  }
+  const lowY = Y + 4.4, upY = Y + 11.6;
+  const bays = 5;
+  for (let i = 0; i < bays; i++) {
+    const wx = -w / 2 + (i + 0.5) * (w / bays);
+    if (Math.abs(wx) < 6.5) continue; // centre reserved for the entrance
+    archWindow(wx, lowY, d / 2 + 0.05, 0);
+    archWindow(wx, upY, d / 2 + 0.05, 0);
+  }
+  for (const s of [-1, 1]) for (const bz of [-d / 4, d / 4]) {
+    archWindow(s * (w / 2 + 0.05), lowY, bz, s * Math.PI / 2);
+    archWindow(s * (w / 2 + 0.05), upY, bz, s * Math.PI / 2);
+  }
+
+  // grand portico: four columns + entablature + pediment, out front
+  const porchD = 5, colH = 11, colZ = d / 2 + porchD - 0.8;
+  for (const s of [-4.2, -1.4, 1.4, 4.2]) {
+    g.add(mesh(new THREE.CylinderGeometry(0.45, 0.5, colH, 14), trimMat, s, Y + colH / 2, colZ));
+    g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + 0.25, colZ, false));
+    g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + colH - 0.25, colZ, false));
+  }
+  const entY = Y + colH + 0.35;
+  g.add(mesh(new THREE.BoxGeometry(11, 1.1, 1.9), trimMat, 0, entY, colZ));
+  const pw = 11.6, pr = pw * 0.26;
+  const ps = new THREE.Shape(); ps.moveTo(-pw / 2, 0); ps.lineTo(pw / 2, 0); ps.lineTo(0, pr); ps.closePath();
+  const ped = new THREE.Mesh(new THREE.ExtrudeGeometry(ps, { depth: 1.7, bevelEnabled: false }), trimMat);
+  ped.position.set(0, entY + 0.55, colZ - 0.95); ped.castShadow = true; g.add(ped);
+
+  for (let i = 0; i < 3; i++) {
+    g.add(mesh(new THREE.BoxGeometry(11 - i * 0.6, 0.32, 1.0), stoneMat, 0, 0.16 + i * 0.32, d / 2 + porchD + 0.6 - i * 0.9, false));
+  }
+
+  // grand double door against the body
+  const doorG = new THREE.Group();
+  doorG.add(mesh(new THREE.BoxGeometry(4.6, 6.2, 0.22), trimMat, 0, 3.1, 0, false));
+  doorG.add(mesh(new THREE.BoxGeometry(3.8, 5.6, 0.28), toonMat(P.woodDark), 0, 3.0, 0.05, false));
+  doorG.add(mesh(new THREE.BoxGeometry(0.12, 5.6, 0.32), toonMat(0xc8a24a), 0, 3.0, 0.12, false));
+  for (const s of [-0.55, 0.55]) doorG.add(mesh(new THREE.SphereGeometry(0.13, 8, 6), toonMat(0xf2c14e), s, 2.7, 0.2, false));
+  doorG.position.set(0, Y, d / 2 + 0.05); g.add(doorG);
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, Y + h + (roof.userData.rise || 4) + 2, 0);
+  g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + porchD + 1.6);
+  const collider = { x, z, w: w + 1.4, d: d + 1.4 };
+  return { group: g, doorWorld, collider };
+}
+
 // ----------------------------------------------------------- campus
 export function buildCampus() {
   const root = new THREE.Group();
@@ -336,8 +415,8 @@ export function buildCampus() {
 
   // ---- buildings (positions & footprints identical to v1) ----
   const buildings = [
-    { id: 'library', x: -55, z: -32, w: 26, h: 11, d: 16, color: P.wallCream, roofColor: P.roofTeal,
-      wallStyle: 'brick', columns: true, label: '📚 Library', prompt: '📚 Enter Library' },
+    { id: 'library', x: -58, z: -36, w: 42, h: 18, d: 26, color: P.wallCream, roofColor: P.roofTeal,
+      label: '📚 Library', prompt: '📚 Enter Library' },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
     { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: P.wallBlue, roofColor: P.roofNavy,
@@ -354,7 +433,7 @@ export function buildCampus() {
 
   const doors = {};
   for (const b of buildings) {
-    const built = makeBuilding(b);
+    const built = b.id === 'library' ? makeLibraryExterior(b) : makeBuilding(b);
     root.add(built.group);
     colliders.push(built.collider);
     doors[b.id] = built.doorWorld;

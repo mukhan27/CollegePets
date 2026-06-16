@@ -558,7 +558,7 @@ export function buildLibrary() {
     fireGroup.add(fl);
     flames.push({ mesh: fl, baseY: fl.position.y, phase: i * 1.6, speed: 6 + i * 0.5 });
   }
-  fireGroup.position.set(-33.4, 0.5, 14); root.add(fireGroup);
+  fireGroup.position.set(-33.7, 0.5, 14); root.add(fireGroup);
 
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
@@ -624,10 +624,11 @@ export function buildLibrary() {
   // so the player walks the deck and can only leave it down the stairs.
   const bounds1 = { minX: -32, maxX: 32, minZ: -D / 2 + 2.5, maxZ: 2 };
   colliders1.push({ x: -4.75, z: -4, w: 54.5, d: 14 }); // atrium void: x[-32,22.5], z[-11,3]
-  // close the two slivers of open air either side of the stair mouth (x[24,31]),
-  // so you can only step off the balcony down the stairs — not into the void
-  colliders1.push({ x: 23.25, z: -4.5, w: 1.6, d: 13 }); // between deck edge and stair (x[22.5,24])
-  colliders1.push({ x: 31.5, z: -4.5, w: 1.4, d: 13 });  // right of the stair (x[31,32])
+  // close the two slivers of open air either side of the stair mouth (x[24,31]).
+  // Kept clear of the stair funnel zone (x[24.7,30.3]+player radius) so the
+  // player isn't snagged stepping on/off the top of the stairs.
+  colliders1.push({ x: 23.0, z: -4.5, w: 1.4, d: 13 }); // blocks x(21.6,24.4)
+  colliders1.push({ x: 31.6, z: -4.5, w: 0.8, d: 13 }); // blocks x(30.5,32.7)
   const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
   return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs, fireAnchor, animate };
 }
