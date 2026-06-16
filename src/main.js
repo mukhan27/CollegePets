@@ -90,10 +90,11 @@ bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 21, 16);
-// interiors use the same camera framing as the outdoor campus
-library.camOffset = new THREE.Vector3(0, 21, 16);
-dormCommon.camOffset = new THREE.Vector3(0, 21, 16);
-bedroom.camOffset = new THREE.Vector3(0, 21, 16);
+// interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
+// caps aren't visible — they rise out of frame — and gives the warm AC feel)
+library.camOffset = new THREE.Vector3(0, 11, 18);
+dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
+bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
 const LOCATIONS = {
   campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },

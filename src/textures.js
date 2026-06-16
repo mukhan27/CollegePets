@@ -6,11 +6,12 @@ import * as THREE from 'three';
 let gradientMap = null;
 export function toonGradient() {
   if (gradientMap) return gradientMap;
-  // 4-step gradient for soft AC-style banding
-  const data = new Uint8Array([110, 170, 220, 255]);
-  gradientMap = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
-  gradientMap.minFilter = THREE.NearestFilter;
-  gradientMap.magFilter = THREE.NearestFilter;
+  // Smooth multi-step ramp (linear-filtered) — soft, natural falloff across
+  // surfaces rather than hard flat toon bands, which read as less flat/dull.
+  const data = new Uint8Array([84, 128, 168, 202, 230, 255]);
+  gradientMap = new THREE.DataTexture(data, 6, 1, THREE.RedFormat);
+  gradientMap.minFilter = THREE.LinearFilter;
+  gradientMap.magFilter = THREE.LinearFilter;
   gradientMap.needsUpdate = true;
   return gradientMap;
 }
@@ -360,6 +361,19 @@ export function plaster(base = '#ece2cc') {
       ctx.fill();
     }
   }, { repeat: [4, 3], anisotropy: 4 });
+}
+
+// Soft round contact shadow — laid on the floor under props/furniture so objects
+// feel grounded (cheap fake AO) instead of floating flatly on the floor.
+export function softShadow() {
+  return canvasTexture(128, 128, (ctx, W, H) => {
+    const g = ctx.createRadialGradient(W / 2, H / 2, 2, W / 2, H / 2, W / 2);
+    g.addColorStop(0, 'rgba(20,16,10,0.5)');
+    g.addColorStop(0.55, 'rgba(20,16,10,0.22)');
+    g.addColorStop(1, 'rgba(20,16,10,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
 }
 
 export { hex };

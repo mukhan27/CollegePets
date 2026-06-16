@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { textSprite } from './world.js';
 import { PALETTE } from './palette.js';
-import { toonMat, woodPlanks, stoneFloor, plaster, bookcaseTexture, glowTexture } from './textures.js';
+import { toonMat, woodPlanks, stoneFloor, plaster, bookcaseTexture, glowTexture, softShadow } from './textures.js';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
 
 // Blender-authored hero props (glTF). Loaded async, re-materialised with the
@@ -20,7 +20,7 @@ function loadProp(parent, url, { x, y = 0, z, ry = 0, scale = 1 }) {
       const color = src && src.color ? src.color.getHex() : 0xb0a080;
       const emissive = src && src.emissive ? src.emissive.getHex() : 0;
       const opts = { noCache: true };
-      if (emissive) { opts.emissive = emissive; opts.emissiveIntensity = Math.max(1, src.emissiveIntensity || 1); }
+      if (emissive) { opts.emissive = emissive; opts.emissiveIntensity = 0.45; } // gentle glow, not a blowout
       o.material = toonMat(color, opts);
     });
     gltf.scene.position.set(x, y, z);
@@ -117,6 +117,31 @@ export function buildLibrary() {
     const side = tbox(0.6, WALL_H, D, wallMat); side.position.set(s * W / 2, WALL_H / 2, 0); root.add(side);
   }
 
+  // soft contact-shadow decal (fake AO) to ground objects on the floor/deck
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
+  function groundShadow(x, z, sx, sz = sx, y = 0.02) {
+    const d = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat);
+    d.rotation.x = -Math.PI / 2; d.position.set(x, y, z); root.add(d);
+  }
+
+  // ---- tall arched windows high on the side walls (daylight + character) ----
+  const glassMat = new THREE.MeshToonMaterial({ color: 0xcfe6f2, emissive: 0x8ab6d8, emissiveIntensity: 0.8 });
+  function archedWindow(wallX, z, ry) {
+    const g = new THREE.Group();
+    const w = 3.2, yBot = 4.6, yTop = 9.0, midY = (yBot + yTop) / 2, hh = yTop - yBot;
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), glassMat); pane.position.y = midY; g.add(pane);
+    const arch = new THREE.Mesh(new THREE.CircleGeometry(w / 2, 18, 0, Math.PI), glassMat); arch.position.y = yTop; g.add(arch);
+    // wood frame + muntins
+    const fr = (gw, gh, gy) => { const b = tbox(gw, gh, 0.18, railMat); b.position.set(0, gy, -0.05); g.add(b); };
+    fr(w + 0.5, 0.3, yBot - 0.15); fr(0.18, hh + w / 2 + 0.3, midY + w / 4);
+    for (const my of [yBot + hh * 0.34, yBot + hh * 0.68]) { const m = tbox(w, 0.12, 0.16, railMat); m.position.set(0, my, 0.02); g.add(m); }
+    g.position.set(wallX, 0, z); g.rotation.y = ry; root.add(g);
+  }
+  for (const z of [-16, -2, 12]) {
+    archedWindow(-W / 2 + 0.4, z, Math.PI / 2);   // left wall, faces +x
+    archedWindow(W / 2 - 0.4, z, -Math.PI / 2);    // right wall, faces -x
+  }
+
   // ---- shelf runs: book-spine textured faces on a wood backing ----
   function shelfRun(x, z, len, dir, face, y0, h) {
     const depth = 1.1, n = Math.max(1, Math.round(len / 5));
@@ -144,10 +169,14 @@ export function buildLibrary() {
   shelfRun(W / 2 - 0.9, 0, D - 4, 'z', -1, 0, 4.4);
   colliders.push({ x: -W / 2 + 1.3, z: 0, w: 1.6, d: D - 4 });
   colliders.push({ x: W / 2 - 1.3, z: 0, w: 1.6, d: D - 4 });
+  groundShadow(0, -D / 2 + 1.3, W - 2, 3.2);
+  groundShadow(-W / 2 + 1.3, 0, 3.2, D - 2);
+  groundShadow(W / 2 - 1.3, 0, 3.2, D - 2);
   // two free-standing double-sided stacks for depth
   for (const sx of [-13, 13]) {
     shelfRun(sx, -3, 9, 'z', 1, 0, 3.6);
     shelfRun(sx, -3, 9, 'z', -1, 0, 3.6);
+    groundShadow(sx, -3, 3.4, 10);
     colliders.push({ x: sx, z: -3, w: 2.4, d: 9 });
   }
   // mezzanine upper shelves (back wall) — level 1
@@ -162,6 +191,7 @@ export function buildLibrary() {
     const base = tbox(1.5, 0.5, 1.5, colMat); base.position.y = 0.25; g.add(base);
     const cap = tbox(1.5, 0.5, 1.5, colMat); cap.position.y = WALL_H - 0.25; g.add(cap);
     g.position.set(x, 0, z); root.add(g);
+    groundShadow(x, z, 3.2, 3.2);
     colliders.push({ x, z, w: 1.6, d: 1.6 });
     if (both) colliders1.push({ x, z, w: 1.6, d: 1.6 });
   }
@@ -203,6 +233,7 @@ export function buildLibrary() {
   function readingDesk(dx, dz, floorY, cl) {
     const y = floorY;
     const desk = tbox(4.6, 1.1, 2.4, deskMat); desk.position.set(dx, y + 0.55, dz); root.add(desk);
+    groundShadow(dx, dz + 1, 6.5, 4.5, y + 0.02);
     const lampPost = tbox(0.3, 0.7, 0.3, brassMat); lampPost.position.set(dx + 1.5, y + 1.45, dz - 0.6); root.add(lampPost);
     const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12),
       toonMat(0x2e6f4f, { emissive: 0x123a26 })); lampShade.position.set(dx + 1.5, y + 1.85, dz - 0.6); root.add(lampShade);
@@ -232,6 +263,7 @@ export function buildLibrary() {
     const backr = tbox(1.8, 1.3, 0.4, toonMat(PALETTE.leather)); backr.position.set(0, 1.2, -0.7); g.add(backr);
     for (const ax of [-1, 1]) { const arm = tbox(0.35, 0.6, 1.6, toonMat(PALETTE.leather)); arm.position.set(ax * 0.9, 0.85, 0); g.add(arm); }
     g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    groundShadow(x, z, 2.8, 2.8);
     colliders.push({ x, z, w: 2, d: 2 });
   }
   armchair(-27, 12, 0.5); armchair(-22, 16, -0.6);
@@ -253,19 +285,16 @@ export function buildLibrary() {
   loadProp(root, 'assets/fireplace.glb', { x: -33.7, z: 14, ry: -Math.PI / 2, scale: 1 });
   loadProp(root, 'assets/globe.glb', { x: -29, z: 18.5, ry: 0.5, scale: 1 });
   loadProp(root, 'assets/gramophone.glb', { x: -31, z: 9.5, ry: 0.8, scale: 1 });
+  groundShadow(-33.4, 14, 2, 3.6); groundShadow(-29, 18.5, 2, 2); groundShadow(-31, 9.5, 1.8, 1.8);
 
   // ---- librarian counter (front-right) ----
   const counter = tbox(7, 1.3, 2, woodMat); counter.position.set(21, 0.65, 19); root.add(counter);
   const counterTop = tbox(7.4, 0.18, 2.4, brassMat); counterTop.position.set(21, 1.4, 19); root.add(counterTop);
+  groundShadow(21, 19, 8.5, 3.6);
   colliders.push({ x: 21, z: 19, w: 7.4, d: 2.4 });
 
-  // ---- open rafter ceiling + pendant lamps + warm fill lights ----
-  // No solid slab — it would block the shared top-down camera. Instead a raised
-  // grid of rafters the pendants hang from, so the lights read as hung, not floating.
-  const bbeam = tbox(W - 2, 0.5, 0.6, beamMat); bbeam.position.set(0, WALL_H - 0.5, -D / 2 + 0.5); root.add(bbeam);
-  for (const s of [-1, 1]) { const sb = tbox(0.6, 0.5, D - 2, beamMat); sb.position.set(s * (W / 2 - 0.5), WALL_H - 0.5, 0); root.add(sb); }
-  for (const bz of [-20, -12, -4, 4, 12, 20]) { const cb = tbox(W - 2, 0.4, 0.45, beamMat); cb.position.set(0, WALL_H - 0.55, bz); root.add(cb); }
-  for (const bx of [-18, 18]) { const lb = tbox(0.45, 0.4, D - 4, beamMat); lb.position.set(bx, WALL_H - 0.7, 0); root.add(lb); }
+  // ---- pendant lamps + warm fill lights (no ceiling/rafters; the low camera
+  // keeps the lamp rod-tops and column caps above the top of frame) ----
   function pendant(x, z) {
     const rod = tbox(0.06, 4, 0.06, beamMat); rod.position.set(x, 10, z); root.add(rod);
     const shade = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.8, 16), toonMat(PALETTE.pendantDark)); shade.position.set(x, 8, z); root.add(shade);
@@ -279,8 +308,8 @@ export function buildLibrary() {
   warmLight(0, 8, 8, 50, 44); warmLight(-18, 8, 8, 26, 30); warmLight(18, 8, 8, 26, 30);
   warmLight(-26, 4.5, 14, 34, 24);  // nook glow
   warmLight(0, 8, -14, 26, 36);     // balcony glow
-  const fireGlow = new THREE.PointLight(0xff8a3c, 26, 16, 2); // fireplace
-  fireGlow.position.set(-32, 1.8, 14); root.add(fireGlow);
+  const fireGlow = new THREE.PointLight(0xff7a2e, 7, 10, 2); // fireplace (gentle)
+  fireGlow.position.set(-32, 1.4, 14); root.add(fireGlow);
 
   // ---- exit + spawn ----
   addExitPad(root, 0, D / 2 - 2);
