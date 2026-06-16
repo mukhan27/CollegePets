@@ -324,14 +324,17 @@ function makeLibraryExterior(b) {
     archWindow(s * (w / 2 + 0.05), upY, bz, s * Math.PI / 2);
   }
 
-  // grand portico: columns pulled out to the sides so they frame the doorway
-  // rather than stand in front of it
-  const porchD = 5, colH = 11, colZ = d / 2 + porchD - 0.8;
+  // ---- grand portico, standing on a solid stone porch ----
+  const porchD = 5, colH = 11, colZ = d / 2 + porchD - 1.0;
+  // solid masonry porch floor: ground up to the plinth top (Y), reaching from the
+  // body out past the columns so they read as planted, not floating
+  const porchFront = d / 2 + porchD + 1.0;
+  g.add(mesh(new THREE.BoxGeometry(18, Y, porchD + 1.0), stoneMat, 0, Y / 2, d / 2 + (porchD + 1.0) / 2, false));
   const colXs = [-7.5, -4.2, 4.2, 7.5]; // clear of the ~4m-wide door (±2.3)
   for (const s of colXs) {
-    g.add(mesh(new THREE.CylinderGeometry(0.45, 0.5, colH, 14), trimMat, s, Y + colH / 2, colZ));
-    g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + 0.25, colZ, false));
-    g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + colH - 0.25, colZ, false));
+    g.add(mesh(new THREE.CylinderGeometry(0.5, 0.55, colH, 14), trimMat, s, Y + colH / 2, colZ));
+    g.add(mesh(new THREE.BoxGeometry(1.3, 0.55, 1.3), trimMat, s, Y + 0.28, colZ, false));        // base
+    g.add(mesh(new THREE.BoxGeometry(1.3, 0.55, 1.3), trimMat, s, Y + colH - 0.28, colZ, false));  // capital
   }
   const entW = 17, entY = Y + colH + 0.35;
   g.add(mesh(new THREE.BoxGeometry(entW, 1.1, 1.9), trimMat, 0, entY, colZ));
@@ -340,10 +343,10 @@ function makeLibraryExterior(b) {
   const ped = new THREE.Mesh(new THREE.ExtrudeGeometry(ps, { depth: 1.7, bevelEnabled: false }), trimMat);
   ped.position.set(0, entY + 0.55, colZ - 0.95); ped.castShadow = true; g.add(ped);
 
-  // shallow stone steps, centred on the door and stacked just in front of the body
+  // solid masonry steps descending from the porch to the lawn (each a full block)
   for (let i = 0; i < 3; i++) {
-    const sw = 9 + i * 1.4;
-    g.add(mesh(new THREE.BoxGeometry(sw, 0.3, 1.1), stoneMat, 0, 0.9 - i * 0.3, d / 2 + 1.0 + i * 1.0, false));
+    const hi = Y * (3 - i) / 4;
+    g.add(mesh(new THREE.BoxGeometry(13 - i, hi, 1.1), stoneMat, 0, hi / 2, porchFront + 0.5 + i * 1.05, false));
   }
 
   // grand double door against the body
@@ -359,7 +362,8 @@ function makeLibraryExterior(b) {
   g.add(sign);
 
   g.position.set(x, 0, z);
-  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + porchD + 1.6);
+  // enter-point sits out at the foot of the steps so the prompt is easy to find
+  const doorWorld = new THREE.Vector3(x, 0, z + porchFront + 2.5);
   const collider = { x, z, w: w + 1.4, d: d + 1.4 };
   return { group: g, doorWorld, collider };
 }
@@ -420,7 +424,7 @@ export function buildCampus() {
   // ---- buildings (positions & footprints identical to v1) ----
   const buildings = [
     { id: 'library', x: -58, z: -36, w: 42, h: 18, d: 26, color: P.wallCream, roofColor: P.roofTeal,
-      label: '📚 Library', prompt: '📚 Enter Library' },
+      label: '📚 Library', prompt: '📚 Enter Library', enterR: 4.5 },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
     { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: P.wallBlue, roofColor: P.roofNavy,
@@ -442,7 +446,7 @@ export function buildCampus() {
     colliders.push(built.collider);
     doors[b.id] = built.doorWorld;
     if (b.prompt) {
-      interactables.push({ id: b.id, x: built.doorWorld.x, z: built.doorWorld.z, r: 3.2, label: b.prompt });
+      interactables.push({ id: b.id, x: built.doorWorld.x, z: built.doorWorld.z, r: b.enterR || 3.2, label: b.prompt });
     }
   }
 
