@@ -1,6 +1,7 @@
-// Virtual joystick (touch) + WASD/arrow keys (desktop). Exposes a normalized move vector.
+// Virtual joystick (touch) + WASD/arrow keys (desktop). Exposes a normalized move
+// vector, plus a camera yaw the player drags with on the right side of the screen.
 
-export const input = { x: 0, y: 0, active: false };
+export const input = { x: 0, y: 0, active: false, camYaw: 0 };
 
 const keys = new Set();
 const KEYMAP = {
@@ -81,4 +82,25 @@ export function initInput() {
   };
   zone.addEventListener('touchend', endTouch);
   zone.addEventListener('touchcancel', endTouch);
+
+  // --- camera rotation: drag horizontally on the right side of the screen ---
+  const camZone = document.getElementById('camera-zone');
+  if (camZone) {
+    let camPid = null, lastX = 0;
+    camZone.addEventListener('pointerdown', (e) => {
+      if (camPid !== null) return;
+      camPid = e.pointerId; lastX = e.clientX;
+      try { camZone.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    camZone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== camPid) return;
+      input.camYaw -= (e.clientX - lastX) * 0.006; // drag right → view swings around
+      lastX = e.clientX;
+      e.preventDefault();
+    }, { passive: false });
+    const endCam = (e) => { if (e.pointerId === camPid) camPid = null; };
+    camZone.addEventListener('pointerup', endCam);
+    camZone.addEventListener('pointercancel', endCam);
+  }
 }

@@ -92,7 +92,7 @@ const bedroom = buildBedroom();
 bedroom.rebuildDecor(state.room);
 
 campus.spawn = { x: 0, z: 10 };
-campus.camOffset = new THREE.Vector3(0, 14, 23); // cozier 3/4 angle to match the interiors
+campus.camOffset = new THREE.Vector3(0, 12, 19); // closer 3/4 angle, matched to the interior view
 // interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
 // caps aren't visible — they rise out of frame — and gives the warm AC feel)
 library.camOffset = new THREE.Vector3(0, 11, 18);
@@ -142,6 +142,8 @@ function switchLocation(key, spawnOverride) {
   gu.vignetteStrength.value = mood.vignette;
   gu.warmth.value = mood.warmth;
   gu.saturation.value = mood.saturation;
+
+  input.camYaw = 0; // reset the view rotation entering a new scene
 
   const sp = spawnOverride || loc.def.spawn;
   player.position.set(sp.x, 0, sp.z);
@@ -208,6 +210,25 @@ function movePlayer(def, dx, dz) {
   moveWithCollision(pos, dx, dz, lvl);
   const entered = stairAt(def, pos.x, pos.z);
   playerTargetY = entered ? rampHeight(entered, pos.z) : lvl.y;
+}
+
+// How far (0..1) the camera can sit along the player→desired-camera line before
+// it would sink into a large building, so the trailing camera doesn't clip
+// through walls when the player rounds the back of a building.
+function cameraClearT(px, pz, cx, cz, colliders) {
+  const steps = 18;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const sx = px + (cx - px) * t, sz = pz + (cz - pz) * t;
+    for (const c of colliders) {
+      if (c.w < 14 && c.d < 13) continue; // buildings only
+      const hw = c.w / 2 + 0.4, hd = c.d / 2 + 0.4;
+      if (sx > c.x - hw && sx < c.x + hw && sz > c.z - hd && sz < c.z + hd) {
+        return Math.max(0.06, (i - 1) / steps); // stop just before the wall
+      }
+    }
+  }
+  return 1;
 }
 
 // ----------------------------------------------------------- interactions
@@ -352,20 +373,32 @@ function frame(dt, t) {
   const uiOpen = isModalOpen();
   let moving = false;
 
+  // camera yaw rotates both the view and the movement frame, so "up" on the
+  // stick always walks away from the camera no matter which way it's turned
+  const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
   if (!uiOpen && !seated && input.active) {
     const speed = currentLoc === 'campus' ? 9 : 6;
-    const dx = input.x * speed * dt;
-    const dz = input.y * speed * dt;
-    movePlayer(loc, dx, dz);
-    player.rotation.y = Math.atan2(input.x, input.y);
+    const mx = input.x * cy + input.y * sy;
+    const mz = -input.x * sy + input.y * cy;
+    movePlayer(loc, mx * speed * dt, mz * speed * dt);
+    player.rotation.y = Math.atan2(mx, mz);
     moving = true;
   }
   player.userData.animate(t, moving);
   // smooth elevation toward the active floor / stair height (not while seated)
   if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
 
-  // camera follow
-  const targetCam = player.position.clone().add(loc.camOffset);
+  // camera follow — offset rotated by the player-controlled yaw, then pulled in
+  // if a building would otherwise swallow it
+  const off = loc.camOffset;
+  let camX = player.position.x + (off.x * cy + off.z * sy);
+  let camZ = player.position.z + (-off.x * sy + off.z * cy);
+  if (currentLoc === 'campus') {
+    const t = cameraClearT(player.position.x, player.position.z, camX, camZ, loc.colliders);
+    camX = player.position.x + (camX - player.position.x) * t;
+    camZ = player.position.z + (camZ - player.position.z) * t;
+  }
+  const targetCam = new THREE.Vector3(camX, player.position.y + off.y, camZ);
   camera.position.lerp(targetCam, Math.min(1, dt * 5));
   camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
 

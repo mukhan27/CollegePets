@@ -495,7 +495,9 @@ export function buildLibrary() {
   // ---- cozy fireside nook (front-left), arranged around a patterned rug ----
   const rug = new THREE.Mesh(new THREE.CircleGeometry(6, 32),
     toonMat(PALETTE.rug, { map: rugTexture(`#${PALETTE.rug.toString(16)}`, `#${PALETTE.rugBorder.toString(16)}`) }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.02, 13); root.add(rug);
+  // sit the rug clearly above the floor + contact-shadow decals (both at y≈0.02)
+  // so it doesn't z-fight / flicker
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.06, 13); root.add(rug);
   // seats angled to face the fireplace/rug focal point (≈ -30,13)
   sofa(-20.5, 13, -Math.PI / 2);                 // faces the fireplace (-x)
   armchair(-25.5, 7.5, -0.69, blueMat);          // angled in toward the fire
@@ -511,7 +513,7 @@ export function buildLibrary() {
   // greenery + a couple of books spilled on the rug for that lived-in feel
   pottedPlant(-32, 5, true); pottedPlant(-31, 20);
   pottedPlant(15, 21); pottedPlant(-2, -9, true);
-  bookStack(-23, 0.02, 16.5, 4, 0.3);
+  bookStack(-23, 0.08, 16.5, 4, 0.3);
   candle(-27.7, 0.95, 13.6, true);
 
   // ---- wall art, a grandfather clock and a rolling ladder for character ----

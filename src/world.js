@@ -324,22 +324,26 @@ function makeLibraryExterior(b) {
     archWindow(s * (w / 2 + 0.05), upY, bz, s * Math.PI / 2);
   }
 
-  // grand portico: four columns + entablature + pediment, out front
+  // grand portico: columns pulled out to the sides so they frame the doorway
+  // rather than stand in front of it
   const porchD = 5, colH = 11, colZ = d / 2 + porchD - 0.8;
-  for (const s of [-4.2, -1.4, 1.4, 4.2]) {
+  const colXs = [-7.5, -4.2, 4.2, 7.5]; // clear of the ~4m-wide door (±2.3)
+  for (const s of colXs) {
     g.add(mesh(new THREE.CylinderGeometry(0.45, 0.5, colH, 14), trimMat, s, Y + colH / 2, colZ));
     g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + 0.25, colZ, false));
     g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), trimMat, s, Y + colH - 0.25, colZ, false));
   }
-  const entY = Y + colH + 0.35;
-  g.add(mesh(new THREE.BoxGeometry(11, 1.1, 1.9), trimMat, 0, entY, colZ));
-  const pw = 11.6, pr = pw * 0.26;
-  const ps = new THREE.Shape(); ps.moveTo(-pw / 2, 0); ps.lineTo(pw / 2, 0); ps.lineTo(0, pr); ps.closePath();
+  const entW = 17, entY = Y + colH + 0.35;
+  g.add(mesh(new THREE.BoxGeometry(entW, 1.1, 1.9), trimMat, 0, entY, colZ));
+  const pr = entW * 0.22;
+  const ps = new THREE.Shape(); ps.moveTo(-entW / 2, 0); ps.lineTo(entW / 2, 0); ps.lineTo(0, pr); ps.closePath();
   const ped = new THREE.Mesh(new THREE.ExtrudeGeometry(ps, { depth: 1.7, bevelEnabled: false }), trimMat);
   ped.position.set(0, entY + 0.55, colZ - 0.95); ped.castShadow = true; g.add(ped);
 
+  // shallow stone steps, centred on the door and stacked just in front of the body
   for (let i = 0; i < 3; i++) {
-    g.add(mesh(new THREE.BoxGeometry(11 - i * 0.6, 0.32, 1.0), stoneMat, 0, 0.16 + i * 0.32, d / 2 + porchD + 0.6 - i * 0.9, false));
+    const sw = 9 + i * 1.4;
+    g.add(mesh(new THREE.BoxGeometry(sw, 0.3, 1.1), stoneMat, 0, 0.9 - i * 0.3, d / 2 + 1.0 + i * 1.0, false));
   }
 
   // grand double door against the body

@@ -76,6 +76,11 @@ html, body {
   position: absolute; left: 0; bottom: 0; width: 45%; height: 65%;
   pointer-events: auto;
 }
+/* drag on the right side to rotate the camera */
+#camera-zone {
+  position: absolute; right: 0; top: 58px; width: 55%; height: 82%;
+  pointer-events: auto; touch-action: none;
+}
 #joystick-base {
   position: absolute; left: 36px; bottom: 36px; width: 110px; height: 110px;
   border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.3);
