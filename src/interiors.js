@@ -794,20 +794,21 @@ export function buildDormCommon() {
   add(tb(0.5, 0.05, 0.9, 0x222), -2.0, 1.12, 2.0); // remote
   add(tb(1.3, 0.18, 1.3, 0xd9a441), -3.6, 1.18, 2.2).rotation.y = 0.2; // pizza box
 
-  // ---- bookshelf (left wall) ----
-  const bs = add(tb(2.2, 4.2, 1.0, 0x6b4a33), -W / 2 + 0.9, 2.1, -3);
-  for (let r = 0; r < 4; r++) add(tb(2.0, 0.1, 0.9, 0x4a3322), -W / 2 + 0.9, 0.7 + r * 1.0, -3 + 0.02);
+  // ---- bookshelf (flush against the left wall, depth into the room) ----
+  const bsX = -W / 2 + 0.7;
+  add(tb(1.0, 4.2, 2.6, 0x6b4a33), bsX, 2.1, -3);
   const spineCols = [0x8c3b3b, 0x3f5e8c, 0x3f7a55, 0xb08a2e, 0x6e4a86];
-  for (let r = 0; r < 4; r++) for (let b = 0; b < 5; b++) {
-    const bk = add(tb(0.26, 0.7, 0.5, spineCols[(r + b) % 5]), -W / 2 + 0.4 + b * 0.34, 1.15 + r * 1.0, -2.6);
+  for (let r = 0; r < 4; r++) {
+    add(tb(0.9, 0.1, 2.4, 0x4a3322), bsX + 0.05, 0.7 + r * 1.0, -3); // shelf board
+    for (let b = 0; b < 6; b++) add(tb(0.45, 0.72, 0.3, spineCols[(r + b) % 5]), bsX + 0.3, 1.16 + r * 1.0, -4.1 + b * 0.42); // spines face +x
   }
-  colliders.push({ x: -W / 2 + 0.9, z: -3, w: 2.4, d: 1.2 });
+  colliders.push({ x: bsX, z: -3, w: 1.2, d: 2.8 });
 
-  // ---- floor lamp, plants, posters, wall clock, string lights, mini-fridge ----
+  // ---- floor lamp (gentle), plants, posters, wall clock, string lights, mini-fridge ----
   add(cyl(0.18, 0.22, 0.1, 12, 0x33353b), -12, 0.05, 6); // lamp base
   add(cyl(0.06, 0.06, 3.2, 8, 0x44464c), -12, 1.6, 6);
-  add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.9, 16), emi(0xfff0c4, 0xffcf7a, 0.5)), -12, 3.4, 6);
-  const lampLight = new THREE.PointLight(0xffd29a, 18, 16, 2); lampLight.position.set(-12, 3.2, 6); root.add(lampLight);
+  add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.9, 16), emi(0xfff0c4, 0xffcf7a, 0.32)), -12, 3.4, 6);
+  const lampLight = new THREE.PointLight(0xffd29a, 7, 11, 2); lampLight.position.set(-12, 3.0, 6); root.add(lampLight);
 
   function plant(x, z, tall) {
     add(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z);
@@ -843,18 +844,35 @@ export function buildDormCommon() {
   add(tb(1.62, 0.1, 1.42, 0xd6d8da), 13.2, 1.45, 10); // door split
   add(tb(0.12, 0.5, 0.1, 0xbfc2c6), 12.9, 1.0, 10.75); // handle
   colliders.push({ x: 13.2, z: 10, w: 2.0, d: 1.8 });
-  const vend = add(tb(1.8, 3.4, 1.3, 0xc0392b), 13.4, 1.7, 5.5);
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.4), emi(0x9fd8e8, 0x2a4a55, 0.3)); glass.position.set(12.74, 2.0, 5.5); glass.rotation.y = -Math.PI / 2; root.add(glass);
-  for (let r = 0; r < 3; r++) for (let cI = 0; cI < 3; cI++) add(tb(0.06, 0.3, 0.3, [0xffd166, 0x6be0a0, 0xff6b6b][(r + cI) % 3]), 12.7, 1.2 + r * 0.7, 5.0 + cI * 0.5);
-  colliders.push({ x: 13.4, z: 5.5, w: 2.2, d: 1.7 });
-  interactables.push({ id: 'vending', x: 11.8, z: 5.5, r: 2.2, label: '🥤 Vending machine' });
+  // vending machine: red body, yellow brand header, recessed glass display with
+  // colourful snack rows, a control/coin panel and a dispenser tray (faces -x)
+  const vx = 13.7;
+  add(tb(1.6, 3.6, 1.6, 0xb83227), vx, 1.8, 5.5);                       // body
+  add(tb(1.64, 0.55, 1.64, 0xe8c33a), vx, 3.45, 5.5);                  // header band
+  add(tb(0.14, 2.4, 1.0, 0x12202a), vx - 0.74, 2.0, 5.2);             // recessed dark display
+  for (let r = 0; r < 4; r++) for (let cI = 0; cI < 3; cI++)          // snacks behind the glass
+    add(tb(0.1, 0.32, 0.26, [0xffd166, 0x6be0a0, 0xff6b6b, 0x6bb0ff][(r + cI) % 4]), vx - 0.78, 1.25 + r * 0.5, 4.85 + cI * 0.34);
+  const vglass = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.4), emi(0xbfe6f0, 0x223844, 0.18));
+  vglass.position.set(vx - 0.82, 2.0, 5.2); vglass.rotation.y = -Math.PI / 2; root.add(vglass);
+  add(tb(0.14, 2.4, 0.4, 0x8a2018), vx - 0.74, 2.0, 6.1);             // side control panel
+  for (let i = 0; i < 4; i++) add(tb(0.06, 0.12, 0.12, 0xf0e6c8), vx - 0.82, 2.7 - i * 0.3, 6.1); // buttons
+  add(tb(0.1, 0.4, 0.5, 0x9aa0a6), vx - 0.8, 1.3, 6.1);              // coin slot panel
+  add(tb(0.5, 0.5, 0.9, 0x101316), vx - 0.5, 0.55, 5.4);             // dispenser tray (bottom)
+  colliders.push({ x: vx, z: 5.5, w: 1.8, d: 1.8 });
+  interactables.push({ id: 'vending', x: vx - 1.5, z: 5.5, r: 2.4, label: '🥤 Vending machine' });
 
   // ---- improved games table (table-tennis) front-right ----
   const tt = add(tb(4.6, 0.18, 2.6, 0x1f7a52), 8, 1.0, 6);
   add(tb(4.6, 0.02, 0.08, 0xffffff), 8, 1.1, 6); // centre line
   add(tb(0.06, 0.5, 2.6, 0xeeeeee), 8, 1.25, 6); // net
   for (const [lx, lz] of [[-2.0, -1.0], [2.0, -1.0], [-2.0, 1.0], [2.0, 1.0]]) add(cyl(0.1, 0.1, 1.0, 8, 0x3a3f45), 8 + lx, 0.5, 6 + lz);
-  for (const [px, pz, rot] of [[-1.4, 1.6, 0.4], [1.4, 0.4, -0.6]]) { const p = add(cyl(0.32, 0.32, 0.06, 14, 0xb5462f), 8 + px, 1.16, 6 + pz); p.rotation.x = Math.PI / 2; p.rotation.z = rot; }
+  // two paddles lying flat on the table (blade + handle) + a ball
+  function paddle(px, pz, dir) {
+    const blade = add(cyl(0.3, 0.3, 0.05, 16, 0xb5462f), px, 1.12, pz); blade.rotation.x = Math.PI / 2;
+    add(tb(0.5, 0.05, 0.14, 0x5b3c25), px + dir * 0.4, 1.12, pz); // handle off the blade edge
+  }
+  paddle(6.6, 5.0, -1); paddle(9.3, 6.7, 1);
+  add(sph(0.1, 0xfff0b0), 8.4, 1.15, 5.3); // ball
   colliders.push({ x: 8, z: 6, w: 4.8, d: 2.8 }); shade(8, 6, 5.4, 3.4);
 
   // ---- warm cosy lighting ----
