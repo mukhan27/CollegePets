@@ -1177,32 +1177,96 @@ export function buildLectureLobby() {
   for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.6, WALL_H, D), wallMat); m.position.set(s * W / 2, WALL_H / 2, 0); m.receiveShadow = true; root.add(m); }
   for (const [w, d, x, z] of [[W, 0.3, 0, -D / 2 + 0.3], [0.3, D, -W / 2 + 0.3, 0], [0.3, D, W / 2 - 0.3, 0]]) at(tb(w, 0.6, d, 0xcfc6b2), x, 0.3, z);
 
-  // reception desk (front-centre) with a glowing kiosk screen + sign
-  at(tb(8, 1.2, 2, 0x6e4a2e), 0, 0.6, 8); at(tb(8.4, 0.16, 2.3, 0xc9a13b), 0, 1.26, 8);
-  colliders.push({ x: 0, z: 8, w: 8.2, d: 2.2 });
-  at(tb(1.6, 1.0, 0.1, 0x14181d), 0, 1.9, 7.3); { const s = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), emi(0x223040, 0x2a8f86, 0.5)); s.position.set(0, 1.9, 7.24); root.add(s); }
+  // ---- textured material kit + helpers for the upgraded furnishings ----
+  const fabricBlue = toonMat(0x52688f, { map: fabricTexture('#3f5578') });
+  const fabricGold = toonMat(0xb0843e, { map: fabricTexture('#8f6a2e') });
+  const woodWarm = toonMat(0xffffff, { map: woodPlanks('#9a6a3f', '#7a5230') });
+  const woodDark = toonMat(0xffffff, { map: woodPlanks('#5b3c25', '#46301f') });
+  const woodFeet = toonMat(0x4a3322);
+  const tbm = (w, h, d, m) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); me.castShadow = true; me.receiveShadow = true; return me; };
+  const cylm = (rt, rb, h, n, m) => { const me = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), m); me.castShadow = true; return me; };
+  const gat = (g, m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
+  const shade = (x, z, sx, sz = sx) => { const dq = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); dq.rotation.x = -Math.PI / 2; dq.position.set(x, 0.02, z); root.add(dq); };
+
+  // ---- reception desk (detailed): counter, monitor, keyboard, lamp, bell ----
+  at(tbm(8, 1.3, 2, woodWarm), 0, 0.65, 8); at(tbm(8.5, 0.18, 2.4, woodDark), 0, 1.42, 8);
+  at(tbm(7.4, 0.5, 0.08, toonMat(0xc9a13b)), 0, 1.0, 9.0); // brass front accent
+  colliders.push({ x: 0, z: 8, w: 8.4, d: 2.2 });
+  at(tbm(1.4, 0.9, 0.08, toonMat(0x14181d)), 1.6, 2.0, 8.4); { const sc = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), emi(0x223040, 0x2a8f86, 0.5)); sc.position.set(1.6, 2.0, 8.36); root.add(sc); }
+  at(tbm(0.9, 0.05, 0.4, toonMat(0x33353b)), 1.6, 1.55, 9.0);
+  at(cylm(0.18, 0.2, 0.1, 12, toonMat(0x9aa6ae)), -2, 1.56, 8.6); at(cylm(0.04, 0.04, 0.5, 8, toonMat(0x44464c)), -2, 1.8, 8.6); at(new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.3, 12), emi(0xfff0c4, 0xffcf7a, 0.22)), -2, 2.15, 8.6);
+  at(sph(0.14, 0xc99a3b), 0, 1.56, 8.7); at(tbm(0.7, 0.1, 0.5, toonMat(0xf2ece0)), -0.9, 1.55, 8.7);
+  at(textSprite('RECEPTION', { size: 22 }), 0, 2.7, 8);
   at(textSprite('🏛️ HAWTHORNE LECTURE HALL', { size: 20 }), 0, 3.4, -D / 2 + 0.6);
 
-  // waiting lounge: a sofa + two armchairs + coffee table on a rug
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), toonMat(0x8a9bb0, { map: rugTexture('#8a9bb0', '#5d6e86') }));
-  rug.rotation.x = -Math.PI / 2; rug.position.set(-12, 0.02, 4); root.add(rug);
-  (function sofa(x, z, len) { const c = 0x4f6a96;
-    at(tb(len, 0.5, 1.8, c), x, 0.5, z); for (let i = 0; i < 3; i++) { const cx = x - len / 2 + (i + 0.5) * len / 3; at(tb(len / 3 - 0.1, 0.4, 1.4, c), cx, 0.82, z + 0.12); at(tb(len / 3 - 0.1, 0.9, 0.4, c), cx, 1.25, z - 0.66); }
-    colliders.push({ x, z, w: len + 0.4, d: 2 }); })(-12, 1.5, 4.5);
-  function armchair(x, z) { const c = 0x6a83a6; at(tb(1.7, 0.5, 1.7, c), x, 0.5, z); at(tb(1.7, 0.9, 0.4, c), x, 1.0, z - 0.66); colliders.push({ x, z, w: 1.9, d: 1.9 }); }
-  armchair(-16, 6); armchair(-8, 6);
-  at(tb(2.6, 0.16, 1.6, 0x8a5a32), -12, 1.0, 4.5); colliders.push({ x: -12, z: 4.5, w: 2.6, d: 1.6 });
-  at(tb(0.8, 0.16, 1.0, 0xb5462f), -12.4, 1.16, 4.5).rotation.y = 0.3;
+  // ---- waiting lounge: rounded textured sofa + armchairs in a CIRCLE ----
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 32), toonMat(0x8a9bb0, { map: rugTexture('#8a9bb0', '#5d6e86') }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-12, 0.03, 4); root.add(rug);
+  function armchair(x, z, ry, mat, pcol) {
+    const g = new THREE.Group();
+    gat(g, tbm(1.9, 0.45, 1.9, mat), 0, 0.5, 0);
+    const cu = cylm(0.85, 0.85, 0.4, 18, mat); cu.scale.z = 0.95; gat(g, cu, 0, 0.82, 0.1);
+    gat(g, tbm(1.85, 1.35, 0.45, mat), 0, 1.25, -0.78);
+    const br = cylm(0.28, 0.28, 1.85, 14, mat); br.rotation.z = Math.PI / 2; gat(g, br, 0, 1.9, -0.78);
+    for (const ax of [-1, 1]) {
+      gat(g, tbm(0.45, 0.7, 1.7, mat), ax * 0.92, 0.95, 0);
+      const ar = cylm(0.26, 0.26, 1.7, 14, mat); ar.rotation.x = Math.PI / 2; gat(g, ar, ax * 0.92, 1.32, 0);
+      for (const fz of [-0.7, 0.7]) gat(g, cylm(0.12, 0.1, 0.3, 8, woodFeet), ax * 0.8, 0.15, fz);
+    }
+    if (pcol) { const p = tbm(0.6, 0.6, 0.22, toonMat(pcol)); p.rotation.z = 0.3; gat(g, p, 0, 1.18, 0.12); }
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    shade(x, z, 2.6, 2.6); colliders.push({ x, z, w: 2.0, d: 2.0 });
+    const fx = Math.sin(ry), fz = Math.cos(ry);
+    interactables.push({ id: 'lounge', x: x + fx * 2.4, z: z + fz * 2.4, r: 2.4, label: '🛋️ Relax', seatPos: { x, z, y: 0 }, sitY: 1.0, face: ry, stepBack: { x: x + fx * 2.2, z: z + fz * 2.2 } });
+  }
+  function sofa(x, z, ry, mat, pcols) {
+    const g = new THREE.Group();
+    gat(g, tbm(4.4, 0.45, 1.9, mat), 0, 0.5, 0);
+    for (const cx of [-1.35, 0, 1.35]) { gat(g, tbm(1.28, 0.4, 1.6, mat), cx, 0.82, 0.12); gat(g, tbm(1.28, 1.05, 0.45, mat), cx, 1.3, -0.72); }
+    const br = cylm(0.26, 0.26, 4.4, 14, mat); br.rotation.z = Math.PI / 2; gat(g, br, 0, 1.92, -0.72);
+    for (const ax of [-1, 1]) { gat(g, tbm(0.45, 0.8, 1.9, mat), ax * 2.0, 1.0, 0); const ar = cylm(0.28, 0.28, 1.9, 14, mat); ar.rotation.x = Math.PI / 2; gat(g, ar, ax * 2.0, 1.4, 0); }
+    pcols.forEach((pc, i) => { const p = tbm(0.6, 0.6, 0.22, toonMat(pc)); p.rotation.z = i ? -0.25 : 0.3; gat(g, p, i ? 1.3 : -1.3, 1.18, -0.1); });
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    const a = Math.abs(Math.sin(ry)); shade(x, z, 5, 2.4); colliders.push({ x, z, w: 4.6 * (1 - a) + 2.2 * a, d: 2.2 * (1 - a) + 4.6 * a });
+    const fx = Math.sin(ry), fz = Math.cos(ry);
+    interactables.push({ id: 'lounge', x: x + fx * 2.6, z: z + fz * 2.6, r: 2.6, label: '🛋️ Relax', seatPos: { x, z, y: 0 }, sitY: 1.05, face: ry, stepBack: { x: x + fx * 2.4, z: z + fz * 2.4 } });
+  }
+  // arranged around the coffee table at (-12,4), all facing the centre
+  sofa(-12, 0.8, 0, fabricBlue, [0xf2a35c, 0x6be0a0]);   // faces +z (toward centre)
+  armchair(-8, 4, -Math.PI / 2, fabricGold, 0xe8748c);   // faces -x
+  armchair(-16, 4, Math.PI / 2, fabricGold, 0x6bb0ff);   // faces +x
+  // round coffee table + clutter
+  (function roundTable(x, z) {
+    const g = new THREE.Group();
+    gat(g, cylm(1.3, 1.3, 0.16, 24, woodWarm), 0, 1.0, 0); gat(g, cylm(1.15, 1.15, 0.18, 24, woodWarm), 0, 0.85, 0);
+    for (const a of [0, 1, 2, 3]) gat(g, cylm(0.1, 0.13, 0.85, 10, woodDark), Math.cos(a * Math.PI / 2) * 0.9, 0.42, Math.sin(a * Math.PI / 2) * 0.9);
+    g.position.set(x, 0, z); root.add(g); shade(x, z, 3, 3); colliders.push({ x, z, w: 2, d: 2 });
+  })(-12, 4);
+  at(tbm(0.8, 0.08, 1.0, toonMat(0x3a6f9a)), -12.3, 1.13, 4.2).rotation.y = 0.3;
+  at(tbm(0.7, 0.08, 0.9, toonMat(0xb5462f)), -11.6, 1.17, 3.7).rotation.y = -0.4;
+  // warm pendant over the lounge
+  at(tbm(0.08, 6, 0.08, toonMat(0x2c2c2c)), -12, 7, 4);
+  at(new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.95, 16), toonMat(0x3a3f45)), -12, 4.1, 4);
+  at(new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), emi(0xfff4cf, 0xffe9a8, 0.4)), -12, 3.75, 4);
+  { const L = new THREE.PointLight(0xffe9b0, 8, 13, 2); L.position.set(-12, 3.7, 4); root.add(L); }
 
-  // plants, vending, water cooler, directory board, posters
-  function plant(x, z) { at(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z); const f = at(sph(0.95, 0x4f8a45), x, 1.45, z); f.scale.y = 1.1; colliders.push({ x, z, w: 1.1, d: 1.1 }); }
+  // ---- plants, water cooler, directory, posters, and a detailed vending ----
+  function plant(x, z) { at(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z); const f = at(sph(0.95, 0x4f8a45), x, 1.45, z); f.scale.y = 1.1; shade(x, z, 1.6, 1.6); colliders.push({ x, z, w: 1.1, d: 1.1 }); }
   plant(-19, 12); plant(19, 12); plant(-19, -6);
-  at(tb(1.6, 3.2, 1.2, 0xc0392b), 18, 1.6, 6); colliders.push({ x: 18, z: 6, w: 1.8, d: 1.4 });
-  interactables.push({ id: 'vending', x: 16, z: 6, r: 2.2, label: '🥤 Vending machine' });
-  at(cyl(0.4, 0.4, 1.4, 12, 0xdfe6ec), 18, 0.7, 10); at(cyl(0.45, 0.45, 0.3, 12, 0x9fc7d8), 18, 1.55, 10); colliders.push({ x: 18, z: 10, w: 1, d: 1 });
+  at(cyl(0.4, 0.4, 1.4, 12, 0xdfe6ec), 18, 0.7, 11); at(cyl(0.45, 0.45, 0.3, 12, 0x9fc7d8), 18, 1.55, 11); colliders.push({ x: 18, z: 11, w: 1, d: 1 });
   at(tb(0.2, 3.2, 4.2, 0x2a3a3a), W / 2 - 0.4, 4, -2); { const b = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.8), emi(0x1a2a2a, 0x2a4a4a, 0.25)); b.position.set(W / 2 - 0.52, 4, -2); b.rotation.y = -Math.PI / 2; root.add(b); }
   at(tb(2.2, 2.8, 0.12, 0xe8748c), -W / 2 + 0.35, 4, 8).rotation.y = Math.PI / 2;
   at(tb(1.8, 2.4, 0.12, 0x4f9e96), -W / 2 + 0.35, 4, 12).rotation.y = Math.PI / 2;
+  // vending machine (glass front + snack rows + control panel + tray)
+  const vx = 19;
+  at(tb(1.6, 3.6, 1.6, 0xb83227), vx, 1.8, 6); at(tb(1.64, 0.55, 1.64, 0xe8c33a), vx, 3.45, 6);
+  at(tb(0.14, 2.4, 1.0, 0x12202a), vx - 0.74, 2.0, 5.7);
+  for (let r = 0; r < 4; r++) for (let cI = 0; cI < 3; cI++) at(tb(0.1, 0.32, 0.26, [0xffd166, 0x6be0a0, 0xff6b6b, 0x6bb0ff][(r + cI) % 4]), vx - 0.78, 1.25 + r * 0.5, 5.35 + cI * 0.34);
+  { const vg = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.4), emi(0xbfe6f0, 0x223844, 0.18)); vg.position.set(vx - 0.82, 2.0, 5.7); vg.rotation.y = -Math.PI / 2; root.add(vg); }
+  at(tb(0.14, 2.4, 0.4, 0x8a2018), vx - 0.74, 2.0, 6.6); for (let i = 0; i < 4; i++) at(tb(0.06, 0.12, 0.12, 0xf0e6c8), vx - 0.82, 2.7 - i * 0.3, 6.6);
+  at(tb(0.5, 0.5, 0.9, 0x101316), vx - 0.5, 0.55, 5.9); colliders.push({ x: vx, z: 6, w: 1.8, d: 1.8 });
+  interactables.push({ id: 'vending', x: vx - 1.5, z: 6, r: 2.4, label: '🥤 Vending machine' });
 
   // ---- door into the lecture hall (back wall, glowing portal) ----
   const pad = new THREE.Mesh(new THREE.CircleGeometry(1.4, 20), emi(0x6bb0ff, 0x1d3a5c, 0.6));
