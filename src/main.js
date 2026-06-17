@@ -6,7 +6,7 @@ import { state, save, PET_TYPES, furnitureCount } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
-import { buildLibrary, buildDormCommon, buildBedroom, buildLectureHall } from './interiors.js';
+import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby } from './interiors.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
@@ -87,7 +87,8 @@ new ResizeObserver(resize).observe($('game-canvas'));
 // ----------------------------------------------------------- locations
 const campus = buildCampus();
 const library = buildLibrary();
-const lectureHall = buildLectureHall();
+const lectureLobby = buildLectureLobby();
+const lectureRoom = buildLectureRoom();
 const dormCommon = buildDormCommon();
 const bedroom = buildBedroom(state.room.layout);
 state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
@@ -106,7 +107,8 @@ campus.groundHeight = (x, z) => {
 // interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
 // caps aren't visible — they rise out of frame — and gives the warm AC feel)
 library.camOffset = new THREE.Vector3(0, 11, 18);
-lectureHall.camOffset = new THREE.Vector3(0, 13, 21);
+lectureLobby.camOffset = new THREE.Vector3(0, 11, 17);
+lectureRoom.camOffset = new THREE.Vector3(0, 13, 21);
 dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
 bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
@@ -118,7 +120,8 @@ const LOCATIONS = {
   campus: { def: campus, name: '🏫 Campus', sky: 0xd8f0f4 },
   library: { def: library, name: '📚 Library', sky: 0x2a2018,
     mood: { exposure: 0.95, vignette: 0.55, warmth: 0.045, saturation: 1.06 } },
-  lectureHall: { def: lectureHall, name: '🏛️ Lecture Hall', sky: 0x2a3340 },
+  lectureLobby: { def: lectureLobby, name: '🏛️ Lecture Building', sky: 0x2a3340 },
+  lectureRoom: { def: lectureRoom, name: '🏛️ Lecture Hall', sky: 0x1e2630 },
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
@@ -279,8 +282,10 @@ function runInteract(it) {
       break;
     case 'library': switchLocation('library'); break;
     case 'exit_library': switchLocation('campus', { x: campus.doors.library.x, z: campus.doors.library.z + 1 }); break;
-    case 'lecturehall': switchLocation('lectureHall'); break;
+    case 'lecturehall': switchLocation('lectureLobby'); break;
     case 'exit_lecture': switchLocation('campus', { x: campus.doors.lecturehall.x, z: campus.doors.lecturehall.z + 1 }); break;
+    case 'enter_lecture_room': switchLocation('lectureRoom'); break;
+    case 'exit_lecture_room': switchLocation('lectureLobby', { x: -8, z: -11 }); break;
     case 'dorm': switchLocation('dormCommon'); break;
     case 'exit_dorm': switchLocation('campus', { x: campus.doors.dorm.x, z: campus.doors.dorm.z + 1 }); break;
     case 'enter_bedroom': switchLocation('bedroom'); break;
@@ -513,7 +518,7 @@ function startGame() {
      📚 <b>Library</b> — sit down for a pomodoro study session (earns coins)<br>
      💬 <b>Students</b> — walk up to a pet and chat<br>
      🏀 <b>Court</b> — shoot some hoops<br>
-     🏛️ <b>Lecture Hall</b> — big screen downstairs, study desks upstairs<br>
+     🏛️ <b>Lecture Hall</b> — a lobby leading to a big-screen hall, plus upstairs study desks<br>
      🛍️ <b>Campus Store</b> — clothes & room decor<br>
      🏠 <b>Maple Dorm</b> — your customizable room`);
 }
