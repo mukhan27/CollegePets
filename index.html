@@ -50,6 +50,20 @@
   <button id="interact-btn" class="hidden"></button>
 </div>
 
+<!-- Room editor (grid-based decorating) -->
+<div id="room-editor" class="hidden">
+  <div id="re-top">
+    <span id="re-title">🎨 Decorate</span>
+    <span id="re-hint">Tap a piece to select · drag it to move</span>
+    <button id="re-done" class="re-btn re-primary">Done</button>
+  </div>
+  <div id="re-sel" class="hidden">
+    <button id="re-rotate" class="re-btn">↻ Rotate</button>
+    <button id="re-delete" class="re-btn re-danger">🗑 Remove</button>
+  </div>
+  <div id="re-palette"></div>
+</div>
+
 <!-- Generic modal dialog -->
 <div id="modal" class="overlay hidden">
   <div class="panel" id="modal-panel">

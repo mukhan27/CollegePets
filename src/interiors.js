@@ -807,8 +807,8 @@ export function buildDormCommon() {
   // ---- floor lamp (gentle), plants, posters, wall clock, string lights, mini-fridge ----
   add(cyl(0.18, 0.22, 0.1, 12, 0x33353b), -12, 0.05, 6); // lamp base
   add(cyl(0.06, 0.06, 3.2, 8, 0x44464c), -12, 1.6, 6);
-  add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.9, 16), emi(0xfff0c4, 0xffcf7a, 0.32)), -12, 3.4, 6);
-  const lampLight = new THREE.PointLight(0xffd29a, 7, 11, 2); lampLight.position.set(-12, 3.0, 6); root.add(lampLight);
+  add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.9, 16), emi(0xfff0c4, 0xffcf7a, 0.14)), -12, 3.4, 6);
+  const lampLight = new THREE.PointLight(0xffd29a, 3, 6, 2); lampLight.position.set(-12, 3.0, 6); root.add(lampLight);
 
   function plant(x, z, tall) {
     add(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z);
@@ -894,107 +894,201 @@ export function buildDormCommon() {
 }
 
 // ------------------------------------------------------------ bedroom
-const BED_COLORS = {
-  bed_red: 0xc0392b, bed_blue: 0x3a6ea8, bed_pink: 0xe75480, bed_green: 0x2e8b57,
-};
+// A revamped dorm bedroom with a grid-based decorating editor: every piece of
+// furniture lives in a `layout` (type + grid cell + rotation) that the player
+// edits in-game. The editor interface is returned for main.js to drive.
+function defaultLayout() {
+  return [
+    { t: 'bed', gx: -5, gz: -3, r: 0 },
+    { t: 'nightstand', gx: -7, gz: -5, r: 0 },
+    { t: 'desk', gx: 6, gz: -5, r: 0 },
+    { t: 'bookshelf', gx: 8, gz: 1, r: 1 },
+    { t: 'rug', gx: 0, gz: 2, r: 0 },
+    { t: 'plant', gx: -7, gz: 5, r: 0 },
+    { t: 'lamp', gx: 7, gz: 4, r: 0 },
+    { t: 'beanbag', gx: 2, gz: 4, r: 0 },
+  ];
+}
 
-export function buildBedroom() {
+export function buildBedroom(initialLayout) {
   const root = new THREE.Group();
   const colliders = [];
   const interactables = [];
   const W = 18, D = 14;
   const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { floor: 0xb09a78, wall: 0xa8c8d8 }));
+  root.add(makeRoom(W, D, { wall: 0xbcd6e6 }));
 
-  const decorGroup = new THREE.Group();
-  root.add(decorGroup);
+  // local toon helpers
+  const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
+  const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
+  const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), toonMat(c)); m.castShadow = true; return m; };
+  const at = (m, x, y, z) => { m.position.set(x, y, z); return m; };
+  const emi = (c, e, i = 0.5) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
 
-  // fixed furniture: bed frame + desk (always present)
-  const bedFrame = box(3, 0.5, 4.6, 0x5b3c25);
-  bedFrame.position.set(-6.2, 0.25, -4.2);
-  root.add(bedFrame);
-  colliders.push({ x: -6.2, z: -4.2, w: 3.4, d: 5 });
+  // ---- shell: warm wood floor, accent wall, trim, window, soft lighting ----
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#caa775', '#a8804c') }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.011; floor.receiveShadow = true; root.add(floor);
+  for (const [w, d, x, z] of [[W, 0.3, 0, -D / 2 + 0.3], [0.3, D, -W / 2 + 0.3, 0], [0.3, D, W / 2 - 0.3, 0]]) {
+    root.add(at(tb(w, 0.5, d, 0xdfe7ee), x, 0.25, z));   // baseboard
+    root.add(at(tb(w, 0.22, d, 0xf2f6fa), x, 4.85, z));  // crown
+  }
+  root.add(at(tb(W - 0.6, 4.4, 0.16, 0x8fb4d6), 0, 2.5, -D / 2 + 0.42)); // accent wall behind the bed
+  // window on the left wall (warm daylight glow facing into the room, +x)
+  root.add(at(tb(0.16, 2.9, 3.3, 0xf2f6fa), -W / 2 + 0.32, 3.0, 3));        // frame
+  root.add(at(tb(0.1, 2.3, 2.9, 0x14181d), -W / 2 + 0.4, 3.0, 3));          // inner reveal
+  root.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.3, 2.9), emi(0xdcecf4, 0xbcd6e0, 0.4)), -W / 2 + 0.46, 3.0, 3)); // glass
+  for (const vz of [3 - 0.95, 3, 3 + 0.95]) root.add(at(tb(0.1, 2.3, 0.1, 0xf2f6fa), -W / 2 + 0.5, 3.0, vz)); // muntins
+  root.add(at(tb(0.1, 0.1, 2.9, 0xf2f6fa), -W / 2 + 0.5, 3.0, 3));
+  root.add(new THREE.AmbientLight(0xfff0dc, 0.4));
+  const w1 = new THREE.PointLight(0xffe1bd, 14, 20, 2); w1.position.set(0, 4.4, 0); root.add(w1);
+  const w2 = new THREE.PointLight(0xcfe2ff, 8, 16, 2); w2.position.set(-6, 3.6, 3); root.add(w2);
 
-  const desk = box(3.6, 1.1, 1.6, 0x9a6a3f);
-  desk.position.set(5.5, 0.55, -5.6);
-  root.add(desk);
-  const laptop = box(1.1, 0.08, 0.8, 0xaab4be);
-  laptop.position.set(5.5, 1.18, -5.6);
-  root.add(laptop);
-  const laptopScreen = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06),
-    new THREE.MeshLambertMaterial({ color: 0x222a33, emissive: 0x2a5666 }));
-  laptopScreen.position.set(5.5, 1.5, -6);
-  root.add(laptopScreen);
-  colliders.push({ x: 5.5, z: -5.6, w: 4, d: 2 });
+  // ================= furniture registry (built centred at origin, facing +z) =
+  const FURNITURE = {
+    bed: { name: 'Bed', icon: '🛏️', w: 3, d: 5, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(3, 0.5, 5, 0x6b4a33), 0, 0.3, 0));
+      g.add(at(tb(2.7, 0.4, 4.6, 0xf2ead6), 0, 0.65, 0));      // mattress
+      g.add(at(tb(2.75, 0.3, 3.0, 0x4a78b0), 0, 0.9, 0.8));    // blanket
+      g.add(at(tb(2.4, 0.18, 0.7, 0x3a5e8c), 0, 1.06, -0.2));  // folded blanket edge
+      g.add(at(tb(1.5, 0.35, 0.9, 0xffffff), -0.6, 1.0, -1.9)); // pillows
+      g.add(at(tb(1.5, 0.35, 0.9, 0xfdf0f0), 0.6, 1.0, -1.9));
+      g.add(at(tb(3.1, 1.5, 0.3, 0x5b3c25), 0, 0.85, -2.45));  // headboard
+      return g;
+    } },
+    desk: { name: 'Desk', icon: '🖥️', w: 3, d: 2, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(3, 0.16, 2, 0x9a6a3f), 0, 1.05, 0));
+      for (const [lx, lz] of [[-1.3, -0.8], [1.3, -0.8], [-1.3, 0.8], [1.3, 0.8]]) g.add(at(tb(0.18, 1.0, 0.18, 0x7a5230), lx, 0.5, lz));
+      g.add(at(tb(1.4, 0.1, 0.95, 0xc8d2dc), 0, 1.16, 0.1));    // laptop base
+      g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.85), emi(0x223040, 0x2a6f86, 0.6)), 0, 1.6, -0.35)); // screen
+      g.add(at(tb(1.36, 0.9, 0.06, 0x14181d), 0, 1.6, -0.4));
+      g.add(at(tb(0.5, 0.5, 0.4, 0xd64541), -1.0, 1.35, -0.3)); // book stack
+      const chair = at(tb(1.0, 0.12, 1.0, 0x4a6ea8), 0, 0.55, 1.4); g.add(chair);
+      for (const [lx, lz] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) g.add(at(cyl(0.05, 0.05, 0.55, 8, 0x33405a), lx, 0.28, 1.4 + lz));
+      g.add(at(tb(1.0, 0.9, 0.12, 0x4a6ea8), 0, 1.0, 1.85));
+      return g;
+    } },
+    bookshelf: { name: 'Bookshelf', icon: '📚', w: 2, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(2, 4, 1, 0x6b4a33), 0, 2, 0));
+      const cols = [0x8c3b3b, 0x3f5e8c, 0x3f7a55, 0xb08a2e, 0x6e4a86];
+      for (let r = 0; r < 4; r++) { g.add(at(tb(1.9, 0.1, 0.9, 0x4a3322), 0, 0.6 + r * 1.0, 0.02));
+        for (let b = 0; b < 5; b++) g.add(at(tb(0.28, 0.7, 0.4, cols[(r + b) % 5]), -0.8 + b * 0.36, 1.05 + r * 1.0, 0.28)); }
+      return g;
+    } },
+    dresser: { name: 'Dresser', icon: '🗄️', w: 2, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(2.4, 1.8, 1.1, 0x8a5a36), 0, 0.9, 0));
+      for (let r = 0; r < 3; r++) { g.add(at(tb(2.2, 0.5, 0.06, 0x6e4626), 0, 0.45 + r * 0.55, 0.56));
+        for (const kx of [-0.5, 0.5]) g.add(at(sph(0.07, 0xc99a3b), kx, 0.45 + r * 0.55, 0.62)); }
+      g.add(at(cyl(0.3, 0.25, 0.4, 10, 0xc0633e), -0.6, 2.0, 0)); g.add(at(sph(0.5, 0x4f8a45), -0.6, 2.4, 0));
+      return g;
+    } },
+    wardrobe: { name: 'Wardrobe', icon: '🚪', w: 2, d: 2, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(2.4, 4.2, 1.6, 0x7a5230), 0, 2.1, 0));
+      g.add(at(tb(1.1, 3.8, 0.06, 0x8a6240), -0.6, 2.1, 0.81)); g.add(at(tb(1.1, 3.8, 0.06, 0x8a6240), 0.6, 2.1, 0.81));
+      for (const kx of [-0.15, 0.15]) g.add(at(cyl(0.05, 0.05, 0.5, 8, 0xc99a3b), kx, 2.1, 0.88));
+      return g;
+    } },
+    sofa: { name: 'Sofa', icon: '🛋️', w: 3, d: 2, build() {
+      const g = new THREE.Group(); const c = 0x6a83a6;
+      g.add(at(tb(3, 0.5, 1.8, c), 0, 0.5, 0));
+      for (const sx of [-1, 0, 1]) { g.add(at(tb(0.92, 0.4, 1.4, c), sx, 0.82, 0.1)); g.add(at(tb(0.92, 0.95, 0.4, c), sx, 1.25, -0.66)); }
+      for (const s of [-1, 1]) { g.add(at(tb(0.4, 0.8, 1.8, c), s * 1.5, 0.95, 0)); }
+      g.add(at(tb(0.55, 0.55, 0.2, 0xf2a35c), -0.7, 1.05, -0.1)); g.add(at(tb(0.55, 0.55, 0.2, 0x6be0a0), 0.7, 1.05, -0.1));
+      return g;
+    } },
+    nightstand: { name: 'Nightstand', icon: '🕰️', w: 1, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(1.1, 1.1, 1.0, 0x8a5a36), 0, 0.55, 0));
+      g.add(at(tb(1.0, 0.4, 0.06, 0x6e4626), 0, 0.6, 0.51)); g.add(at(sph(0.06, 0xc99a3b), 0, 0.6, 0.57));
+      g.add(at(cyl(0.16, 0.2, 0.1, 10, 0x33353b), 0, 1.15, 0)); g.add(at(cyl(0.04, 0.04, 0.5, 8, 0x44464c), 0, 1.4, 0));
+      g.add(at(new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.4, 14), emi(0xfff0c4, 0xffcf7a, 0.2)), 0, 1.75, 0));
+      return g;
+    } },
+    tv: { name: 'TV', icon: '📺', w: 3, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(tb(3, 0.6, 1.0, 0x5b3c25), 0, 0.3, 0));
+      g.add(at(tb(2.6, 1.6, 0.16, 0x141519), 0, 1.7, 0));
+      g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), emi(0x2c4f72, 0x356a9c, 0.6)), 0, 1.7, 0.1));
+      g.add(at(tb(1.8, 0.2, 0.3, 0x202227), 0, 0.72, 0.2));
+      return g;
+    } },
+    beanbag: { name: 'Beanbag', icon: '🫘', w: 2, d: 2, build() {
+      const g = new THREE.Group();
+      const b = sph(1.0, 0xd4823e); b.scale.set(1.1, 0.7, 1.1); g.add(at(b, 0, 0.6, 0));
+      const t = sph(0.7, 0xd4823e); t.scale.set(1, 0.6, 1); g.add(at(t, 0, 1.0, 0));
+      return g;
+    } },
+    plant: { name: 'Plant', icon: '🪴', w: 1, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(cyl(0.45, 0.35, 0.8, 12, 0xc0633e), 0, 0.4, 0));
+      g.add(at(cyl(0.1, 0.14, 1.6, 8, 0x6e4a2e), 0, 1.4, 0));
+      for (const [fx, fy, fz, r] of [[0, 2.4, 0, 0.8], [0.4, 2.1, 0.2, 0.55], [-0.4, 2.2, -0.2, 0.55]]) g.add(at(sph(r, 0x4f8a45), fx, fy, fz));
+      return g;
+    } },
+    lamp: { name: 'Floor lamp', icon: '💡', w: 1, d: 1, build() {
+      const g = new THREE.Group();
+      g.add(at(cyl(0.3, 0.34, 0.12, 12, 0x33353b), 0, 0.06, 0));
+      g.add(at(cyl(0.05, 0.05, 2.8, 8, 0x44464c), 0, 1.4, 0));
+      g.add(at(new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.7, 16), emi(0xfff0c4, 0xffcf7a, 0.18)), 0, 2.9, 0));
+      return g;
+    } },
+    rug: { name: 'Rug', icon: '🟪', w: 4, d: 3, noCollide: true, build() {
+      const g = new THREE.Group();
+      const r = new THREE.Mesh(new THREE.PlaneGeometry(4, 3), toonMat(0x8a7bb0, { map: rugTexture('#8a7bb0', '#5d4f86') }));
+      r.rotation.x = -Math.PI / 2; r.position.y = 0.02; r.receiveShadow = true; g.add(r);
+      return g;
+    } },
+  };
 
-  // decorate pad
-  const pad = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16),
-    new THREE.MeshLambertMaterial({ color: 0xe75480, emissive: 0x5c1d33 }));
-  pad.rotation.x = -Math.PI / 2;
-  pad.position.set(0, 0.03, -1);
-  root.add(pad);
-  interactables.push({ id: 'decorate', x: 0, z: -1, r: 2.2, label: '🎨 Decorate room' });
+  // ================= layout + rebuild =======================================
+  const furnitureGroup = new THREE.Group(); root.add(furnitureGroup);
+  let layout = Array.isArray(initialLayout) && initialLayout.length ? initialLayout : defaultLayout();
+  const grid = { cell: 1, minX: -W / 2 + 1.5, maxX: W / 2 - 1.5, minZ: -D / 2 + 1.5, maxZ: D / 2 - 1.5 };
 
+  function rebuild() {
+    furnitureGroup.clear();
+    colliders.length = 0;
+    layout.forEach((item, i) => {
+      const def = FURNITURE[item.t]; if (!def) return;
+      const g = def.build();
+      g.position.set(item.gx, 0, item.gz);
+      g.rotation.y = (item.r || 0) * Math.PI / 2;
+      g.userData.layoutIndex = i;
+      furnitureGroup.add(g);
+      if (!def.noCollide) {
+        const odd = ((item.r || 0) % 2) === 1;
+        colliders.push({ x: item.gx, z: item.gz, w: odd ? def.d : def.w, d: odd ? def.w : def.d });
+      }
+    });
+  }
+  rebuild();
+
+  // ---- room editor pad + exit ----
+  const pad = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), emi(0xe75480, 0x5c1d33, 0.5));
+  pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.04, -1); root.add(pad);
+  interactables.push({ id: 'decorate', x: 0, z: -1, r: 2.2, label: '🎨 Edit room' });
   addExitPad(root, 0, D / 2 - 1.8);
   interactables.push({ id: 'exit_bedroom', x: 0, z: D / 2 - 1.8, r: 2, label: '🚪 Back to common room' });
 
-  // Rebuild swappable decor from saved choices.
-  function rebuildDecor(room) {
-    decorGroup.clear();
+  // editor grid overlay (toggled by main.js in edit mode)
+  const gridHelper = new THREE.GridHelper(Math.max(W, D), Math.max(W, D), 0xffffff, 0xaab0c0);
+  gridHelper.position.y = 0.03; gridHelper.material.opacity = 0.32; gridHelper.material.transparent = true; gridHelper.visible = false;
+  root.add(gridHelper);
 
-    // bedding
-    const bedColor = BED_COLORS[room.bed] || BED_COLORS.bed_red;
-    const mattress = box(2.8, 0.5, 4.4, 0xf0ead8);
-    mattress.position.set(-6.2, 0.7, -4.2);
-    decorGroup.add(mattress);
-    const blanket = box(2.85, 0.3, 2.9, bedColor);
-    blanket.position.set(-6.2, 0.85, -3.4);
-    decorGroup.add(blanket);
-    const pillow = box(1.6, 0.35, 1, 0xffffff);
-    pillow.position.set(-6.2, 1.05, -5.8);
-    decorGroup.add(pillow);
-
-    if (room.rug) {
-      const rugColor = room.rug === 'rug_pink' ? 0xe75480 : 0x3a6ea8;
-      const rug = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), mat(rugColor));
-      rug.rotation.x = -Math.PI / 2;
-      rug.position.set(0, 0.02, 2);
-      decorGroup.add(rug);
-    }
-    if (room.poster) {
-      const emoji = room.poster === 'poster_band' ? '🎸 ROCK ON' : '📈 GRIND TIME';
-      const poster = box(2.4, 1.7, 0.06, room.poster === 'poster_band' ? 0x222233 : 0xf2e8c8);
-      poster.position.set(0, 3, -D / 2 + 0.26);
-      decorGroup.add(poster);
-      const label = textSprite(emoji, { size: 20, bg: null, color: room.poster === 'poster_band' ? '#ffd166' : '#2c3e50' });
-      label.position.set(0, 3, -D / 2 + 0.4);
-      decorGroup.add(label);
-    }
-    if (room.plant) {
-      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.6, 8), mat(0xc0633e));
-      pot.position.set(-7.5, 0.3, 4.5);
-      decorGroup.add(pot);
-      const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), mat(0x3f7d3a));
-      leaves.position.set(-7.5, 1.1, 4.5);
-      decorGroup.add(leaves);
-    }
-    if (room.lamp) {
-      const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.2, 8), mat(0x444444));
-      lampBase.position.set(7.4, 0.1, -5.6);
-      decorGroup.add(lampBase);
-      const lava = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.1, 8),
-        new THREE.MeshLambertMaterial({ color: 0xe75480, emissive: 0x7d2244, transparent: true, opacity: 0.85 }));
-      lava.position.set(7.4, 0.75, -5.6);
-      decorGroup.add(lava);
-    }
-    if (room.beanbag) {
-      const bag = new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 8), mat(0xd4a93e));
-      bag.scale.y = 0.6;
-      bag.position.set(5, 0.55, 3.5);
-      decorGroup.add(bag);
-    }
-  }
+  const editor = {
+    types: Object.entries(FURNITURE).map(([id, d]) => ({ id, name: d.name, icon: d.icon })),
+    grid, group: furnitureGroup,
+    get layout() { return layout; },
+    setLayout(l) { layout = l; rebuild(); },
+    rebuild,
+    add(typeId) { layout.push({ t: typeId, gx: 0, gz: 0, r: 0 }); rebuild(); return layout.length - 1; },
+    showGrid(on) { gridHelper.visible = on; },
+  };
 
   const spawn = { x: 0, z: D / 2 - 3.4 };
-  return { root, colliders, interactables, bounds, spawn, rebuildDecor };
+  return { root, colliders, interactables, bounds, spawn, editor };
 }

@@ -46,7 +46,7 @@ function defaults() {
     coins: 100,
     owned: [],                 // item ids
     equipped: { hat: null, face: null, neck: null },
-    room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red' },
+    room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red', layout: null },
     stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0 },
   };
 }

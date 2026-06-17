@@ -88,8 +88,8 @@ new ResizeObserver(resize).observe($('game-canvas'));
 const campus = buildCampus();
 const library = buildLibrary();
 const dormCommon = buildDormCommon();
-const bedroom = buildBedroom();
-bedroom.rebuildDecor(state.room);
+const bedroom = buildBedroom(state.room.layout);
+state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
 
 campus.spawn = { x: 0, z: 10 };
 campus.camOffset = new THREE.Vector3(0, 12, 19); // closer 3/4 angle, matched to the interior view
@@ -280,7 +280,7 @@ function runInteract(it) {
     case 'enter_bedroom': switchLocation('bedroom'); break;
     case 'exit_bedroom': switchLocation('dormCommon', { x: 8, z: -6.5 }); break;
     case 'shop': openShop(() => setWearables(player, state.equipped)); break;
-    case 'decorate': openDecorator(() => bedroom.rebuildDecor(state.room)); break;
+    case 'decorate': enterEdit(); break;
     case 'basketball': startBasketball(); break;
     case 'studentcenter': startSodaPong(); break;
     case 'study_seat': beginStudy(it); break;
@@ -338,6 +338,109 @@ function endLounge() {
   player.position.set(loungeStand.x, loungeFloorY, loungeStand.z);
   playerTargetY = loungeFloorY;
 }
+
+// ----------------------------------------------------------- room editor
+let editMode = false;
+let editSel = -1;          // selected layout index (-1 = none)
+let editDragging = false;
+const editRay = new THREE.Raycaster();
+const editNdc = new THREE.Vector2();
+const editPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const selHighlight = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x6be0a0, transparent: true, opacity: 0.32, depthWrite: false }),
+);
+selHighlight.rotation.x = -Math.PI / 2; selHighlight.position.y = 0.05; selHighlight.visible = false;
+bedroom.root.add(selHighlight);
+
+function enterEdit() {
+  editMode = true; editSel = -1; editDragging = false;
+  if (player) player.visible = false;
+  bedroom.editor.showGrid(true);
+  buildPalette();
+  refreshSelUI();
+  $('hud').classList.add('editing');
+  $('room-editor').classList.remove('hidden');
+}
+function exitEdit() {
+  editMode = false; selHighlight.visible = false;
+  bedroom.editor.showGrid(false);
+  if (player) player.visible = true;
+  $('hud').classList.remove('editing');
+  $('room-editor').classList.add('hidden');
+  state.room.layout = bedroom.editor.layout;
+  save();
+}
+
+function buildPalette() {
+  const pal = $('re-palette');
+  pal.innerHTML = '';
+  for (const t of bedroom.editor.types) {
+    const b = document.createElement('button');
+    b.className = 're-item';
+    b.innerHTML = `<span class="ic">${t.icon}</span><span class="nm">${t.name}</span>`;
+    b.onclick = () => { const i = bedroom.editor.add(t.id); selectIndex(i); };
+    pal.appendChild(b);
+  }
+}
+
+function selGroup() {
+  return bedroom.editor.group.children.find(c => c.userData.layoutIndex === editSel) || null;
+}
+function updateHighlight() {
+  const g = selGroup();
+  if (!g) { selHighlight.visible = false; return; }
+  const box = new THREE.Box3().setFromObject(g);
+  const size = new THREE.Vector3(), center = new THREE.Vector3();
+  box.getSize(size); box.getCenter(center);
+  selHighlight.position.set(center.x, 0.05, center.z);
+  selHighlight.scale.set(size.x + 0.5, size.z + 0.5, 1);
+  selHighlight.visible = true;
+}
+function selectIndex(i) { editSel = i; refreshSelUI(); updateHighlight(); }
+function refreshSelUI() { $('re-sel').classList.toggle('hidden', editSel < 0); }
+
+// pointer → select / drag furniture across the floor grid
+function editPointer(e, ndcOnly) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  editNdc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  editRay.setFromCamera(editNdc, camera);
+}
+window.addEventListener('pointerdown', (e) => {
+  if (!editMode || e.target.closest('#room-editor')) return;
+  editPointer(e);
+  const hits = editRay.intersectObjects(bedroom.editor.group.children, true);
+  if (hits.length) {
+    let o = hits[0].object;
+    while (o && o.userData.layoutIndex === undefined) o = o.parent;
+    if (o) { selectIndex(o.userData.layoutIndex); editDragging = true; }
+  } else { editSel = -1; refreshSelUI(); selHighlight.visible = false; }
+});
+window.addEventListener('pointermove', (e) => {
+  if (!editMode || !editDragging || editSel < 0) return;
+  editPointer(e);
+  const p = new THREE.Vector3();
+  if (!editRay.ray.intersectPlane(editPlane, p)) return;
+  const gr = bedroom.editor.grid;
+  const gx = THREE.MathUtils.clamp(Math.round(p.x), Math.ceil(gr.minX), Math.floor(gr.maxX));
+  const gz = THREE.MathUtils.clamp(Math.round(p.z), Math.ceil(gr.minZ), Math.floor(gr.maxZ));
+  const item = bedroom.editor.layout[editSel];
+  if (item && (item.gx !== gx || item.gz !== gz)) {
+    item.gx = gx; item.gz = gz; bedroom.editor.rebuild(); updateHighlight();
+  }
+});
+window.addEventListener('pointerup', () => { editDragging = false; });
+
+$('re-done').addEventListener('click', exitEdit);
+$('re-rotate').addEventListener('click', () => {
+  const item = bedroom.editor.layout[editSel]; if (!item) return;
+  item.r = ((item.r || 0) + 1) % 4; bedroom.editor.rebuild(); updateHighlight();
+});
+$('re-delete').addEventListener('click', () => {
+  if (editSel < 0) return;
+  bedroom.editor.layout.splice(editSel, 1); editSel = -1;
+  bedroom.editor.rebuild(); refreshSelUI(); selHighlight.visible = false;
+});
 
 // ----------------------------------------------------------- pet selection
 function setupSelectScreen() {
@@ -408,7 +511,7 @@ function frame(dt, t) {
   // camera yaw rotates both the view and the movement frame, so "up" on the
   // stick always walks away from the camera no matter which way it's turned
   const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
-  if (!uiOpen && !seated && input.active) {
+  if (!uiOpen && !seated && !editMode && input.active) {
     const speed = currentLoc === 'campus' ? 9 : 6;
     const mx = input.x * cy + input.y * sy;
     const mz = -input.x * sy + input.y * cy;
@@ -420,19 +523,25 @@ function frame(dt, t) {
   // smooth elevation toward the active floor / stair height (not while seated)
   if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
 
-  // camera follow — offset rotated by the player-controlled yaw, then pulled in
-  // if a building would otherwise swallow it
-  const off = loc.camOffset;
-  let camX = player.position.x + (off.x * cy + off.z * sy);
-  let camZ = player.position.z + (-off.x * sy + off.z * cy);
-  if (currentLoc === 'campus') {
-    const t = cameraClearT(player.position.x, player.position.z, camX, camZ, loc.colliders);
-    camX = player.position.x + (camX - player.position.x) * t;
-    camZ = player.position.z + (camZ - player.position.z) * t;
+  if (editMode) {
+    // overhead 3/4 view of the whole room while decorating
+    camera.position.lerp(new THREE.Vector3(0, 16, 14), Math.min(1, dt * 5));
+    camera.lookAt(0, 0.5, 0);
+  } else {
+    // camera follow — offset rotated by the player-controlled yaw, then pulled
+    // in if a building would otherwise swallow it
+    const off = loc.camOffset;
+    let camX = player.position.x + (off.x * cy + off.z * sy);
+    let camZ = player.position.z + (-off.x * sy + off.z * cy);
+    if (currentLoc === 'campus') {
+      const t = cameraClearT(player.position.x, player.position.z, camX, camZ, loc.colliders);
+      camX = player.position.x + (camX - player.position.x) * t;
+      camZ = player.position.z + (camZ - player.position.z) * t;
+    }
+    const targetCam = new THREE.Vector3(camX, player.position.y + off.y, camZ);
+    camera.position.lerp(targetCam, Math.min(1, dt * 5));
+    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
   }
-  const targetCam = new THREE.Vector3(camX, player.position.y + off.y, camZ);
-  camera.position.lerp(targetCam, Math.min(1, dt * 5));
-  camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
 
   // NPCs + ambient world animation (campus only)
   if (currentLoc === 'campus') {
@@ -444,9 +553,10 @@ function frame(dt, t) {
   }
 
   // interaction prompt (while lounging on a couch, offer a stand-up button)
-  const it = (seated && loungeActive && !uiOpen)
-    ? { id: 'stand_up', label: '🧍 Stand up' }
-    : (uiOpen || seated ? null : findInteract());
+  const it = editMode ? null
+    : (seated && loungeActive && !uiOpen)
+      ? { id: 'stand_up', label: '🧍 Stand up' }
+      : (uiOpen || seated ? null : findInteract());
   if (it) {
     activeInteract = it;
     interactBtn.textContent = it.label;
