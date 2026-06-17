@@ -29,9 +29,9 @@ Then open `http://localhost:3000` — on a phone, open your computer's LAN IP (e
 - **💬 Chat** — walk up to any wandering student pet and talk to them (canned single-player brains, each with a personality).
 - **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). The screen locks into focus mode (hold 3s to give up). Completing a session pays **🪙 2/min**.
 - **🏀 Basketball** — at the court by the Rec Gym. Hold to charge, release to shoot. 🪙 5 per bucket.
-- **🥤 Soda Pong** — at the Student Center. Drag to aim, release to throw. 🪙 8 per cup + perfect-game bonus.
-- **🛍️ Campus Store** — buy hats, glasses, scarves (worn on your pet) and room decor.
-- **🏠 Maple Dorm** — common room with vending machine, plus **your own bedroom** you can decorate (bedding colors, rugs, posters, plants, lava lamp, beanbag).
+- **🏛️ Lecture Hall** — a big-screen lecture hall with tiered seating + stage downstairs, restrooms, and a study mezzanine of pomodoro desks upstairs.
+- **🛍️ Campus Store** — buy hats, glasses, scarves (worn on your pet) and furniture for your room.
+- **🏠 Maple Dorm** — a furnished common room with sit-able couches, plus **your own bedroom** with a grid-based furniture editor (place, move & rotate furniture you own).
 
 Progress (pet, coins, purchases, room decor, study stats) is saved in `localStorage`.
 
@@ -48,7 +48,7 @@ src/
   petFactory.js     low-poly pets + wearable attachments
   npcs.js           wandering students, speech bubbles, chat brain
   ui.js             modals, chat panel, shop, decorator, pomodoro lock
-  minigames.js      basketball & soda pong (canvas 2D)
+  minigames.js      basketball (canvas 2D)
   state.js          save/load, coins, item catalog
   input.js          virtual joystick + keyboard
 ```

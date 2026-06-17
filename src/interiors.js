@@ -1092,3 +1092,150 @@ export function buildBedroom(initialLayout) {
   const spawn = { x: 0, z: D / 2 - 3.4 };
   return { root, colliders, interactables, bounds, spawn, editor };
 }
+
+// ------------------------------------------------------ lecture hall
+// A large academic building: front lobby, a lecture hall with tiered seats + a
+// big screen/stage, two restrooms, and an upstairs study mezzanine (pomodoro
+// desks) reached by a staircase. Multi-level (levels/stairs) like the library.
+export function buildLectureHall() {
+  const root = new THREE.Group();
+  const colliders = [];   // ground (level 0)
+  const colliders1 = [];  // mezzanine (level 1)
+  const interactables = [];
+  const seatPositions = [];
+  const W = 60, D = 50, WALL_H = 18, MEZZ_Y = 6, DECK_FRONT = -16;
+  const bounds = { minX: -W / 2 + 1.5, maxX: W / 2 - 1.5, minZ: -D / 2 + 1.5, maxZ: D / 2 - 1.5 };
+
+  const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
+  const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
+  const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), toonMat(c)); m.castShadow = true; return m; };
+  const at = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
+  const emi = (c, e, i = 0.5) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
+
+  // ---- shell: floor + 3 tall walls (open front + open top for the camera) ----
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#bdb3a0', '#a3977f') }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; root.add(floor);
+  const wallMat = toonMat(0xe6dfce, { map: plaster() });
+  { const m = new THREE.Mesh(new THREE.BoxGeometry(W, WALL_H, 0.6), wallMat); m.position.set(0, WALL_H / 2, -D / 2); m.receiveShadow = true; root.add(m); }
+  for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.6, WALL_H, D), wallMat); m.position.set(s * W / 2, WALL_H / 2, 0); m.receiveShadow = true; root.add(m); }
+
+  // ---- big lecture screen + stage + podium (back, under the mezzanine) ----
+  at(tb(17, 4.6, 0.4, 0x14181d), 0, 2.7, -D / 2 + 0.5);
+  { const s = new THREE.Mesh(new THREE.PlaneGeometry(16, 4.0), emi(0x2c4f72, 0x3a6fa0, 0.5)); s.position.set(0, 2.7, -D / 2 + 0.72); root.add(s); }
+  for (const [sx, sy, c] of [[-5, 0.7, 0xff6b6b], [0, -0.5, 0xffd166], [5, 0.5, 0x6be0a0]]) {
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.0), emi(c, c, 0.32)); q.position.set(sx, 2.7 + sy, -D / 2 + 0.74); root.add(q);
+  }
+  at(tb(22, 0.6, 5, 0x5b4a38), 0, 0.3, -19); colliders.push({ x: 0, z: -19, w: 22, d: 5 }); // stage
+  at(tb(1.5, 1.7, 1.1, 0x6e4a2e), -7, 1.45, -17.4); at(tb(1.7, 0.12, 1.3, 0x4a3322), -7, 2.3, -17.4); // podium
+  { const ps = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), emi(0x223040, 0x2a6f86, 0.5)); ps.position.set(-7, 1.75, -16.85); root.add(ps); }
+
+  // ---- auditorium seating facing the screen (-z), aisles between blocks ----
+  function auditoriumSeat(x, z) {
+    at(tb(1.3, 0.42, 1.2, 0x8a3b3b), x, 0.5, z);
+    at(tb(1.3, 0.95, 0.22, 0x8a3b3b), x, 1.05, z - 0.55);
+    at(tb(1.05, 0.08, 0.7, 0x6e4626), x, 0.82, z + 0.55); // folding tablet arm
+  }
+  const rows = [-12, -9, -6, -3, 0, 3, 6];
+  for (const rz of rows) {
+    for (const sx of [-13, -9, -5, 5, 9, 13]) auditoriumSeat(sx, rz);
+    colliders.push({ x: -9, z: rz, w: 10, d: 1.7 });
+    colliders.push({ x: 9, z: rz, w: 10, d: 1.7 });
+  }
+
+  // ---- lobby (front): reception, benches, vending, plants ----
+  at(tb(7, 1.2, 1.8, 0x6e4a2e), -14, 0.6, 18); at(tb(7.4, 0.16, 2.1, 0xc9a13b), -14, 1.26, 18);
+  colliders.push({ x: -14, z: 18, w: 7.2, d: 2 });
+  function bench(x, z) { at(tb(3.6, 0.4, 1.0, 0x4a6ea8), x, 0.5, z); at(tb(3.6, 0.8, 0.2, 0x3a5a96), x, 1.0, z - 0.5); colliders.push({ x, z, w: 3.8, d: 1.4 }); }
+  bench(-22, 14); bench(-22, 18);
+  at(tb(1.6, 3.2, 1.2, 0xc0392b), -28, 1.6, 12); colliders.push({ x: -28, z: 12, w: 1.8, d: 1.4 });
+  interactables.push({ id: 'vending', x: -26, z: 12, r: 2.2, label: '🥤 Vending machine' });
+  function plant(x, z) { at(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z); const f = at(sph(0.95, 0x4f8a45), x, 1.45, z); f.scale.y = 1.1; colliders.push({ x, z, w: 1.1, d: 1.1 }); }
+  plant(-27, 21); plant(13, 21);
+
+  // ---- two restrooms (right-front), doors facing the lobby (-x) ----
+  function restroom(cx, cz, label) {
+    const w = 9, d = 5, h = 3.4, wm = 0xdfe6ec;
+    const wall = (ww, dd, x, z) => { at(tb(ww, h, dd, wm), x, h / 2, z); colliders.push({ x, z, w: ww, d: dd }); };
+    wall(w, 0.2, cx, cz + d / 2); wall(w, 0.2, cx, cz - d / 2);   // back/front
+    wall(0.2, d, cx + w / 2, cz);                                 // right (interior side)
+    wall(0.2, (d - 2.4) / 2, cx - w / 2, cz + (1.2 + (d - 2.4) / 4));  // door wall halves (-x)
+    wall(0.2, (d - 2.4) / 2, cx - w / 2, cz - (1.2 + (d - 2.4) / 4));
+    at(textSprite(label, { size: 26 }), cx - w / 2 - 0.1, h + 0.7, cz);
+    for (const sx of [cx + 1.4, cx + 3.4]) { // two stalls along the back (+z)
+      at(tb(1.5, 0.5, 1.3, 0xeef0f2), sx, 0.5, cz + d / 2 - 1.1);
+      at(tb(1.2, 0.95, 0.35, 0xeef0f2), sx, 1.0, cz + d / 2 - 0.4);
+      at(tb(0.1, h - 0.5, 1.8, 0xcdd6dc), sx + 1.0, (h - 0.5) / 2, cz + d / 2 - 1.0);
+    }
+    at(tb(2.6, 0.9, 0.5, 0x9aa6ae), cx - 1.2, 0.9, cz - d / 2 + 0.4); // sink counter (front)
+    for (const sx of [cx - 2.0, cx - 0.4]) at(cyl(0.28, 0.22, 0.18, 12, 0xffffff), sx, 1.4, cz - d / 2 + 0.4);
+    { const mir = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.1), emi(0xcfe2ea, 0x6a8a96, 0.25)); mir.position.set(cx - 1.2, 2.2, cz - d / 2 + 0.16); root.add(mir); }
+  }
+  restroom(24, 15.5, '🚺 Restroom'); restroom(24, 21, '🚹 Restroom');
+
+  // ---- deck-support columns (full height so their tops climb out of frame) ----
+  function column(x, z) {
+    const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, WALL_H, 16), toonMat(0xe7ddc9));
+    sh.position.set(x, WALL_H / 2, z); sh.castShadow = true; root.add(sh);
+    at(tb(1.4, 0.5, 1.4, 0xe7ddc9), x, 0.25, z); // base
+    colliders.push({ x, z, w: 1.5, d: 1.5 }); colliders1.push({ x, z, w: 1.5, d: 1.5 });
+  }
+  for (const cx of [-22, -11, 0, 11]) column(cx, DECK_FRONT);
+
+  // ---- mezzanine deck + railing ----
+  const deckDepth = (D / 2 - 0.3) + DECK_FRONT;
+  { const deck = tb(W - 4, 0.6, deckDepth, 0xb88a5c); deck.position.set(0, MEZZ_Y - 0.3, -(D / 2 - 0.3) + deckDepth / 2); root.add(deck); }
+  function rail(x0, x1) {
+    const len = x1 - x0, cx = (x0 + x1) / 2;
+    at(tb(len, 0.2, 0.18, 0x8a623f), cx, MEZZ_Y + 0.95, DECK_FRONT);
+    at(tb(len, 0.16, 0.16, 0x8a623f), cx, MEZZ_Y + 0.4, DECK_FRONT);
+    const np = Math.max(1, Math.round(len / 2));
+    for (let i = 0; i <= np; i++) at(tb(0.14, 1.0, 0.14, 0x8a623f), x0 + (i / np) * len, MEZZ_Y + 0.5, DECK_FRONT);
+  }
+  rail(-28, 18); // left of the stair mouth (stairs occupy x[18.5,25.5])
+
+  // ---- staircase (right): ground (z=-7,y=0) up to balcony (z=-16,y=6) ----
+  const STEPS = 12, STAIR_X = 22, zB = -7, zT = DECK_FRONT, run = zB - zT; // 9
+  for (let i = 0; i < STEPS; i++) {
+    const t = (i + 1) / STEPS, topY = t * MEZZ_Y;
+    const z = zB - run * (i + 0.5) / STEPS;
+    at(tb(7, topY, run / STEPS + 0.05, 0xb88a5c), STAIR_X, topY / 2, z);
+    at(tb(3, 0.08, run / STEPS + 0.05, 0xa6452f), STAIR_X, topY + 0.05, z);
+  }
+  colliders.push({ x: STAIR_X, z: (zB + zT) / 2, w: 7, d: run });
+  const stairs = [{ xMin: 18.5, xMax: 25.5, zMin: zT, zMax: zB, zBottom: zB, zTop: zT, yBottom: 0, yTop: MEZZ_Y }];
+
+  // ---- upstairs study carrels (pomodoro seats), faces the desk (-z) ----
+  let seatNum = 1;
+  function studyDesk(dx, dz) {
+    const y = MEZZ_Y;
+    at(tb(4, 0.16, 2, 0x9a6a3f), dx, y + 1.0, dz);
+    for (const [lx, lz] of [[-1.7, -0.8], [1.7, -0.8], [-1.7, 0.8], [1.7, 0.8]]) at(tb(0.16, 1.0, 0.16, 0x7a5230), dx + lx, y + 0.5, dz + lz);
+    at(tb(0.1, 1.3, 2, 0x8a6240), dx - 2, y + 1.65, dz); at(tb(0.1, 1.3, 2, 0x8a6240), dx + 2, y + 1.65, dz);
+    at(tb(4, 1.3, 0.1, 0x8a6240), dx, y + 1.65, dz - 1);
+    at(cyl(0.05, 0.07, 0.5, 8, 0xc99a3b), dx + 1.4, y + 1.3, dz - 0.6);
+    at(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.28, 12), emi(0x2e6f4f, 0x123a26, 0.4)), dx + 1.4, y + 1.6, dz - 0.6);
+    colliders1.push({ x: dx, z: dz - 0.2, w: 4.4, d: 2.4 });
+    at(tb(1.1, 0.55, 1.1, 0x7a5230), dx, y + 0.28, dz + 2.2);
+    at(tb(1.1, 1.1, 0.18, 0x7a5230), dx, y + 0.95, dz + 2.7);
+    const seatPos = { x: dx, z: dz + 2.2, y: MEZZ_Y };
+    seatPositions.push(seatPos);
+    interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: dz + 2.2 + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
+  }
+  for (const dx of [-20, -10, 0, 10]) studyDesk(dx, -21);
+
+  // ---- lighting (bright + institutional, with a couple of warm accents) ----
+  root.add(new THREE.AmbientLight(0xfff2e0, 0.6));
+  const pl = (x, y, z, i, dist, col = 0xfff0d8) => { const L = new THREE.PointLight(col, i, dist, 2); L.position.set(x, y, z); root.add(L); };
+  pl(0, 10, 0, 36, 50); pl(0, 9, -18, 20, 30, 0xbcd6ff); pl(-16, 8, 16, 18, 26); pl(20, 8, 18, 16, 24); pl(0, 8, -20, 14, 24);
+
+  // ---- exit + spawn ----
+  addExitPad(root, 0, D / 2 - 2);
+  interactables.push({ id: 'exit_lecture', x: 0, z: D / 2 - 2, r: 2.4, label: '🚪 Leave Lecture Hall' });
+  const spawn = { x: 0, z: D / 2 - 5 };
+
+  const bounds1 = { minX: -28, maxX: 28, minZ: -D / 2 + 2.5, maxZ: zB };
+  colliders1.push({ x: -5, z: -11, w: 46, d: 10 });    // atrium void left of stair: x[-28,18], z[-16,-6]
+  colliders1.push({ x: 26.75, z: -11, w: 2.5, d: 10 }); // void right of stair: x[25.5,28]
+  const levels = [{ y: 0, bounds, colliders }, { y: MEZZ_Y, bounds: bounds1, colliders: colliders1 }];
+  return { root, colliders, interactables, bounds, spawn, seatPositions, levels, stairs };
+}

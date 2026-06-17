@@ -32,7 +32,7 @@ const REPLY_POOLS = {
   ],
   game: [
     "The hoops by the Rec Gym are open all day. I've got a mean jump shot for someone with no thumbs.",
-    "Soda pong at the Student Center is SO fun. It's soda, we're responsible students.",
+    "The new Lecture Hall has a huge screen — and the upstairs study desks are clutch before exams.",
     "Basketball court's behind the gym. First to 10 buckets buys snacks!",
   ],
   food: [
