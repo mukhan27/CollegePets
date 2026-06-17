@@ -1120,9 +1120,15 @@ export function buildLectureRoom() {
   for (const [sx, sy, c] of [[-5.5, 1.2, 0xff6b6b], [0, -0.6, 0xffd166], [5.5, 0.9, 0x6be0a0]]) {
     const q = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.4), emi(c, c, 0.32)); q.position.set(sx, 5.5 + sy, Sz + 0.26); root.add(q);
   }
-  at(tb(26, 0.8, 6, 0x5b4a38), 0, 0.4, -D / 2 + 4); colliders.push({ x: 0, z: -D / 2 + 4, w: 26, d: 6 }); // stage
-  at(tb(1.6, 1.7, 1.2, 0x6e4a2e), -8, 1.25, -D / 2 + 6.5); at(tb(1.8, 0.12, 1.4, 0x4a3322), -8, 2.1, -D / 2 + 6.5); // podium
-  { const ps = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), emi(0x223040, 0x2a6f86, 0.5)); ps.position.set(-8, 1.55, -D / 2 + 5.9); root.add(ps); }
+  at(tb(26, 0.8, 6, 0x5b4a38), 0, 0.4, -D / 2 + 4); // stage (walkable; reached by the centre steps)
+  // mini-stairs up to the stage at the centre front
+  [[-15.4, 0.27], [-15.85, 0.53], [-16.0, 0.8]].forEach(([sz, h]) => at(tb(4.2, h, 0.5, 0x6e4a2e), 0, h / 2, sz));
+  // curbs along the stage edges so it's only reachable via the centre steps
+  colliders.push({ x: -8, z: -16, w: 11, d: 0.6 }); colliders.push({ x: 8, z: -16, w: 11, d: 0.6 });   // front (gap x[-2.5,2.5])
+  colliders.push({ x: -13, z: -19, w: 0.6, d: 6 }); colliders.push({ x: 13, z: -19, w: 0.6, d: 6 });     // sides
+  at(tb(1.6, 1.7, 1.2, 0x6e4a2e), -8, 1.65, -D / 2 + 6.5); at(tb(1.8, 0.12, 1.4, 0x4a3322), -8, 2.5, -D / 2 + 6.5); // podium (on the raised stage)
+  colliders.push({ x: -8, z: -D / 2 + 6.5, w: 1.8, d: 1.4 });
+  { const ps = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), emi(0x223040, 0x2a6f86, 0.5)); ps.position.set(-8, 1.95, -D / 2 + 5.9); root.add(ps); }
 
   // auditorium seats — fabric-textured, all FACING THE SCREEN (-z), every seat
   // sit-able, with walkable cross-aisles between rows so they're all reachable
@@ -1133,15 +1139,13 @@ export function buildLectureRoom() {
     at(tbm(1.3, 0.95, 0.22, fabricRed), x, 1.05, z + 0.56); // back (+z, behind the sitter)
     at(tb(1.05, 0.08, 0.7, 0x6e4626), x, 0.82, z - 0.55);   // fold-down desk (-z, in front)
     for (const ax of [-0.6, 0.6]) at(tb(0.12, 0.42, 0.12, 0x4a4a52), x + ax, 0.21, z + 0.1); // armrest legs
-    interactables.push({ id: 'lounge', x, z: z + 1.9, r: 1.9, label: '🪑 Take a seat',
-      seatPos: { x, z, y: 0 }, sitY: 0.74, face: Math.PI, stepBack: { x, z: z + 2.0 } });
+    colliders.push({ x, z, w: 1.3, d: 1.5 }); // per-seat → can walk between rows AND columns
+    // prompt centred on the seat so you sit in the seat you're standing next to
+    interactables.push({ id: 'lounge', x, z, r: 1.9, label: '🪑 Take a seat',
+      seatPos: { x, z, y: 0 }, sitY: 0.74, face: Math.PI, stepBack: { x, z: z + 2.1 } });
   }
   const rows = [-10, -6.2, -2.4, 1.4, 5.2, 9, 12.8];
-  for (const rz of rows) {
-    for (const sx of [-14, -10, -6, 6, 10, 14]) seat(sx, rz);
-    colliders.push({ x: -10, z: rz, w: 11, d: 1.6 });
-    colliders.push({ x: 10, z: rz, w: 11, d: 1.6 });
-  }
+  for (const rz of rows) for (const sx of [-14, -10, -6, 6, 10, 14]) seat(sx, rz);
   // central carpet runner down the aisle
   { const r = new THREE.Mesh(new THREE.PlaneGeometry(3, 30), toonMat(0xffffff, { map: rugTexture('#6e2f2f', '#4a1f1f') })); r.rotation.x = -Math.PI / 2; r.position.set(0, 0.02, 2); root.add(r); }
   // stage dressing: side curtains + valance, a plant, and a mic on the podium
@@ -1165,7 +1169,15 @@ export function buildLectureRoom() {
   addExitPad(root, 0, D / 2 - 2);
   interactables.push({ id: 'exit_lecture_room', x: 0, z: D / 2 - 2, r: 2.4, label: '🚪 Back to lobby' });
   const spawn = { x: 0, z: D / 2 - 5 };
-  return { root, colliders, interactables, bounds, spawn };
+  // raises the player onto the 0.8-high stage; only the centre-front steps ramp
+  // up (the edges are curbed), so you climb the stairs to get on stage
+  const groundHeight = (x, z) => {
+    if (x < -13 || x > 13) return 0;
+    if (z <= -16) return 0.8;                  // up on the stage
+    if (x < -2.5 || x > 2.5 || z >= -15.4) return 0; // off the stairs / in front
+    return 0.8 * (-15.4 - z) / 0.6;            // centre ramp z[-16,-15.4]
+  };
+  return { root, colliders, interactables, bounds, spawn, groundHeight };
 }
 
 // ------------------------------------------------------ lecture lobby
@@ -1303,17 +1315,32 @@ export function buildLectureLobby() {
 
   // upstairs study carrels (pomodoro)
   let seatNum = 1;
-  function studyDesk(dx, dz) { const y = MEZZ_Y;
-    at(tb(4, 0.16, 2, 0x9a6a3f), dx, y + 1.0, dz);
-    for (const [lx, lz] of [[-1.7, -0.8], [1.7, -0.8], [-1.7, 0.8], [1.7, 0.8]]) at(tb(0.16, 1.0, 0.16, 0x7a5230), dx + lx, y + 0.5, dz + lz);
-    at(tb(0.1, 1.3, 2, 0x8a6240), dx - 2, y + 1.65, dz); at(tb(0.1, 1.3, 2, 0x8a6240), dx + 2, y + 1.65, dz); at(tb(4, 1.3, 0.1, 0x8a6240), dx, y + 1.65, dz - 1);
-    at(cyl(0.05, 0.07, 0.5, 8, 0xc99a3b), dx + 1.4, y + 1.3, dz - 0.6); at(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.28, 12), emi(0x2e6f4f, 0x123a26, 0.4)), dx + 1.4, y + 1.6, dz - 0.6);
-    colliders1.push({ x: dx, z: dz - 0.2, w: 4.4, d: 2.4 });
-    at(tb(1.1, 0.55, 1.1, 0x7a5230), dx, y + 0.28, dz + 2.2); at(tb(1.1, 1.1, 0.18, 0x7a5230), dx, y + 0.95, dz + 2.7);
-    const seatPos = { x: dx, z: dz + 2.2, y: MEZZ_Y }; seatPositions.push(seatPos);
-    interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: dz + 2.2 + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
+  // antique-pine study carrels matching the library: knobbed drawers + kneehole,
+  // turned legs, banker's lamp, privacy panels + a back hutch with little books
+  function turnedLeg(x, by, z, h) { at(cyl(0.09, 0.13, h, 10, 0x7a5230), x, by + h / 2, z); at(cyl(0.15, 0.15, 0.12, 10, 0x7a5230), x, by + h * 0.6, z); }
+  function studyDesk(dx, dz) {
+    const y = MEZZ_Y, zf = dz + 1.0;
+    at(tb(4.4, 0.16, 2.2, 0x9a6a3f), dx, y + 1.0, dz); at(tb(4.6, 0.07, 2.35, 0x9a6a3f), dx, y + 0.93, dz);
+    for (const sxn of [-1, 1]) {
+      at(tb(1.3, 0.52, 0.12, 0x9a6a3f), dx + sxn * 1.35, y + 0.66, zf); at(tb(1.15, 0.02, 0.14, 0x6e4a24), dx + sxn * 1.35, y + 0.66, zf + 0.005);
+      for (const dyv of [0.78, 0.54]) at(sph(0.07, 0xc99a3b), dx + sxn * 1.35, y + dyv, zf + 0.12);
+    }
+    at(tb(4.4, 0.4, 0.12, 0x9a6a3f), dx, y + 0.74, dz - 1.0); for (const xx of [2.0, -2.0]) at(tb(0.12, 0.4, 2.0, 0x9a6a3f), dx + xx, y + 0.74, dz);
+    for (const lx of [-2.0, 2.0]) for (const lz of [-0.95, 0.95]) turnedLeg(dx + lx, y, dz + lz, 0.84);
+    // banker's lamp
+    at(cyl(0.2, 0.24, 0.06, 16, 0xc99a3b), dx + 1.4, y + 1.1, dz - 0.5); at(cyl(0.045, 0.055, 0.4, 8, 0xc99a3b), dx + 1.4, y + 1.32, dz - 0.5);
+    { const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.85, 16), toonMat(0x1d6b43)); sh.rotation.z = Math.PI / 2; sh.position.set(dx + 1.4, y + 1.58, dz - 0.5); sh.castShadow = true; root.add(sh); }
+    at(tb(0.85, 0.16, 1.1, 0x46532f), dx - 1.3, y + 1.16, dz - 0.2); // book
+    // privacy panels + back hutch with books
+    for (const xx of [2.3, -2.3]) at(tb(0.1, 1.5, 2.4, 0x8a6240), dx + xx, y + 1.85, dz);
+    at(tb(4.7, 1.6, 0.12, 0x8a6240), dx, y + 1.9, dz - 1.15); at(tb(4.3, 0.1, 0.5, 0x8a6240), dx, y + 2.1, dz - 0.95);
+    [0x5e2b2b, 0x33445e, 0x8a6a24].forEach((c, i) => at(tb(0.5, 0.5, 0.2, c), dx - 1.4 + i * 1.4, y + 2.4, dz - 0.95));
+    colliders1.push({ x: dx, z: dz - 0.2, w: 5.0, d: 3.0 });
+    at(tb(1.1, 0.55, 1.1, 0x7a5230), dx, y + 0.28, dz + 2.4); at(tb(1.1, 1.1, 0.18, 0x7a5230), dx, y + 0.95, dz + 2.9);
+    const seatPos = { x: dx, z: dz + 2.4, y: MEZZ_Y }; seatPositions.push(seatPos);
+    interactables.push({ id: 'study_seat', seat: seatNum++, x: dx, z: dz + 2.4 + 1.5, r: 2.0, label: '🪑 Sit & study', seatPos });
   }
-  for (const dx of [-13, -5, 3]) studyDesk(dx, -13.5);
+  for (const dx of [-16, -9, 0] /* clear of the deck columns at -14,-4,6 */) studyDesk(dx, -13.5);
 
   root.add(new THREE.AmbientLight(0xfff2e0, 0.55));
   const pl = (x, y, z, i, dist) => { const L = new THREE.PointLight(0xfff0d8, i, dist, 2); L.position.set(x, y, z); root.add(L); };
