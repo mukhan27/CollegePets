@@ -699,54 +699,173 @@ export function buildDormCommon() {
   const interactables = [];
   const W = 30, D = 22;
   const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { floor: 0xb09a78, wall: 0xc9b9d8 }));
+  root.add(makeRoom(W, D, { wall: 0xdacfe2 })); // soft lilac-grey walls
 
-  // big rug
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(4.5, 24), mat(0x7b5ea3));
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(-4, 0.02, 0);
-  root.add(rug);
+  // ---- local toon helpers ----
+  const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
+  const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
+  const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), toonMat(c)); m.castShadow = true; return m; };
+  const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
+  const emi = (c, e, i = 0.6) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
 
-  // couch + TV
-  const couch = box(6, 1.2, 2, 0x4466aa);
-  couch.position.set(-4, 0.6, 3);
-  root.add(couch);
-  const couchBack = box(6, 1.2, 0.5, 0x3a5a96);
-  couchBack.position.set(-4, 1.3, 4);
-  root.add(couchBack);
-  colliders.push({ x: -4, z: 3.4, w: 6.4, d: 3 });
-  const tvStand = box(4, 0.8, 1, 0x5b3c25);
-  tvStand.position.set(-4, 0.4, -4);
-  root.add(tvStand);
-  const tv = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2, 0.2),
-    new THREE.MeshLambertMaterial({ color: 0x111820, emissive: 0x21424e }));
-  tv.position.set(-4, 2, -4);
-  root.add(tv);
-  colliders.push({ x: -4, z: -4, w: 4.4, d: 1.4 });
+  // ---- warm wood floor + soft contact-shadow helper + big area rug ----
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#c6a06a', '#a8804c') }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; floor.receiveShadow = true; root.add(floor);
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
+  const shade = (x, z, sx, sz = sx) => { const d = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); d.rotation.x = -Math.PI / 2; d.position.set(x, 0.02, z); root.add(d); };
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(12, 8.5), toonMat(0x8a7bb0, { map: rugTexture('#8a7bb0', '#5d4f86') }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(-3, 0.03, 2); root.add(rug);
 
-  // ping-pong-ish table (flavor)
-  const table = box(5, 1, 2.8, 0x2e8b57);
-  table.position.set(8, 0.5, -3);
-  root.add(table);
-  colliders.push({ x: 8, z: -3, w: 5.4, d: 3.2 });
+  // ---- wall trim: baseboard + crown + a feature wall behind the TV ----
+  const baseMat = 0xc7bcd2, crownMat = 0xeae3f0;
+  const trim = (w, h, d, c, x, y, z) => add(tb(w, h, d, c), x, y, z);
+  for (const [w, d, x, z] of [[W, 0.3, 0, -D / 2 + 0.3], [0.3, D, -W / 2 + 0.3, 0], [0.3, D, W / 2 - 0.3, 0]]) {
+    trim(w, 0.5, d, baseMat, x, 0.25, z);  // baseboard
+    trim(w, 0.25, d, crownMat, x, 4.85, z); // crown
+  }
+  add(tb(9, 4.4, 0.2, 0x6d5a8f), -3, 2.6, -D / 2 + 0.45); // accent feature wall panel behind TV
 
-  // vending machine
-  const vending = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.2, 1.2),
-    new THREE.MeshLambertMaterial({ color: 0xc0392b, emissive: 0x3e1210 }));
-  vending.position.set(13.5, 1.6, 6);
-  root.add(vending);
-  colliders.push({ x: 13.5, z: 6, w: 2, d: 1.6 });
-  interactables.push({ id: 'vending', x: 12, z: 6, r: 2.2, label: '🥤 Vending machine' });
+  // ---- entertainment unit: console + flat TV + soundbar + console & decor ----
+  const TVz = -D / 2 + 0.9;
+  const unit = add(tb(7, 1.0, 1.3, 0x6b4a33), -3, 0.62, TVz);
+  for (const sx of [-3.0, 3.0]) { add(cyl(0.09, 0.11, 0.4, 8, 0x3a2a1c), -3 + sx, 0.2, TVz + 0.45); }
+  for (const sx of [-2, 0, 2]) add(tb(1.5, 0.55, 0.1, 0x271a10), -3 + sx, 0.55, TVz + 0.66); // cubby insets
+  colliders.push({ x: -3, z: TVz, w: 7.2, d: 1.6 });
+  const bezel = add(tb(5.6, 3.2, 0.2, 0x141519), -3, 3.0, TVz - 0.1);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.85), emi(0x2c4f72, 0x356a9c, 0.7));
+  screen.position.set(-3, 3.0, TVz + 0.01); root.add(screen);
+  for (const [sx, sy, c] of [[-1.6, 0.4, 0xff6b6b], [0.2, -0.3, 0x6be0a0], [1.5, 0.5, 0xffd166]]) { // "game" UI blobs
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), emi(c, c, 0.5)); q.position.set(-3 + sx, 3.0 + sy, TVz + 0.02); root.add(q);
+  }
+  add(tb(4.2, 0.28, 0.4, 0x202227), -3, 1.3, TVz + 0.25);  // soundbar
+  add(tb(1.0, 0.2, 0.65, 0x25262b), -5, 1.22, TVz + 0.3);  // game console
+  add(tb(0.45, 0.12, 0.65, 0x33353b), -1.2, 1.18, TVz + 0.35); // controller
+  add(sph(0.5, 0x4f8a45), -0.6, 1.6, TVz + 0.2).scale.set(1, 1.2, 1); // little plant on the unit
+  add(cyl(0.32, 0.26, 0.4, 10, 0xc07a45), -0.6, 1.25, TVz + 0.2);
 
-  // door to bedroom (back wall, glowing pad)
-  const bedroomPad = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16),
-    new THREE.MeshLambertMaterial({ color: 0xffd166, emissive: 0x6e5a1d }));
-  bedroomPad.rotation.x = -Math.PI / 2;
-  bedroomPad.position.set(8, 0.03, -9);
-  root.add(bedroomPad);
-  const bedroomSign = textSprite('MY ROOM', { size: 22 });
-  bedroomSign.position.set(8, 2.2, -9);
-  root.add(bedroomSign);
+  // ---- seating: sectional sofa + loveseat + beanbag, all loungeable ----
+  const pillowCols = [0xf2a35c, 0xe8748c, 0x6be0a0, 0xffd166];
+  function couch(x, z, ry, len, c, sitY) {
+    const g = new THREE.Group();
+    const base = tb(len, 0.5, 1.9, c); base.position.y = 0.5; g.add(base);
+    const seats = Math.max(2, Math.round(len / 1.6));
+    for (let i = 0; i < seats; i++) {
+      const cx = -len / 2 + (i + 0.5) * (len / seats);
+      const cu = tb(len / seats - 0.1, 0.4, 1.5, c); cu.position.set(cx, 0.82, 0.12); g.add(cu);
+      const bk = tb(len / seats - 0.1, 1.0, 0.45, c); bk.position.set(cx, 1.3, -0.72); g.add(bk);
+    }
+    for (const s of [-1, 1]) {
+      const arm = tb(0.45, 0.82, 1.9, c); arm.position.set(s * (len / 2 + 0.05), 1.0, 0); g.add(arm);
+      const roll = cyl(0.26, 0.26, 1.9, 12, c); roll.rotation.x = Math.PI / 2; roll.position.set(s * (len / 2 + 0.05), 1.42, 0); g.add(roll);
+    }
+    const pidx = ((Math.round(x + z)) % pillowCols.length + pillowCols.length) % pillowCols.length;
+    const pil = tb(0.7, 0.7, 0.25, pillowCols[pidx]); pil.position.set(-len / 4, 1.15, -0.2); pil.rotation.z = 0.3; g.add(pil);
+    const pil2 = tb(0.7, 0.7, 0.25, pillowCols[(pidx + 2) % pillowCols.length]); pil2.position.set(len / 4, 1.15, -0.2); pil2.rotation.z = -0.25; g.add(pil2);
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    const a = Math.abs(Math.sin(ry));
+    colliders.push({ x, z, w: (len + 1) * (1 - a) + 2.2 * a, d: 2.2 * (1 - a) + (len + 1) * a });
+    shade(x, z, len + 1.5, 2.6);
+    // loungeable (approach from behind the backrest, like the library couches)
+    const fx = Math.sin(ry), fz = Math.cos(ry);
+    interactables.push({ id: 'lounge', x: x + fx * 2.6, z: z + fz * 2.6, r: 2.6, label: '🛋️ Relax',
+      seatPos: { x, z, y: 0 }, sitY, face: ry, stepBack: { x: x + fx * 2.4, z: z + fz * 2.4 } });
+  }
+  couch(-3, 5.6, Math.PI, 6, 0x4a6ea8, 1.05);      // main sofa faces the TV (-z)
+  couch(-9.5, 1.5, Math.PI / 2, 4.2, 0x5b7bb5, 1.05); // loveseat on the left, faces +x
+
+  function beanbag(x, z, c, sitY) {
+    const g = new THREE.Group();
+    const b = sph(1.0, c); b.scale.set(1.1, 0.7, 1.1); b.position.y = 0.6; g.add(b);
+    const top = sph(0.7, c); top.scale.set(1, 0.6, 1); top.position.y = 1.0; g.add(top);
+    g.position.set(x, 0, z); root.add(g);
+    shade(x, z, 2.4, 2.4); colliders.push({ x, z, w: 1.8, d: 1.8 });
+    interactables.push({ id: 'lounge', x: x, z: z + 2.4, r: 2.4, label: '🛋️ Flop down',
+      seatPos: { x, z, y: 0 }, sitY, face: Math.PI, stepBack: { x, z: z + 2.2 } });
+  }
+  beanbag(1.8, 2.6, 0xe8748c, 0.95);
+
+  // ---- coffee table with clutter ----
+  const ct = add(tb(3.4, 0.18, 1.8, 0x8a5a32), -3, 1.0, 1.5);
+  for (const [lx, lz] of [[-1.4, -0.7], [1.4, -0.7], [-1.4, 0.7], [1.4, 0.7]]) add(cyl(0.1, 0.12, 0.9, 8, 0x6e4626), -3 + lx, 0.45, 1.5 + lz);
+  colliders.push({ x: -3, z: 1.5, w: 3.6, d: 2.0 }); shade(-3, 1.5, 4.2, 2.6);
+  add(tb(0.8, 0.16, 1.0, 0xb5462f), -3.6, 1.17, 1.5).rotation.y = 0.3; // book
+  add(tb(0.7, 0.14, 0.9, 0x3a6f9a), -3.45, 1.31, 1.6).rotation.y = 0.5;
+  const mug = add(cyl(0.16, 0.14, 0.28, 10, 0xffffff), -2.2, 1.23, 1.2); // mug
+  add(tb(0.5, 0.05, 0.9, 0x222), -2.0, 1.12, 2.0); // remote
+  add(tb(1.3, 0.18, 1.3, 0xd9a441), -3.6, 1.18, 2.2).rotation.y = 0.2; // pizza box
+
+  // ---- bookshelf (left wall) ----
+  const bs = add(tb(2.2, 4.2, 1.0, 0x6b4a33), -W / 2 + 0.9, 2.1, -3);
+  for (let r = 0; r < 4; r++) add(tb(2.0, 0.1, 0.9, 0x4a3322), -W / 2 + 0.9, 0.7 + r * 1.0, -3 + 0.02);
+  const spineCols = [0x8c3b3b, 0x3f5e8c, 0x3f7a55, 0xb08a2e, 0x6e4a86];
+  for (let r = 0; r < 4; r++) for (let b = 0; b < 5; b++) {
+    const bk = add(tb(0.26, 0.7, 0.5, spineCols[(r + b) % 5]), -W / 2 + 0.4 + b * 0.34, 1.15 + r * 1.0, -2.6);
+  }
+  colliders.push({ x: -W / 2 + 0.9, z: -3, w: 2.4, d: 1.2 });
+
+  // ---- floor lamp, plants, posters, wall clock, string lights, mini-fridge ----
+  add(cyl(0.18, 0.22, 0.1, 12, 0x33353b), -12, 0.05, 6); // lamp base
+  add(cyl(0.06, 0.06, 3.2, 8, 0x44464c), -12, 1.6, 6);
+  add(new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.9, 16), emi(0xfff0c4, 0xffcf7a, 0.5)), -12, 3.4, 6);
+  const lampLight = new THREE.PointLight(0xffd29a, 18, 16, 2); lampLight.position.set(-12, 3.2, 6); root.add(lampLight);
+
+  function plant(x, z, tall) {
+    add(cyl(0.5, 0.4, 0.8, 12, 0xb5703f), x, 0.4, z);
+    if (tall) { add(cyl(0.12, 0.16, 2.0, 8, 0x6e4a2e), x, 1.5, z); for (const [fx, fy, fz, r] of [[0, 2.7, 0, 0.9], [0.4, 2.4, 0.2, 0.6], [-0.4, 2.5, -0.2, 0.6]]) add(sph(r, 0x4f8a45), x + fx, fy, z + fz); }
+    else { add(sph(0.85, 0x4f8a45), x, 1.35, z).scale.y = 1.1; add(sph(0.5, 0x5fa052), x + 0.35, 1.65, z + 0.2); }
+    shade(x, z, 1.8, 1.8); colliders.push({ x, z, w: 1.1, d: 1.1 });
+  }
+  plant(-13, 8.5, true); plant(13, -8.5, false);
+
+  function poster(x, y, z, ry, w, h, c) {
+    const g = new THREE.Group();
+    g.add(tb(w + 0.16, h + 0.16, 0.08, 0xf3ece0));
+    const art = tb(w, h, 0.1, c); art.position.z = 0.02; g.add(art);
+    g.position.set(x, y, z); g.rotation.y = ry; root.add(g);
+  }
+  poster(-W / 2 + 0.35, 3.2, 6, Math.PI / 2, 2.0, 2.6, 0xe8748c);
+  poster(-W / 2 + 0.35, 3.2, 9.5, Math.PI / 2, 1.6, 2.2, 0x4f9e96);
+  poster(W / 2 - 0.35, 3.0, -2, -Math.PI / 2, 2.2, 1.6, 0xf2a35c);
+
+  // wall clock (back wall, above the TV accent)
+  const clock = add(cyl(0.7, 0.7, 0.12, 22, 0xf3ece0), 6, 4.0, -D / 2 + 0.5); clock.rotation.x = Math.PI / 2;
+  add(tb(0.06, 0.4, 0.04, 0x222), 6, 4.12, -D / 2 + 0.42);
+  add(tb(0.28, 0.05, 0.04, 0x222), 6.1, 4.0, -D / 2 + 0.42);
+
+  // string fairy-lights along the top of the back wall
+  for (let i = 0; i < 14; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), emi(0xfff2c8, 0xffcf7a, 0.9));
+    b.position.set(-W / 2 + 1.5 + i * 2, 4.4 + Math.sin(i) * 0.12, -D / 2 + 0.55); root.add(b);
+  }
+
+  // ---- mini-fridge + improved vending on the right wall ----
+  const fridge = add(tb(1.6, 2.2, 1.4, 0xeef0f2), 13.2, 1.1, 10);
+  add(tb(1.62, 0.1, 1.42, 0xd6d8da), 13.2, 1.45, 10); // door split
+  add(tb(0.12, 0.5, 0.1, 0xbfc2c6), 12.9, 1.0, 10.75); // handle
+  colliders.push({ x: 13.2, z: 10, w: 2.0, d: 1.8 });
+  const vend = add(tb(1.8, 3.4, 1.3, 0xc0392b), 13.4, 1.7, 5.5);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.4), emi(0x9fd8e8, 0x2a4a55, 0.3)); glass.position.set(12.74, 2.0, 5.5); glass.rotation.y = -Math.PI / 2; root.add(glass);
+  for (let r = 0; r < 3; r++) for (let cI = 0; cI < 3; cI++) add(tb(0.06, 0.3, 0.3, [0xffd166, 0x6be0a0, 0xff6b6b][(r + cI) % 3]), 12.7, 1.2 + r * 0.7, 5.0 + cI * 0.5);
+  colliders.push({ x: 13.4, z: 5.5, w: 2.2, d: 1.7 });
+  interactables.push({ id: 'vending', x: 11.8, z: 5.5, r: 2.2, label: '🥤 Vending machine' });
+
+  // ---- improved games table (table-tennis) front-right ----
+  const tt = add(tb(4.6, 0.18, 2.6, 0x1f7a52), 8, 1.0, 6);
+  add(tb(4.6, 0.02, 0.08, 0xffffff), 8, 1.1, 6); // centre line
+  add(tb(0.06, 0.5, 2.6, 0xeeeeee), 8, 1.25, 6); // net
+  for (const [lx, lz] of [[-2.0, -1.0], [2.0, -1.0], [-2.0, 1.0], [2.0, 1.0]]) add(cyl(0.1, 0.1, 1.0, 8, 0x3a3f45), 8 + lx, 0.5, 6 + lz);
+  for (const [px, pz, rot] of [[-1.4, 1.6, 0.4], [1.4, 0.4, -0.6]]) { const p = add(cyl(0.32, 0.32, 0.06, 14, 0xb5462f), 8 + px, 1.16, 6 + pz); p.rotation.x = Math.PI / 2; p.rotation.z = rot; }
+  colliders.push({ x: 8, z: 6, w: 4.8, d: 2.8 }); shade(8, 6, 5.4, 3.4);
+
+  // ---- warm cosy lighting ----
+  root.add(new THREE.AmbientLight(0xffe7cf, 0.4));
+  const warm = (x, y, z, i, dist) => { const L = new THREE.PointLight(0xffd6a8, i, dist, 2); L.position.set(x, y, z); root.add(L); };
+  warm(-3, 4.5, 2, 26, 22); warm(8, 4, 4, 16, 18); warm(-3, 3.6, TVz + 2, 12, 14);
+
+  // ---- doors + spawn ----
+  const bedroomPad = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16), emi(0xffd166, 0x6e5a1d, 0.6));
+  bedroomPad.rotation.x = -Math.PI / 2; bedroomPad.position.set(8, 0.04, -9); root.add(bedroomPad);
+  add(textSprite('MY ROOM', { size: 22 }), 8, 2.2, -9);
   interactables.push({ id: 'enter_bedroom', x: 8, z: -9, r: 2.2, label: '🛏️ My Room' });
 
   addExitPad(root, -10, D / 2 - 2);
