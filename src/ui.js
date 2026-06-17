@@ -219,87 +219,161 @@ const QUOTES = [
 let focusTimer = null;
 let wakeLock = null;
 
-export function startPomodoro(minutes, onDone) {
+function fmtClock(s) {
+  const m = Math.floor(s / 60), sec = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+// Start a focus session, optionally rolling into a break. The overlay is kept
+// translucent (see css) so the player can still watch their character study.
+// onDone(completed) fires once the whole session ends, so the player stands up.
+export function startPomodoro(minutes, onDone, opts = {}) {
+  beginPhase('focus', minutes, { focusMin: Math.round(minutes), breakMin: Math.round(opts.breakMin || 0), reward: 0, onDone });
+}
+
+function beginPhase(mode, minutes, ctx) {
   const overlay = $('focus-overlay');
   const timerEl = $('focus-timer');
-  let remaining = minutes * 60;
+  const isBreak = mode === 'break';
+  let remaining = Math.max(1, Math.round(minutes * 60));
 
-  $('focus-quote').textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
   overlay.classList.remove('hidden');
+  overlay.classList.toggle('is-break', isBreak);
+  $('focus-emoji').textContent = isBreak ? '☕' : '📚';
+  $('focus-label').textContent = isBreak
+    ? `Break — relax! (earned 🪙${ctx.reward})`
+    : 'Focus mode';
+  $('focus-quote').textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 
-  // keep the screen awake during the focus session if the browser allows it
-  if (navigator.wakeLock) {
+  if (!isBreak && navigator.wakeLock) {
     navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {});
   }
-  if (document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  }
 
-  function fmt(s) {
-    const m = Math.floor(s / 60), sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  }
-  timerEl.textContent = fmt(remaining);
-
+  timerEl.textContent = fmtClock(remaining);
+  clearInterval(focusTimer);
   focusTimer = setInterval(() => {
     remaining--;
-    timerEl.textContent = fmt(remaining);
-    if (remaining <= 0) endPomodoro(true, minutes, onDone);
+    timerEl.textContent = fmtClock(remaining);
+    if (remaining <= 0) phaseComplete(mode, ctx);
   }, 1000);
 
-  // hold-to-give-up (3 seconds)
+  // hold-to-confirm button (give up a focus session / skip a break)
   const btn = $('focus-giveup');
-  btn.innerHTML = '<div class="fill"></div><span>Hold to give up</span>';
+  btn.innerHTML = `<div class="fill"></div><span>${isBreak ? 'Hold to skip break' : 'Hold to give up'}</span>`;
   const fill = btn.querySelector('.fill');
   let holdStart = null, holdRAF = null;
-
   function holdLoop() {
     if (holdStart === null) return;
-    const pct = Math.min(1, (performance.now() - holdStart) / 3000);
+    const pct = Math.min(1, (performance.now() - holdStart) / 2000);
     fill.style.width = (pct * 100) + '%';
-    if (pct >= 1) {
-      const elapsed = minutes * 60 - remaining;
-      endPomodoro(false, Math.floor(elapsed / 60), onDone);
-      return;
-    }
+    if (pct >= 1) { holdStart = null; phaseAbort(mode, ctx); return; }
     holdRAF = requestAnimationFrame(holdLoop);
   }
   const down = (e) => { e.preventDefault(); holdStart = performance.now(); holdLoop(); };
   const up = () => { holdStart = null; fill.style.width = '0%'; if (holdRAF) cancelAnimationFrame(holdRAF); };
-  btn.onpointerdown = down;
-  btn.onpointerup = up;
-  btn.onpointerleave = up;
-  btn.onpointercancel = up;
+  btn.onpointerdown = down; btn.onpointerup = up; btn.onpointerleave = up; btn.onpointercancel = up;
 }
 
-function endPomodoro(completed, minutes, onDone) {
-  clearInterval(focusTimer);
-  focusTimer = null;
-  $('focus-overlay').classList.add('hidden');
-  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-
-  if (completed) {
-    const reward = minutes * 2;
-    state.stats.focusMinutes += minutes;
+function phaseComplete(mode, ctx) {
+  clearInterval(focusTimer); focusTimer = null;
+  if (mode === 'focus') {
+    ctx.reward = ctx.focusMin * 2;
+    state.stats.focusMinutes += ctx.focusMin;
     state.stats.pomodorosDone++;
-    addCoins(reward);
-    showModal('🎉 Focus session complete!',
-      `You studied for <b>${minutes} minutes</b> straight!<br>Reward: <b>🪙 ${reward}</b><br><br>Total focus time: ${state.stats.focusMinutes} min across ${state.stats.pomodorosDone} session${state.stats.pomodorosDone === 1 ? '' : 's'}.`);
+    addCoins(ctx.reward);
+    if (ctx.breakMin > 0) beginPhase('break', ctx.breakMin, ctx);
+    else finishSession(true, ctx, false);
   } else {
-    showModal('😿 Session abandoned',
-      'No coins this time. The books will be waiting when you\'re ready!');
+    finishSession(true, ctx, true);
   }
-  if (onDone) onDone(completed);
 }
 
+function phaseAbort(mode, ctx) {
+  clearInterval(focusTimer); focusTimer = null;
+  if (mode === 'focus') finishSession(false, ctx, false);
+  else finishSession(true, ctx, true); // skipping the break; focus reward already given
+}
+
+function finishSession(completed, ctx, fromBreak) {
+  const overlay = $('focus-overlay');
+  overlay.classList.add('hidden');
+  overlay.classList.remove('is-break');
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+
+  if (!completed) {
+    showModal('😿 Session abandoned', 'No coins this time. The books will be waiting when you\'re ready!');
+  } else if (fromBreak) {
+    showModal('✅ Break over!',
+      `Refreshed and ready. Total focus: <b>${state.stats.focusMinutes} min</b> across ${state.stats.pomodorosDone} session${state.stats.pomodorosDone === 1 ? '' : 's'}.`);
+  } else {
+    showModal('🎉 Focus session complete!',
+      `You studied for <b>${ctx.focusMin} minutes</b> straight!<br>Reward: <b>🪙 ${ctx.reward}</b><br><br>Total focus time: ${state.stats.focusMinutes} min across ${state.stats.pomodorosDone} session${state.stats.pomodorosDone === 1 ? '' : 's'}.`);
+  }
+  if (ctx.onDone) ctx.onDone(completed);
+}
+
+// Setup screen: a focus length + break length the player can dial to the minute.
 export function openPomodoroSetup(onStart) {
-  showModal('📚 Study session',
-    'Sit down, pick a length, and your screen locks into focus mode until the timer ends.<br><br>Earn <b>🪙 2 per minute</b> of completed focus!',
-    [
-      { label: '1 min (test)', onClick: () => onStart(1) },
-      { label: '25 min', onClick: () => onStart(25) },
-      { label: '50 min', onClick: () => onStart(50) },
-      { label: 'Cancel', primary: false },
-    ]);
+  let focusMin = 25, breakMin = 5;
+  const body = `
+    <div class="pomo">
+      <div class="pomo-row">
+        <span class="pomo-cap">📚 Focus</span>
+        <div class="stepper">
+          <button type="button" data-act="f-">–</button>
+          <b id="pomo-f">25</b><i>min</i>
+          <button type="button" data-act="f+">+</button>
+        </div>
+      </div>
+      <div class="pomo-presets" data-group="f">
+        <button type="button" data-v="15">15</button>
+        <button type="button" data-v="25">25</button>
+        <button type="button" data-v="50">50</button>
+        <button type="button" data-v="90">90</button>
+      </div>
+      <div class="pomo-row">
+        <span class="pomo-cap">☕ Break</span>
+        <div class="stepper">
+          <button type="button" data-act="b-">–</button>
+          <b id="pomo-b">5</b><i>min</i>
+          <button type="button" data-act="b+">+</button>
+        </div>
+      </div>
+      <div class="pomo-presets" data-group="b">
+        <button type="button" data-v="0">None</button>
+        <button type="button" data-v="5">5</button>
+        <button type="button" data-v="10">10</button>
+        <button type="button" data-v="15">15</button>
+      </div>
+      <p class="pomo-hint">Adjustable to the minute · earn 🪙 2 per focus minute</p>
+    </div>`;
+  showModal('📚 Study session', body, [
+    { label: 'Start studying', onClick: () => onStart(focusMin, breakMin) },
+    { label: 'Cancel', primary: false },
+  ]);
+
+  const fEl = $('pomo-f'), bEl = $('pomo-b');
+  const clampF = v => Math.max(1, Math.min(180, v));
+  const clampB = v => Math.max(0, Math.min(60, v));
+  const render = () => { fEl.textContent = focusMin; bEl.textContent = breakMin; };
+  $('modal-body').querySelectorAll('[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      const a = btn.dataset.act;
+      if (a === 'f-') focusMin = clampF(focusMin - 1);
+      else if (a === 'f+') focusMin = clampF(focusMin + 1);
+      else if (a === 'b-') breakMin = clampB(breakMin - 1);
+      else if (a === 'b+') breakMin = clampB(breakMin + 1);
+      render();
+    };
+  });
+  $('modal-body').querySelectorAll('.pomo-presets').forEach(group => {
+    group.querySelectorAll('[data-v]').forEach(btn => {
+      btn.onclick = () => {
+        if (group.dataset.group === 'f') focusMin = clampF(+btn.dataset.v);
+        else breakMin = clampB(+btn.dataset.v);
+        render();
+      };
+    });
+  });
+  render();
 }

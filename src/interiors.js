@@ -543,9 +543,22 @@ export function buildLibrary() {
   // so it doesn't z-fight / flicker
   rug.rotation.x = -Math.PI / 2; rug.position.set(-25, 0.06, 13); root.add(rug);
   // seats angled to face the fireplace/rug focal point (≈ -30,13)
+  // each couch/chair is a loungeable seat: the player can sit and stand back up.
+  function addLounge(x, z, face, sitY) {
+    const fx = Math.sin(face), fz = Math.cos(face); // facing direction
+    interactables.push({
+      id: 'lounge',
+      x: x - fx * 2.6, z: z - fz * 2.6, r: 2.6, // approach pad on the open side
+      label: '🛋️ Relax', seatPos: { x, z, y: 0 }, sitY, face,
+      stepBack: { x: x - fx * 2.4, z: z - fz * 2.4 },
+    });
+  }
   sofa(-20.5, 13, -Math.PI / 2);                 // faces the fireplace (-x)
+  addLounge(-20.5, 13, -Math.PI / 2, 1.05);
   armchair(-25.5, 7.5, -0.69, blueMat);          // angled in toward the fire
+  addLounge(-25.5, 7.5, -0.69, 0.98);
   armchair(-25.5, 18.5, -2.46);
+  addLounge(-25.5, 18.5, -2.46, 0.98);
   roundTable(-27, 13, 1.2, 0.95);
   vaseFlowers(-27, 1.02, 13);
   bookStack(-26.4, 0.95, 13.7, 3, 0.6);

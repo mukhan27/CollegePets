@@ -151,11 +151,21 @@ html, body {
 /* ---------- Focus / pomodoro lock ---------- */
 #focus-overlay {
   position: fixed; inset: 0; z-index: 60;
-  background: radial-gradient(circle at 50% 30%, #243b55, #141e30);
+  /* low-opacity scrim so the player can still see their character studying */
+  background: rgba(16, 24, 40, 0.16);
   display: flex; align-items: center; justify-content: center; text-align: center; color: #fff;
 }
+#focus-overlay.is-break { background: rgba(20, 38, 30, 0.16); }
+.focus-inner {
+  background: rgba(18, 28, 46, 0.42);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 26px; padding: 20px 32px;
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  box-shadow: 0 12px 44px rgba(0,0,0,0.28);
+}
+#focus-overlay.is-break .focus-inner { background: rgba(20, 40, 32, 0.42); }
 #focus-emoji { font-size: 56px; }
-#focus-timer { font-size: clamp(56px, 14vw, 110px); font-weight: bold; letter-spacing: 4px; font-variant-numeric: tabular-nums; }
+#focus-timer { font-size: clamp(56px, 14vw, 110px); font-weight: bold; letter-spacing: 4px; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.5); }
 #focus-label { opacity: .75; margin-top: 4px; }
 #focus-quote { opacity: .55; font-style: italic; margin-top: 14px; font-size: 14px; max-width: 70vw; margin-left: auto; margin-right: auto; }
 #focus-giveup {
@@ -167,6 +177,26 @@ html, body {
   position: absolute; inset: 0; width: 0%; background: rgba(231, 76, 60, .55); transition: none;
 }
 #focus-giveup span { position: relative; }
+
+/* ---------- Pomodoro setup ---------- */
+.pomo { display: flex; flex-direction: column; gap: 10px; }
+.pomo-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pomo-cap { font-weight: 600; font-size: 15px; }
+.stepper { display: inline-flex; align-items: center; gap: 10px; }
+.stepper button {
+  width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; background: #e9dfca; color: #5a4a2e;
+}
+.stepper button:active { background: #ddcfb0; }
+.stepper b { min-width: 2.4ch; text-align: center; font-size: 24px; }
+.stepper i { opacity: .55; font-style: normal; font-size: 13px; }
+.pomo-presets { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.pomo-presets button {
+  padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(0,0,0,.16);
+  background: #fff; cursor: pointer; font-size: 14px;
+}
+.pomo-presets button:active { background: #f0e9d8; }
+.pomo-hint { opacity: .6; font-size: 12px; text-align: center; margin: 2px 0 0; }
 
 /* ---------- Mini-game ---------- */
 #minigame-overlay { position: fixed; inset: 0; z-index: 40; background: #102030; }

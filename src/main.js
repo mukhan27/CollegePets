@@ -284,6 +284,8 @@ function runInteract(it) {
     case 'basketball': startBasketball(); break;
     case 'studentcenter': startSodaPong(); break;
     case 'study_seat': beginStudy(it); break;
+    case 'lounge': beginLounge(it); break;
+    case 'stand_up': endLounge(); break;
     case 'vending':
       showModal('🥤 Vending machine', 'You grab a fizzy soda. Refreshing! (+ vibes, no charge — RA covered it)');
       break;
@@ -305,17 +307,36 @@ window.addEventListener('keydown', (e) => {
 // ----------------------------------------------------------- studying
 function beginStudy(it) {
   const floorY = it.seatPos.y || 0; // seats can be on the mezzanine
-  openPomodoroSetup((minutes) => {
+  openPomodoroSetup((focusMin, breakMin) => {
     seated = true;
     player.position.set(it.seatPos.x, floorY + 0.45, it.seatPos.z);
     player.rotation.y = it.face ?? Math.PI; // face the desk/table
-    startPomodoro(minutes, () => {
+    startPomodoro(focusMin, () => {
       seated = false;
       const back = it.stepBack || { x: it.seatPos.x, z: it.seatPos.z + 1.6 };
       player.position.set(back.x, floorY, back.z);
       playerTargetY = floorY; // hold the floor height after standing up
-    });
+    }, { breakMin });
   });
+}
+
+// ----------------------------------------------------------- lounging (couches)
+let loungeActive = false;
+let loungeStand = null;
+let loungeFloorY = 0;
+function beginLounge(it) {
+  loungeFloorY = it.seatPos.y || 0;
+  loungeStand = it.stepBack || { x: it.seatPos.x, z: it.seatPos.z + 1.8 };
+  seated = true;
+  loungeActive = true;
+  player.position.set(it.seatPos.x, it.sitY ?? (loungeFloorY + 0.45), it.seatPos.z);
+  player.rotation.y = it.face ?? Math.PI; // face the way the couch faces
+}
+function endLounge() {
+  seated = false;
+  loungeActive = false;
+  player.position.set(loungeStand.x, loungeFloorY, loungeStand.z);
+  playerTargetY = loungeFloorY;
 }
 
 // ----------------------------------------------------------- pet selection
@@ -422,8 +443,10 @@ function frame(dt, t) {
     loc.animate(t, dt); // interior ambient animation (e.g. the fireplace flicker)
   }
 
-  // interaction prompt
-  const it = uiOpen || seated ? null : findInteract();
+  // interaction prompt (while lounging on a couch, offer a stand-up button)
+  const it = (seated && loungeActive && !uiOpen)
+    ? { id: 'stand_up', label: '🧍 Stand up' }
+    : (uiOpen || seated ? null : findInteract());
   if (it) {
     activeInteract = it;
     interactBtn.textContent = it.label;
