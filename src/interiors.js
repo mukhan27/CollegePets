@@ -1123,24 +1123,39 @@ export function buildLectureRoom() {
   at(tb(1.6, 1.7, 1.2, 0x6e4a2e), -8, 1.25, -D / 2 + 6.5); at(tb(1.8, 0.12, 1.4, 0x4a3322), -8, 2.1, -D / 2 + 6.5); // podium
   { const ps = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), emi(0x223040, 0x2a6f86, 0.5)); ps.position.set(-8, 1.55, -D / 2 + 5.9); root.add(ps); }
 
-  // tiered auditorium seats — all FACING THE SCREEN (-z): back behind (+z)
+  // auditorium seats — fabric-textured, all FACING THE SCREEN (-z), every seat
+  // sit-able, with walkable cross-aisles between rows so they're all reachable
+  const fabricRed = toonMat(0xffffff, { map: fabricTexture('#8a3b3b') });
+  const tbm = (w, h, d, m) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); me.castShadow = true; me.receiveShadow = true; return me; };
   function seat(x, z) {
-    at(tb(1.3, 0.42, 1.2, 0x8a3b3b), x, 0.5, z);
-    at(tb(1.3, 0.95, 0.22, 0x8a3b3b), x, 1.05, z + 0.56); // back (+z, behind the sitter)
-    at(tb(1.05, 0.08, 0.7, 0x6e4626), x, 0.82, z - 0.55); // fold-down desk (-z, in front)
+    at(tbm(1.3, 0.42, 1.2, fabricRed), x, 0.5, z);
+    at(tbm(1.3, 0.95, 0.22, fabricRed), x, 1.05, z + 0.56); // back (+z, behind the sitter)
+    at(tb(1.05, 0.08, 0.7, 0x6e4626), x, 0.82, z - 0.55);   // fold-down desk (-z, in front)
+    for (const ax of [-0.6, 0.6]) at(tb(0.12, 0.42, 0.12, 0x4a4a52), x + ax, 0.21, z + 0.1); // armrest legs
+    interactables.push({ id: 'lounge', x, z: z + 1.9, r: 1.9, label: '🪑 Take a seat',
+      seatPos: { x, z, y: 0 }, sitY: 0.74, face: Math.PI, stepBack: { x, z: z + 2.0 } });
   }
-  const rows = [-10, -7, -4, -1, 2, 5, 8, 11, 14];
+  const rows = [-10, -6.2, -2.4, 1.4, 5.2, 9, 12.8];
   for (const rz of rows) {
     for (const sx of [-14, -10, -6, 6, 10, 14]) seat(sx, rz);
-    colliders.push({ x: -10, z: rz, w: 11, d: 1.7 });
-    colliders.push({ x: 10, z: rz, w: 11, d: 1.7 });
+    colliders.push({ x: -10, z: rz, w: 11, d: 1.6 });
+    colliders.push({ x: 10, z: rz, w: 11, d: 1.6 });
   }
+  // central carpet runner down the aisle
+  { const r = new THREE.Mesh(new THREE.PlaneGeometry(3, 30), toonMat(0xffffff, { map: rugTexture('#6e2f2f', '#4a1f1f') })); r.rotation.x = -Math.PI / 2; r.position.set(0, 0.02, 2); root.add(r); }
+  // stage dressing: side curtains + valance, a plant, and a mic on the podium
+  for (const cx of [-11.5, 11.5]) at(tb(2.2, 9.5, 0.6, 0x7a2030), cx, 5, Sz + 0.35);
+  at(tb(25, 1.6, 0.7, 0x7a2030), 0, 9.7, Sz + 0.35);
+  at(cyl(0.5, 0.4, 0.9, 12, 0xb5703f), 9, 1.25, -D / 2 + 5.5); { const f = at(new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 10), toonMat(0x4f8a45)), 9, 2.3, -D / 2 + 5.5); f.scale.y = 1.1; }
+  at(cyl(0.03, 0.03, 0.7, 6, 0x33353b), -8, 2.7, -D / 2 + 6.0); at(new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), toonMat(0x222)), -8, 3.05, -D / 2 + 6.0); // mic
   // gentle decorative columns at the far sides (well clear of the screen)
   for (const cx of [-25, 25]) for (const cz of [-6, 10]) {
     const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, WALL_H, 16), toonMat(0xe7ddc9));
     sh.position.set(cx, WALL_H / 2, cz); sh.castShadow = true; root.add(sh);
     colliders.push({ x: cx, z: cz, w: 1.4, d: 1.4 });
   }
+  // warm wall sconces down both sides
+  for (const sz of [-6, 4, 14]) for (const s of [-1, 1]) at(new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.6, 12), emi(0xfff0c4, 0xffcf7a, 0.3)), s * (W / 2 - 0.5), 7, sz);
 
   root.add(new THREE.AmbientLight(0xeef0ff, 0.45));
   const pl = (x, y, z, i, dist, c = 0xfff0d8) => { const L = new THREE.PointLight(c, i, dist, 2); L.position.set(x, y, z); root.add(L); };
@@ -1197,8 +1212,6 @@ export function buildLectureLobby() {
   at(tbm(0.9, 0.05, 0.4, toonMat(0x33353b)), 1.6, 1.55, 9.0);
   at(cylm(0.18, 0.2, 0.1, 12, toonMat(0x9aa6ae)), -2, 1.56, 8.6); at(cylm(0.04, 0.04, 0.5, 8, toonMat(0x44464c)), -2, 1.8, 8.6); at(new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.3, 12), emi(0xfff0c4, 0xffcf7a, 0.22)), -2, 2.15, 8.6);
   at(sph(0.14, 0xc99a3b), 0, 1.56, 8.7); at(tbm(0.7, 0.1, 0.5, toonMat(0xf2ece0)), -0.9, 1.55, 8.7);
-  at(textSprite('RECEPTION', { size: 22 }), 0, 2.7, 8);
-  at(textSprite('🏛️ HAWTHORNE LECTURE HALL', { size: 20 }), 0, 3.4, -D / 2 + 0.6);
 
   // ---- waiting lounge: rounded textured sofa + armchairs in a CIRCLE ----
   const rug = new THREE.Mesh(new THREE.CircleGeometry(5, 32), toonMat(0x8a9bb0, { map: rugTexture('#8a9bb0', '#5d6e86') }));
@@ -1233,7 +1246,7 @@ export function buildLectureLobby() {
     interactables.push({ id: 'lounge', x: x + fx * 2.6, z: z + fz * 2.6, r: 2.6, label: '🛋️ Relax', seatPos: { x, z, y: 0 }, sitY: 1.05, face: ry, stepBack: { x: x + fx * 2.4, z: z + fz * 2.4 } });
   }
   // arranged around the coffee table at (-12,4), all facing the centre
-  sofa(-12, 0.8, 0, fabricBlue, [0xf2a35c, 0x6be0a0]);   // faces +z (toward centre)
+  sofa(-12, -1, 0, fabricBlue, [0xf2a35c, 0x6be0a0]);    // faces +z (toward centre), moved back for access
   armchair(-8, 4, -Math.PI / 2, fabricGold, 0xe8748c);   // faces -x
   armchair(-16, 4, Math.PI / 2, fabricGold, 0x6bb0ff);   // faces +x
   // round coffee table + clutter
