@@ -2,7 +2,7 @@
 // location switching, and the contextual interaction system.
 
 import * as THREE from 'three';
-import { state, save, PET_TYPES } from './state.js';
+import { state, save, PET_TYPES, furnitureCount } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
@@ -159,6 +159,7 @@ function switchLocation(key, spawnOverride) {
   activeLevel = 0; playerTargetY = 0; // always spawn on the ground floor
   player.rotation.y = key === 'campus' ? Math.PI : Math.PI; // face the camera-ish
   $('hud-location').textContent = loc.name;
+  $('edit-room-btn').classList.toggle('hidden', key !== 'bedroom'); // bottom-left edit button in the bedroom
 
   // snap camera so we don't lerp across the map
   camera.position.copy(player.position).add(loc.def.camOffset);
@@ -372,14 +373,19 @@ function exitEdit() {
   save();
 }
 
+function placedCount(typeId) { return bedroom.editor.layout.filter(i => i.t === typeId).length; }
 function buildPalette() {
   const pal = $('re-palette');
   pal.innerHTML = '';
   for (const t of bedroom.editor.types) {
+    const avail = furnitureCount(t.id) - placedCount(t.id);
     const b = document.createElement('button');
-    b.className = 're-item';
-    b.innerHTML = `<span class="ic">${t.icon}</span><span class="nm">${t.name}</span>`;
-    b.onclick = () => { const i = bedroom.editor.add(t.id); selectIndex(i); };
+    b.className = 're-item' + (avail <= 0 ? ' disabled' : '');
+    b.innerHTML = `<span class="ic">${t.icon}</span><span class="nm">${t.name}</span><span class="ct">×${Math.max(0, avail)}</span>`;
+    b.onclick = () => {
+      if (furnitureCount(t.id) - placedCount(t.id) <= 0) return; // own none left to place
+      const i = bedroom.editor.add(t.id); selectIndex(i); buildPalette();
+    };
     pal.appendChild(b);
   }
 }
@@ -431,7 +437,12 @@ window.addEventListener('pointermove', (e) => {
 });
 window.addEventListener('pointerup', () => { editDragging = false; });
 
+let editShopOpen = false;
 $('re-done').addEventListener('click', exitEdit);
+$('re-shop').addEventListener('click', () => {
+  editShopOpen = true; $('room-editor').classList.add('hidden');
+  openShop(() => setWearables(player, state.equipped), 'furniture');
+});
 $('re-rotate').addEventListener('click', () => {
   const item = bedroom.editor.layout[editSel]; if (!item) return;
   item.r = ((item.r || 0) + 1) % 4; bedroom.editor.rebuild(); updateHighlight();
@@ -439,8 +450,9 @@ $('re-rotate').addEventListener('click', () => {
 $('re-delete').addEventListener('click', () => {
   if (editSel < 0) return;
   bedroom.editor.layout.splice(editSel, 1); editSel = -1;
-  bedroom.editor.rebuild(); refreshSelUI(); selHighlight.visible = false;
+  bedroom.editor.rebuild(); refreshSelUI(); selHighlight.visible = false; buildPalette();
 });
+$('edit-room-btn').addEventListener('click', () => { if (currentLoc === 'bedroom' && !editMode) enterEdit(); });
 
 // ----------------------------------------------------------- pet selection
 function setupSelectScreen() {
@@ -507,6 +519,12 @@ function frame(dt, t) {
   const loc = LOCATIONS[currentLoc].def;
   const uiOpen = isModalOpen();
   let moving = false;
+
+  // restore the editor + refresh palette counts after the furniture shop closes
+  if (editShopOpen && !uiOpen) {
+    editShopOpen = false;
+    if (editMode) { $('room-editor').classList.remove('hidden'); buildPalette(); }
+  }
 
   // camera yaw rotates both the view and the movement frame, so "up" on the
   // stick always walks away from the camera no matter which way it's turned

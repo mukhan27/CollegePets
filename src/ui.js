@@ -1,6 +1,6 @@
 // DOM UI: modal dialogs, chat panel, shop, room decorator, pomodoro lock.
 
-import { state, save, addCoins, buy, owns, CATALOG } from './state.js';
+import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture } from './state.js';
 import { npcReply } from './npcs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -81,27 +81,32 @@ export function initChatUI() {
 }
 
 // ----------------------------------------------------------- shop
-export function openShop(onWearablesChanged) {
-  let tab = 'clothes';
+export function openShop(onWearablesChanged, initialTab = 'clothes') {
+  let tab = initialTab;
 
   function render() {
-    const items = CATALOG[tab];
     let html = `<div class="shop-tabs">
       <button class="shop-tab ${tab === 'clothes' ? 'active' : ''}" data-tab="clothes">👕 Clothes</button>
-      <button class="shop-tab ${tab === 'decor' ? 'active' : ''}" data-tab="decor">🛋️ Room Decor</button>
+      <button class="shop-tab ${tab === 'furniture' ? 'active' : ''}" data-tab="furniture">🛋️ Furniture</button>
     </div><div class="item-grid">`;
-    for (const item of items) {
-      const owned = owns(item.id);
-      const equipped = tab === 'clothes' && state.equipped.hat === item.id
-        || tab === 'clothes' && state.equipped.face === item.id
-        || tab === 'clothes' && state.equipped.neck === item.id;
-      html += `<div class="item-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" data-id="${item.id}">
-        <div class="item-icon">${item.icon}</div>
-        <div class="item-name">${item.name}</div>
-        ${owned
-          ? `<div class="item-status">${equipped ? 'Wearing ✓' : (tab === 'clothes' ? 'Tap to wear' : 'Owned ✓')}</div>`
-          : `<div class="item-price">🪙 ${item.price}</div>`}
-      </div>`;
+    if (tab === 'clothes') {
+      for (const item of CATALOG.clothes) {
+        const owned = owns(item.id);
+        const equipped = state.equipped.hat === item.id || state.equipped.face === item.id || state.equipped.neck === item.id;
+        html += `<div class="item-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" data-id="${item.id}">
+          <div class="item-icon">${item.icon}</div><div class="item-name">${item.name}</div>
+          ${owned
+            ? `<div class="item-status">${equipped ? 'Wearing ✓' : 'Tap to wear'}</div>`
+            : `<div class="item-price">🪙 ${item.price}</div>`}</div>`;
+      }
+    } else {
+      for (const item of FURNITURE_CATALOG) {
+        const n = furnitureCount(item.id);
+        html += `<div class="item-card ${n > 0 ? 'owned' : ''}" data-id="${item.id}">
+          <div class="item-icon">${item.icon}</div><div class="item-name">${item.name}</div>
+          <div class="item-status">${n > 0 ? `Own ${n} · ` : ''}🪙 ${item.price}</div>
+          <div class="item-buy">Buy +1</div></div>`;
+      }
     }
     html += '</div>';
     showModal(`🛍️ Campus Store — 🪙 ${state.coins}`, html, [{ label: 'Done', primary: false }]);
@@ -114,40 +119,33 @@ export function openShop(onWearablesChanged) {
     });
   }
 
+  function notEnough(price) {
+    showModal('Not enough coins 😿',
+      `You need 🪙 ${price} but only have 🪙 ${state.coins}.<br>Earn coins by studying in the library or winning mini-games!`,
+      [{ label: 'Back to shop', onClick: render }]);
+  }
+
   function handleItem(id) {
-    const item = CATALOG.clothes.find(i => i.id === id) || CATALOG.decor.find(i => i.id === id);
-    if (!owns(id)) {
-      if (state.coins < item.price) {
-        showModal('Not enough coins 😿',
-          `You need 🪙 ${item.price} but only have 🪙 ${state.coins}.<br>Earn coins by studying in the library or winning mini-games!`,
-          [{ label: 'Back to shop', onClick: render }]);
-        return;
-      }
-      buy(id);
-      if (CATALOG.decor.includes(item)) applyDecorPurchase(item);
+    if (tab === 'furniture') {
+      const item = FURNITURE_CATALOG.find(f => f.id === id);
+      if (state.coins < item.price) { notEnough(item.price); return; }
+      buyFurniture(id);
       render();
       return;
     }
-    // owned clothes → toggle wear
-    if (CATALOG.clothes.includes(item)) {
-      const slot = id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
-      state.equipped[slot] = state.equipped[slot] === id ? null : id;
-      save();
-      if (onWearablesChanged) onWearablesChanged();
-      render();
+    const item = CATALOG.clothes.find(i => i.id === id);
+    if (!owns(id)) {
+      if (state.coins < item.price) { notEnough(item.price); return; }
+      buy(id); render(); return;
     }
+    const slot = id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
+    state.equipped[slot] = state.equipped[slot] === id ? null : id;
+    save();
+    if (onWearablesChanged) onWearablesChanged();
+    render();
   }
 
   render();
-}
-
-function applyDecorPurchase(item) {
-  // newly bought decor is auto-placed; the decorator panel can change it later
-  if (item.slot === 'bed') state.room.bed = item.id;
-  else if (item.slot === 'rug') state.room.rug = item.id;
-  else if (item.slot === 'poster') state.room.poster = item.id;
-  else state.room[item.slot] = true;
-  save();
 }
 
 // ----------------------------------------------------------- room decorator

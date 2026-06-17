@@ -1047,7 +1047,7 @@ export function buildBedroom(initialLayout) {
   // ================= layout + rebuild =======================================
   const furnitureGroup = new THREE.Group(); root.add(furnitureGroup);
   let layout = Array.isArray(initialLayout) && initialLayout.length ? initialLayout : defaultLayout();
-  const grid = { cell: 1, minX: -W / 2 + 1.5, maxX: W / 2 - 1.5, minZ: -D / 2 + 1.5, maxZ: D / 2 - 1.5 };
+  const grid = { cell: 1, minX: -W / 2 + 0.8, maxX: W / 2 - 0.8, minZ: -D / 2 + 0.8, maxZ: D / 2 - 0.8 };
 
   function rebuild() {
     furnitureGroup.clear();

@@ -224,8 +224,18 @@ html, body {
 .re-item .ic { font-size: 26px; display: block; line-height: 1.1; }
 .re-item .nm { font-size: 11px; opacity: .85; }
 .re-item:active { background: rgba(60,70,100,.9); }
+.re-item .ct { font-size: 11px; font-weight: 700; color: #ffd166; }
+.re-item:disabled, .re-item.disabled { opacity: .4; }
+.item-buy { margin-top: 4px; font-size: 12px; font-weight: 700; color: #2c8a4a; }
+/* bottom-left "edit room" button, only while in the bedroom */
+#edit-room-btn {
+  position: absolute; left: 16px; bottom: 18px; z-index: 6; pointer-events: auto;
+  border: none; border-radius: 999px; padding: 12px 18px; font-size: 15px; font-weight: 700;
+  background: #ffd166; color: #5a4a1e; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer;
+}
+#edit-room-btn:active { transform: translateY(1px); }
 /* hide the normal controls while editing */
-#hud.editing #joystick-zone, #hud.editing #interact-btn, #hud.editing #camera-zone { display: none; }
+#hud.editing #joystick-zone, #hud.editing #interact-btn, #hud.editing #camera-zone, #hud.editing #edit-room-btn { display: none; }
 
 /* ---------- Mini-game ---------- */
 #minigame-overlay { position: fixed; inset: 0; z-index: 40; background: #102030; }
