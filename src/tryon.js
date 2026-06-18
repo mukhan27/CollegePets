@@ -65,8 +65,8 @@ function renderItems() {
     const btn = document.createElement('button');
     btn.className = 'tryon-item' + (on ? ' on' : '') + (owned ? '' : ' locked');
     btn.innerHTML = `<img src="${wearablePreview(item.id)}" alt="">
-      <span class="ti-name">${item.name}</span>
-      <span class="ti-tag">${owned ? (on ? 'Wearing ✓' : 'Tap to wear') : '🪙 ' + item.price}</span>`;
+      <span class="ti-text"><span class="ti-name">${item.name}</span>
+      <span class="ti-tag">${owned ? (on ? 'Wearing ✓' : 'Tap to wear') : '🪙 ' + item.price}</span></span>`;
     btn.addEventListener('click', () => toggle(item));
     wrap.appendChild(btn);
   }

@@ -242,9 +242,9 @@ const BUILDERS = {
     const skull = ball(0.52, P.hamCoat, 1.05, 0.92, 0.95);
     head.add(skull);
     addOutlineLater(head, skull);
-    for (const s of [-1, 1]) { // chubby cheeks + little ears
-      const cheek = ball(0.16, P.hamBelly, 1, 0.85, 0.7);
-      cheek.position.set(s * 0.3, -0.14, 0.32);
+    for (const s of [-1, 1]) { // chubby cheeks (set wide & high, hugging the face) + little ears
+      const cheek = ball(0.18, P.hamBelly, 1.15, 1.0, 0.42);
+      cheek.position.set(s * 0.36, 0.0, 0.26);
       head.add(cheek);
       const ear = ball(0.13, P.hamEar);
       ear.position.set(s * 0.3, 0.5, -0.05);
@@ -253,8 +253,8 @@ const BUILDERS = {
       earIn.position.set(s * 0.29, 0.5, 0.05);
       head.add(earIn);
     }
-    const nose = ball(0.05, 0xcc7788, 1.2, 0.9, 0.8);
-    nose.position.set(0, -0.04, 0.5);
+    const nose = ball(0.06, 0xcc7788, 1.3, 0.85, 0.7);
+    nose.position.set(0, 0.04, 0.48);
     head.add(nose);
     addFace(head, { blushSpread: 0.4, blushY: -0.16 });
     inner.add(head);

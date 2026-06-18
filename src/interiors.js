@@ -1004,25 +1004,25 @@ export function buildShop() {
   add(cyl(0.05, 0.05, 2.8, 8, 0x44464c), 12, 1.4, -1);
   add(new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.7, 16), emi(0xfff0c4, 0xffcf7a, 0.18)), 12, 2.9, -1);
 
-  // ---- fitting-room corner (right, near entrance) with a mirror ----
-  const fxp = W / 2 - 3, fzp = 4;
-  add(tb(5, 0.2, 5, 0xb98a5e), fxp, 0.1, fzp);                          // platform
-  add(tb(0.25, 3.6, 2.2, 0xcaa14e), W / 2 - 0.45, 2.0, fzp);            // gilt mirror frame
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.1), emi(0xbfd8e8, 0x6a90a8, 0.35));
-  mirror.rotation.y = -Math.PI / 2; mirror.position.set(W / 2 - 0.6, 2.0, fzp); root.add(mirror);
-  for (const sz of [-1, 1]) add(cyl(0.08, 0.08, 4.4, 8, 0xcaa14e), fxp - 2.3, 2.2, fzp + sz * 2.3); // curtain posts
-  add(tb(4.8, 0.2, 0.2, 0xcaa14e), fxp - 2.3, 4.3, fzp);
-  shade(fxp, fzp, 5, 5);
-  const mlabel = textSprite('🪞 Fitting Room'); mlabel.position.set(fxp - 1, 4.0, fzp); root.add(mlabel);
-  interactables.push({ id: 'try_on', x: fxp - 2.2, z: fzp, r: 2.6, label: '🪞 Try on outfits' });
+  // ---- fitting-room corner (clean): a low platform with a wall-mounted
+  // full-length mirror and a little stool — no overhead rails or curtains ----
+  const fxp = W / 2 - 3.2, fzp = 4;
+  add(tb(5, 0.22, 5.4, 0xc9a978), fxp, 0.11, fzp);                       // raised platform
+  add(tb(4.4, 0.06, 4.8, 0xb98a5e), fxp, 0.25, fzp);                      // inset top board
+  const mFrame = add(tb(0.22, 3.7, 2.3, 0xcaa14e), W / 2 - 0.55, 2.1, fzp); // gilt mirror frame on the wall
+  add(tb(0.1, 3.2, 1.9, 0xfff1dd), W / 2 - 0.66, 2.1, fzp);               // inner frame bevel
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.05), emi(0xd2e8f2, 0x8fb4c2, 0.28));
+  mirror.rotation.y = -Math.PI / 2; mirror.position.set(W / 2 - 0.72, 2.1, fzp); root.add(mirror);
+  add(cyl(0.45, 0.5, 0.55, 16, 0x8e6bbf), fxp - 0.8, 0.52, fzp + 0.3);    // little velvet stool
+  add(cyl(0.5, 0.46, 0.08, 16, 0x6e4e96), fxp - 0.8, 0.83, fzp + 0.3);
+  shade(fxp, fzp, 5.4, 5.8);
+  interactables.push({ id: 'try_on', x: fxp - 2.2, z: fzp, r: 2.8, label: '🪞 Try on outfits' });
 
-  // ---- soft overhead lighting: small bulbs tucked up near the wall-top so the
-  // camera (which sits below) never sees a bright orb; gentle warm point lights --
-  root.add(new THREE.AmbientLight(0xfff2dc, 0.5));
-  for (const [lx, lz] of [[-7, 3], [7, 3], [-7, -5], [7, -5]]) {
-    add(cyl(0.03, 0.03, 0.4, 6, 0x44464c), lx, 4.75, lz);                                  // short cord up to the open top
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), emi(0xfff3d8, 0xffd98a, 0.22)), lx, 4.5, lz); // small dim bulb
-    const pl = new THREE.PointLight(0xffe6b8, 1.15, 13, 2); pl.position.set(lx, 4.4, lz); root.add(pl);
+  // ---- lighting: gentle warm point lights only (no glowing bulb meshes, so the
+  // camera never catches a bright orb) plus a soft ambient lift ----
+  root.add(new THREE.AmbientLight(0xfff2dc, 0.55));
+  for (const [lx, lz] of [[-7, 2], [7, 2], [-7, -5], [7, -5]]) {
+    const pl = new THREE.PointLight(0xffe6b8, 1.1, 15, 2); pl.position.set(lx, 4.7, lz); root.add(pl);
   }
 
   // ---- entrance plants ----
