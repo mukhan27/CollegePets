@@ -6,7 +6,7 @@ import { textSprite } from './world.js';
 import { PALETTE } from './palette.js';
 import { toonMat, woodPlanks, plaster, bookcaseTexture, glowTexture, softShadow, hardwoodFloor, fabricTexture, rugTexture } from './textures.js';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
-import { createPet } from './petFactory.js';
+import { createPet, setWearables } from './petFactory.js';
 import { FURNITURE } from './furniture.js';
 
 // Blender-authored hero props (glTF). Loaded async, re-materialised with the
@@ -906,7 +906,7 @@ export function buildShop() {
   const interactables = [];
   const W = 28, D = 22;
   const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { wall: 0xf0dfc6 })); // warm cream walls
+  root.add(makeRoom(W, D, { wall: 0xfaf0dc })); // bright warm cream walls
 
   // local toon helpers
   const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
@@ -923,10 +923,35 @@ export function buildShop() {
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(7, 4), toonMat(0xcf6f5a, { map: rugTexture('#cf6f5a', '#9c4636') }));
   rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.03, D / 2 - 4.5); root.add(rug);
 
-  // ---- wall trim ----
+  // ---- wall trim: baseboard, crown, a teal wainscot band, and a candy-striped
+  // valance up top — the same teal+cream+red palette as the storefront outside --
+  const TEAL = 0x2f9c93, CREAM = 0xfff1dd, REDA = 0xd95b4a;
   for (const [w, d, x, z] of [[W, 0.3, 0, -D / 2 + 0.3], [0.3, D, -W / 2 + 0.3, 0], [0.3, D, W / 2 - 0.3, 0]]) {
-    add(tb(w, 0.5, d, 0xd8c4a6), x, 0.25, z); add(tb(w, 0.25, d, 0xfff1dd), x, 4.85, z);
+    add(tb(w, 0.5, d, 0xd8c4a6), x, 0.25, z);   // baseboard
+    add(tb(w, 0.7, d, TEAL), x, 1.15, z);        // teal wainscot band
+    add(tb(w, 0.22, d, 0xeadfc8), x, 1.55, z);   // wainscot cap
+    add(tb(w, 0.3, d, CREAM), x, 4.82, z);       // crown
   }
+  // striped valance running along the back wall (alternating red/cream blocks)
+  for (let i = 0; i < 14; i++) {
+    add(tb(W / 14 - 0.02, 0.55, 0.18, i % 2 ? REDA : CREAM), -W / 2 + (i + 0.5) * (W / 14), 4.35, -D / 2 + 0.42);
+  }
+
+  // ---- bright windows letting daylight in (matches the exterior display glass) --
+  const winGlass = emi(0xeaf6ff, 0xcfe6f4, 0.55);
+  function windowOnWall(cx, cy, cz, ry, ww = 2.8, wh = 2.6) {
+    const grp = new THREE.Group();
+    grp.add(at2(tb(ww + 0.5, wh + 0.5, 0.18, CREAM), 0, 0, 0));                                  // frame
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(ww, wh, 0.1), winGlass); grp.add(glass);  // bright glass
+    grp.add(at2(tb(0.12, wh, 0.16, CREAM), 0, 0, 0.06));                                          // vertical muntin
+    grp.add(at2(tb(ww, 0.12, 0.16, CREAM), 0, 0, 0.06));                                          // horizontal muntin
+    grp.add(at2(tb(ww + 0.7, 0.22, 0.4, 0xb98a5e), 0, -wh / 2 - 0.3, 0.05));                      // sill
+    grp.position.set(cx, cy, cz); grp.rotation.y = ry; root.add(grp);
+  }
+  const at2 = (m, x, y, z) => { m.position.set(x, y, z); return m; };
+  for (const wz of [3.5, -4.5]) windowOnWall(-W / 2 + 0.25, 3.0, wz, Math.PI / 2);  // left wall
+  windowOnWall(W / 2 - 0.25, 3.0, -6.5, -Math.PI / 2);                              // right wall (behind showroom)
+  for (const wx of [-10.5, 10.5]) windowOnWall(wx, 3.4, -D / 2 + 0.25, 0);          // back wall, flanking the shelf
 
   // ---- central reception counter (where you buy) ----
   const cz = -2;
@@ -948,11 +973,17 @@ export function buildShop() {
   const sign = textSprite('🛍️ Campus Store'); sign.position.set(0, 4.2, cz + 0.6); root.add(sign);
   interactables.push({ id: 'shop_buy', x: 0, z: cz + 2.5, r: 2.5, label: '🛍️ Browse & buy' });
 
-  // ---- display mannequins (real pets wearing featured items) on the left aisle ----
+  // ---- display mannequins: plain white animal-shaped forms wearing featured
+  // items (built without coats/faces, then re-skinned to a single matte white) --
+  const mannequinMat = toonMat(0xf3efe6); // soft matte white, no pattern
   function pedestal(x, z) { add(cyl(0.7, 0.82, 0.5, 16, 0xe8dcc6), x, 0.25, z); shade(x, z, 2, 2); colliders.push({ x, z, w: 1.4, d: 1.4 }); }
   function mannequin(x, z, type, equipped, ry) {
     pedestal(x, z);
-    const pet = createPet(type, { equipped });
+    const pet = createPet(type, {}); // no items yet
+    // recolour the body to matte white but keep the dark back-side toon outline,
+    // so it reads as a clean mannequin silhouette
+    pet.traverse((o) => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) o.material = mannequinMat; });
+    if (equipped) setWearables(pet, equipped); // add the coloured item on top
     pet.position.set(x, 0.5, z); pet.rotation.y = ry; pet.scale.setScalar(0.92);
     if (pet.userData.animate) pet.userData.animate(0, false); // settle to idle pose
     root.add(pet);
@@ -985,11 +1016,13 @@ export function buildShop() {
   const mlabel = textSprite('🪞 Fitting Room'); mlabel.position.set(fxp - 1, 4.0, fzp); root.add(mlabel);
   interactables.push({ id: 'try_on', x: fxp - 2.2, z: fzp, r: 2.6, label: '🪞 Try on outfits' });
 
-  // ---- pendant lights ----
-  for (const lx of [-7, 0, 7]) {
-    add(cyl(0.04, 0.04, 1.2, 6, 0x44464c), lx, 4.4, 4);
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 12), emi(0xfff3d8, 0xffd98a, 0.5)), lx, 3.7, 4);
-    const pl = new THREE.PointLight(0xffe6b8, 2.0, 14, 2); pl.position.set(lx, 3.5, 4); root.add(pl);
+  // ---- soft overhead lighting: small bulbs tucked up near the wall-top so the
+  // camera (which sits below) never sees a bright orb; gentle warm point lights --
+  root.add(new THREE.AmbientLight(0xfff2dc, 0.5));
+  for (const [lx, lz] of [[-7, 3], [7, 3], [-7, -5], [7, -5]]) {
+    add(cyl(0.03, 0.03, 0.4, 6, 0x44464c), lx, 4.75, lz);                                  // short cord up to the open top
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), emi(0xfff3d8, 0xffd98a, 0.22)), lx, 4.5, lz); // small dim bulb
+    const pl = new THREE.PointLight(0xffe6b8, 1.15, 13, 2); pl.position.set(lx, 4.4, lz); root.add(pl);
   }
 
   // ---- entrance plants ----

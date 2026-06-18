@@ -370,6 +370,79 @@ function makeLibraryExterior(b) {
   return { group: g, doorWorld, enter, enterR: 6, collider };
 }
 
+// A storefront-style shop exterior: cream painted walls, a teal roof & trim, a
+// red/cream striped awning, and two big display windows (with little white
+// mannequin forms + colourful boxes behind the glass) flanking a glass door.
+// Palette matches the interior so inside reads as the same building.
+function makeShopExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshToonMaterial({ color: 0xf6e7cc, map: plaster() });
+  const trimMat = toonMat(0x2f9c93);  // teal
+  const cream = toonMat(0xfff1dd);
+  const glassMat = new THREE.MeshToonMaterial({ color: 0xbfe0ea, emissive: 0x3a6e7a, emissiveIntensity: 0.4 });
+
+  const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, h / 2, 0); body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.6, d + 0.3), trimMat, 0, 0.3, 0, false));   // base trim
+  g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.5, d + 0.4), cream, 0, h - 0.25, 0, false)); // cornice
+  const roof = gableRoof(w, d, 0x2f9c93); roof.position.y = h; g.add(roof);
+
+  // side & back windows so the building reads as glassy all around
+  for (const s of [-1, 1]) addWindow(g, s * w * 0.3, h * 0.55, d / 2 + 0.04); // (extra small windows up high, flank the awning)
+
+  // ---- storefront display windows flanking the door ----
+  const fz = d / 2 + 0.06;
+  function displayWindow(cx, ww = 4.6, wh = 4.2) {
+    const grp = new THREE.Group();
+    grp.add(mesh(new THREE.BoxGeometry(ww + 0.5, wh + 0.6, 0.3), cream, 0, 0, 0, false));   // frame
+    grp.add(mesh(new THREE.BoxGeometry(ww, wh, 0.16), glassMat, 0, 0, 0.1, false));         // glass
+    grp.add(mesh(new THREE.BoxGeometry(0.14, wh, 0.22), cream, 0, 0, 0.15, false));         // muntins
+    grp.add(mesh(new THREE.BoxGeometry(ww, 0.14, 0.22), cream, 0, 0, 0.15, false));
+    // display behind the glass: a white mannequin form + colourful boxes
+    grp.add(mesh(new THREE.BoxGeometry(0.9, 1.9, 0.5), toonMat(0xf3efe6), -ww * 0.24, -wh * 0.08, -0.25, false));
+    grp.add(mesh(new THREE.SphereGeometry(0.5, 12, 10), toonMat(0xf3efe6), -ww * 0.24, wh * 0.34, -0.25, false));
+    for (const [bx, by, c] of [[ww * 0.2, -wh * 0.3, 0xd95b4a], [ww * 0.3, -wh * 0.16, 0x3a6ea8], [ww * 0.12, -wh * 0.02, 0xffd166]])
+      grp.add(mesh(new THREE.BoxGeometry(0.8, 0.8, 0.45), toonMat(c), bx, by, -0.25, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww + 0.7, 0.3, 0.7), toonMat(0xb98a5e), 0, -wh / 2 - 0.35, 0.22, false)); // sill
+    grp.position.set(cx, h * 0.5, fz); g.add(grp);
+  }
+  displayWindow(-w * 0.28); displayWindow(w * 0.28);
+
+  // ---- striped awning across the storefront ----
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.16, 2.4),
+    new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }));
+  awn.rotation.x = 0.44; awn.position.set(0, h * 0.8, d / 2 + 1.15); awn.castShadow = true; g.add(awn);
+  for (let i = 0; i < 11; i++) { // scalloped valance hanging off the awning's front edge
+    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.6, 3),
+      toonMat(i % 2 ? 0xd95b4a : 0xfff1dd, { noCache: true }));
+    tri.rotation.x = Math.PI; tri.position.set(-w / 2 + (i + 0.5) * (w / 11), h * 0.8 - 0.55, d / 2 + 2.05); g.add(tri);
+  }
+
+  // ---- central glass door ----
+  const doorG = new THREE.Group();
+  doorG.add(mesh(new THREE.BoxGeometry(3.0, 4.0, 0.16), cream, 0, 2.0, 0, false));
+  doorG.add(mesh(new THREE.BoxGeometry(2.4, 3.5, 0.2), trimMat, 0, 1.85, 0.04, false));
+  doorG.add(mesh(new THREE.BoxGeometry(1.8, 1.5, 0.22), glassMat, 0, 2.7, 0.06, false));
+  doorG.add(mesh(new THREE.SphereGeometry(0.1, 8, 6), toonMat(0xf2c14e), 0.8, 1.7, 0.16, false));
+  doorG.add(mesh(new THREE.BoxGeometry(3.4, 0.24, 1.4), toonMat(P.sandDark), 0, 0.12, 0.7, false));
+  doorG.position.set(0, 0, d / 2 + 0.05); g.add(doorG);
+
+  // ---- window planters ----
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.BoxGeometry(4.8, 0.5, 0.8, ), toonMat(0x8a5a36), s * w * 0.28, h * 0.26, d / 2 + 0.55, false));
+    for (let i = 0; i < 3; i++) g.add(mesh(new THREE.SphereGeometry(0.28, 10, 8), toonMat([0xe85b6a, 0xffd166, 0x8e6bbf][i % 3], { noCache: true }), s * w * 0.28 - 1.4 + i * 1.4, h * 0.26 + 0.45, d / 2 + 0.55, false));
+  }
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, h + (roof.userData.rise || 3) + 1.2, 0);
+  g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const collider = { x, z, w: w + 0.6, d: d + 0.6 };
+  return { group: g, doorWorld, collider };
+}
+
 // ----------------------------------------------------------- campus
 export function buildCampus() {
   const root = new THREE.Group();
@@ -429,8 +502,8 @@ export function buildCampus() {
       label: '📚 Library', prompt: '📚 Enter Library' },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
-    { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: P.wallBlue, roofColor: P.roofNavy,
-      awning: true, label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
+    { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: 0xf6e7cc, roofColor: 0x2f9c93,
+      label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
     { id: 'lecturehall', x: 0, z: -55, w: 36, h: 15, d: 22, color: P.wallSage, roofColor: P.roofNavy,
       wallStyle: 'brick', columns: true, label: '🏛️ Lecture Hall', prompt: '🏛️ Enter Lecture Hall' },
     { id: 'lecture', x: -20, z: 56, w: 26, h: 12, d: 13, color: P.wallSage, roofColor: P.roofGreen,
@@ -441,7 +514,9 @@ export function buildCampus() {
 
   const doors = {};
   for (const b of buildings) {
-    const built = b.id === 'library' ? makeLibraryExterior(b) : makeBuilding(b);
+    const built = b.id === 'library' ? makeLibraryExterior(b)
+      : b.id === 'shop' ? makeShopExterior(b)
+      : makeBuilding(b);
     root.add(built.group);
     colliders.push(built.collider);
     doors[b.id] = built.doorWorld;
