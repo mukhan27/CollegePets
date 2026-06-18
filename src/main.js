@@ -131,7 +131,7 @@ for (const loc of Object.values(LOCATIONS)) {
   scene.add(loc.def.root);
 }
 
-const basketball = createBasketball(renderer);
+const basketball = createBasketball({ parent: campus.root, court: campus.court });
 let bballActive = false;
 
 let currentLoc = null;
@@ -298,7 +298,7 @@ function runInteract(it) {
     case 'decorate': enterEdit(); break;
     case 'basketball':
       bballActive = true;
-      basketball.enter(() => { bballActive = false; basketball.exit(); });
+      basketball.enter(player, () => { bballActive = false; basketball.exit(); });
       break;
     case 'study_seat': beginStudy(it); break;
     case 'lounge': beginLounge(it); break;
@@ -531,7 +531,18 @@ function startGame() {
 }
 
 function frame(dt, t) {
-  if (bballActive) { basketball.update(dt); renderer.render(basketball.scene, basketball.camera); return; }
+  if (bballActive) {
+    basketball.update(dt, t);
+    // same 3rd-person follow as the campus, tracking the player on the court
+    const off = campus.camOffset;
+    const bcy = Math.cos(input.camYaw), bsy = Math.sin(input.camYaw);
+    const bx = player.position.x + (off.x * bcy + off.z * bsy);
+    const bz = player.position.z + (-off.x * bsy + off.z * bcy);
+    camera.position.lerp(new THREE.Vector3(bx, player.position.y + off.y, bz), Math.min(1, dt * 6));
+    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+    fx.composer.render(dt);
+    return;
+  }
   if (!player || !currentLoc) { fx.composer.render(dt); return; }
 
   const loc = LOCATIONS[currentLoc].def;

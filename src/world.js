@@ -486,6 +486,13 @@ export function buildCampus() {
   makeHoop(CX - CL / 2 + 1.4, CZ, 1);   // left hoop, rim faces +x (into court)
   makeHoop(CX + CL / 2 - 1.4, CZ, -1);  // right hoop, rim faces -x (into court)
   interactables.push({ id: 'basketball', x: CX, z: CZ, r: 4, label: '🏀 Play Basketball' });
+  // shared with the basketball mini-game (rim world positions + play bounds)
+  const courtInfo = {
+    center: { x: CX, z: CZ }, rimY: 3.5,
+    left: { x: CX - CL / 2 + 1.4 + 0.3, y: 3.5, z: CZ },
+    right: { x: CX + CL / 2 - 1.4 - 0.3, y: 3.5, z: CZ },
+    bounds: { minX: CX - CL / 2 + 1.2, maxX: CX + CL / 2 - 1.2, minZ: CZ - CW / 2 + 1, maxZ: CZ + CW / 2 - 1 },
+  };
 
   // ---- nature & props (tree/lamp/bench coords unchanged from v1) ----
   const treeSpots = [
@@ -621,5 +628,5 @@ export function buildCampus() {
     }
   }
 
-  return { root, colliders, interactables, bounds, doors, animate };
+  return { root, colliders, interactables, bounds, doors, animate, court: courtInfo };
 }
