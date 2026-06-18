@@ -8,6 +8,7 @@ import { input } from './input.js';
 import { addCoins } from './state.js';
 import { showModal } from './ui.js';
 import { toonMat } from './textures.js';
+import { createPet } from './petFactory.js';
 
 const $ = (id) => document.getElementById(id);
 const G = 16;
@@ -26,17 +27,17 @@ export function createBasketball({ parent, court }) {
   const B = court.bounds, RIGHT = court.right, LEFT = court.left; // team A attacks RIGHT, team B attacks LEFT
   const group = new THREE.Group(); group.visible = false; parent.add(group);
 
-  function figure(jersey) {
-    const g = new THREE.Group();
-    const part = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, toonMat(c)); m.position.set(x, y, z); m.castShadow = true; g.add(m); };
-    part(new THREE.CylinderGeometry(0.34, 0.42, 1.1, 10), jersey, 0, 1.0, 0);
-    part(new THREE.SphereGeometry(0.32, 14, 12), 0xf0c49a, 0, 1.78, 0);
-    for (const s of [-1, 1]) part(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 8), 0xf0c49a, s * 0.46, 1.05, 0);
-    for (const s of [-1, 1]) part(new THREE.CylinderGeometry(0.14, 0.12, 0.9, 8), 0x33384a, s * 0.18, 0.45, 0);
-    group.add(g);
-    return { mesh: g, pos: new THREE.Vector3(), jy: 0, vy: 0, jumping: false };
+  // NPCs are real animal pets (matching the campus art) wearing a team-colored
+  // jersey band so you can tell teammate from opponent at a glance.
+  function makeNpc(type, teamColor) {
+    const pet = createPet(type, {});
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 8, 18), toonMat(teamColor));
+    band.rotation.x = Math.PI / 2; band.position.y = 0.55; band.castShadow = true;
+    pet.add(band);
+    group.add(pet);
+    return { mesh: pet, pos: new THREE.Vector3(), jy: 0, vy: 0, jumping: false };
   }
-  const teammate = figure(0x3a78c8), enemy = figure(0xd14b4b);
+  const teammate = makeNpc('dog', 0x3a78c8), enemy = makeNpc('bear', 0xd14b4b);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 14), toonMat(0xe07a33)); ball.castShadow = true; group.add(ball);
   const bs = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), inAir: false };
 
@@ -48,7 +49,7 @@ export function createBasketball({ parent, court }) {
   let shot = null;               // { team:'A'|'B', target, points, scored }
   let charging = false, meter = 0, meterDir = 1;
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 75;
-  let msgT = 0, oppShootT = 0, stealCool = 0, resetT = 0, resetTeam = null;
+  let msgT = 0, oppShootT = 0, stealCool = 0, pStealCool = 0, resetT = 0, resetTeam = null;
   let onExit = null, active = false;
 
   const setMsg = (t, d = 1.2) => { $('bball-msg').textContent = t; msgT = t ? d : 0; };
@@ -109,6 +110,18 @@ export function createBasketball({ parent, court }) {
     if (!pjump) { pvy = 6.5; pjump = true; }
     if (phase === 'play' && owner === 'enemy' && oppShootT > 0 && dist2(pl.position, enemy.pos) < 2.6) { enemy.blocked = true; setMsg('BLOCK! Ball back', 1.3); }
   }
+  function playerSteal() {
+    if (phase !== 'play' || owner !== 'enemy' || pStealCool > 0) return;
+    pStealCool = 0.7;
+    const d = dist2(pl.position, enemy.pos);
+    if (d > 2.2) { setMsg('Too far to steal', 0.7); return; }
+    // closer + facing the ball-handler = better odds
+    const toBall = Math.atan2(enemy.pos.z - pl.position.z, enemy.pos.x - pl.position.x);
+    const face = clamp(1 - Math.abs(angDiff(pl.rotation.y, toBall)) / 1.4, 0, 1);
+    const chance = clamp(0.55 * face * (1 - d / 2.6), 0.05, 0.7);
+    if (Math.random() < chance) { setMsg('STEAL! Your ball'); owner = 'player'; oppShootT = 0; enemy.blocked = false; }
+    else setMsg('Missed the steal', 0.7);
+  }
 
   // ---- per-frame ----
   function movePlayer(dt, t) {
@@ -124,25 +137,27 @@ export function createBasketball({ parent, court }) {
     pl.position.y = pjy;
     if (pl.userData.animate) pl.userData.animate(t, moving);
   }
-  function moveTo(e, tx, tz, spd, dt) {
+  function moveTo(e, tx, tz, spd, dt, t) {
     const dx = tx - e.pos.x, dz = tz - e.pos.z, d = Math.hypot(dx, dz);
-    if (d > 0.06) { const s = Math.min(spd * dt, d); e.pos.x += dx / d * s; e.pos.z += dz / d * s; e.mesh.rotation.y = Math.atan2(dx, dz); }
+    let moving = false;
+    if (d > 0.06 && spd > 0) { const s = Math.min(spd * dt, d); e.pos.x += dx / d * s; e.pos.z += dz / d * s; e.mesh.rotation.y = Math.atan2(dx, dz); moving = true; }
     e.pos.x = clamp(e.pos.x, B.minX, B.maxX); e.pos.z = clamp(e.pos.z, B.minZ, B.maxZ);
     if (e.jumping) { e.vy -= G * dt; e.jy += e.vy * dt; if (e.jy <= 0) { e.jy = 0; e.jumping = false; } }
     e.mesh.position.set(e.pos.x, e.jy, e.pos.z);
+    if (e.mesh.userData.animate) e.mesh.userData.animate(t, moving);
   }
   function aiTeammate(dt, t) {
     if (owner === 'tm') {
       teammate.willShoot -= dt;
-      moveTo(teammate, teammate.pos.x, teammate.pos.z, 0, dt);
+      moveTo(teammate, teammate.pos.x, teammate.pos.z, 0, dt, t);
       if (teammate.willShoot <= 0) { const d = dist2(teammate.pos, RIGHT); launchShot(new THREE.Vector3(teammate.pos.x, 1.6, teammate.pos.z), RIGHT, teammate.contested ? 0.95 : 0.72, d > 6.5 ? 3 : 2, 'A'); }
       return;
     }
     if (teamOf(owner) === 'A') { // spot up open, away from the enemy, toward the right wing
       const side = (court.center.z > enemy.pos.z) ? -4.5 : 4.5;
-      moveTo(teammate, RIGHT.x - 5, court.center.z + side, 4.5, dt);
+      moveTo(teammate, RIGHT.x - 5, court.center.z + side, 4.5, dt, t);
     } else { // help defend
-      moveTo(teammate, (enemy.pos.x + LEFT.x) / 2, enemy.pos.z, 4.2, dt);
+      moveTo(teammate, (enemy.pos.x + LEFT.x) / 2, enemy.pos.z, 4.2, dt, t);
     }
   }
   function aiEnemy(dt, t) {
@@ -152,9 +167,10 @@ export function createBasketball({ parent, court }) {
       if (dh > 5 && oppShootT === 0) {
         const dx = LEFT.x - enemy.pos.x, dz = LEFT.z - enemy.pos.z, dl = Math.hypot(dx, dz);
         const perpX = -dz / dl, perpZ = dx / dl, weave = Math.sin(t * 2.5) * 2.4;
-        moveTo(enemy, enemy.pos.x + dx / dl * 3 + perpX * weave, enemy.pos.z + dz / dl * 3 + perpZ * weave, 6, dt);
+        moveTo(enemy, enemy.pos.x + dx / dl * 3 + perpX * weave, enemy.pos.z + dz / dl * 3 + perpZ * weave, 6, dt, t);
       } else {
         oppShootT += dt;
+        moveTo(enemy, enemy.pos.x, enemy.pos.z, 0, dt, t); // idle pull-up animation
         if (oppShootT > 1.2) {
           if (enemy.blocked) { enemy.blocked = false; scoreA += 0; resetPossession('A'); }
           else launchShot(new THREE.Vector3(enemy.pos.x, 1.6, enemy.pos.z), LEFT, 0.84, 2, 'B');
@@ -165,7 +181,7 @@ export function createBasketball({ parent, court }) {
     // defend the ball-handler: slide to stay between them and the right hoop (2D)
     const h = owner === 'player' ? pl.position : teammate.pos;
     const dx = RIGHT.x - h.x, dz = RIGHT.z - h.z, dl = Math.hypot(dx, dz) || 1;
-    moveTo(enemy, h.x + dx / dl * 1.9, h.z + dz / dl * 1.9, 6.2, dt);
+    moveTo(enemy, h.x + dx / dl * 1.9, h.z + dz / dl * 1.9, 6.2, dt, t);
     if (stealCool > 0) stealCool -= dt;
     if (owner === 'player' && stealCool <= 0 && dist2(enemy.pos, pl.position) < 1.3 && Math.random() < 0.4 * dt) { setMsg('Stolen!'); resetPossession('B'); }
   }
@@ -192,8 +208,8 @@ export function createBasketball({ parent, court }) {
   }
   function ballHold() {
     if (owner === 'player') { const c = Math.cos(pl.rotation.y), s = Math.sin(pl.rotation.y); ball.position.set(pl.position.x + c * 0.5, 1.2 + pjy, pl.position.z + s * 0.5); }
-    else if (owner === 'tm') ball.position.set(teammate.pos.x, 1.4 + teammate.jy, teammate.pos.z);
-    else if (owner === 'enemy') ball.position.set(enemy.pos.x, 1.4 + enemy.jy, enemy.pos.z);
+    else if (owner === 'tm') { const r = teammate.mesh.rotation.y; ball.position.set(teammate.pos.x + Math.sin(r) * 0.72, 1.0 + teammate.jy, teammate.pos.z + Math.cos(r) * 0.72); }
+    else if (owner === 'enemy') { const r = enemy.mesh.rotation.y; ball.position.set(enemy.pos.x + Math.sin(r) * 0.72, 1.0 + enemy.jy, enemy.pos.z + Math.cos(r) * 0.72); }
   }
 
   function update(dt, t) {
@@ -201,6 +217,7 @@ export function createBasketball({ parent, court }) {
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
     if (charging && !(phase === 'play' && owner === 'player')) { charging = false; $('bball-meter').classList.add('hidden'); }
     if (resetT > 0) { resetT -= dt; if (resetT <= 0) resetPossession(resetTeam); }
+    if (pStealCool > 0) pStealCool -= dt;
     if (charging) { meter += meterDir * dt * 1.5; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
     movePlayer(dt, t);
     aiTeammate(dt, t); aiEnemy(dt, t);
@@ -224,6 +241,7 @@ export function createBasketball({ parent, court }) {
   const rel = (e) => { if (e) e.preventDefault(); if (charging) playerShoot(); };
   sb.addEventListener('pointerup', rel); sb.addEventListener('pointerleave', rel); sb.addEventListener('pointercancel', rel);
   $('bball-pass').addEventListener('click', playerPass);
+  $('bball-steal').addEventListener('click', playerSteal);
   $('bball-jump').addEventListener('click', playerJump);
   $('bball-block').addEventListener('click', playerBlock);
   $('bball-quit').addEventListener('click', () => endGame());

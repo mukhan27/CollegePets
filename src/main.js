@@ -133,6 +133,7 @@ for (const loc of Object.values(LOCATIONS)) {
 
 const basketball = createBasketball({ parent: campus.root, court: campus.court });
 let bballActive = false;
+const BBALL_CAM_OFFSET = new THREE.Vector3(0, 7, 11); // closer than the campus follow
 
 let currentLoc = null;
 let player = null;
@@ -533,13 +534,13 @@ function startGame() {
 function frame(dt, t) {
   if (bballActive) {
     basketball.update(dt, t);
-    // same 3rd-person follow as the campus, tracking the player on the court
-    const off = campus.camOffset;
+    // same 3rd-person follow as the campus but pulled in closer to the player
+    const off = BBALL_CAM_OFFSET;
     const bcy = Math.cos(input.camYaw), bsy = Math.sin(input.camYaw);
     const bx = player.position.x + (off.x * bcy + off.z * bsy);
     const bz = player.position.z + (-off.x * bsy + off.z * bcy);
     camera.position.lerp(new THREE.Vector3(bx, player.position.y + off.y, bz), Math.min(1, dt * 6));
-    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+    camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
     fx.composer.render(dt);
     return;
   }

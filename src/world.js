@@ -431,8 +431,6 @@ export function buildCampus() {
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
     { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: P.wallBlue, roofColor: P.roofNavy,
       awning: true, label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
-    { id: 'gym', x: 62, z: 28, w: 22, h: 10, d: 14, color: P.wallGray, roofColor: P.roofTeal,
-      roofStyle: 'arch', label: '🏀 Rec Gym', prompt: null },
     { id: 'lecturehall', x: 0, z: -55, w: 36, h: 15, d: 22, color: P.wallSage, roofColor: P.roofNavy,
       wallStyle: 'brick', columns: true, label: '🏛️ Lecture Hall', prompt: '🏛️ Enter Lecture Hall' },
     { id: 'lecture', x: -20, z: 56, w: 26, h: 12, d: 13, color: P.wallSage, roofColor: P.roofGreen,
