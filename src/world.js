@@ -453,29 +453,39 @@ export function buildCampus() {
     }
   }
 
-  // ---- basketball court (texture includes the line markings) ----
-  const court = new THREE.Mesh(new THREE.PlaneGeometry(16, 10),
+  // ---- full basketball court (two hoops, centre line) ----
+  const CX = 36, CZ = 28, CL = 30, CW = 17; // centre, length(x), width(z)
+  const court = new THREE.Mesh(new THREE.PlaneGeometry(CL, CW),
     new THREE.MeshToonMaterial({ map: courtTexture() }));
   court.rotation.x = -Math.PI / 2;
-  court.position.set(36, 0.04, 28);
+  court.position.set(CX, 0.04, CZ);
   court.receiveShadow = true;
   root.add(court);
-  const hoop = new THREE.Group();
-  hoop.add(mesh(new THREE.CylinderGeometry(0.12, 0.14, 4.2, 8), toonMat(0x4a525c), 0, 2.1, 0));
-  hoop.add(mesh(new THREE.BoxGeometry(2.4, 1.6, 0.12), toonMat(P.white), 0, 4.2, 0.2));
-  hoop.add(mesh(new THREE.BoxGeometry(1.0, 0.8, 0.14), toonMat(0xe07840), 0, 3.95, 0.21, false));
-  const rim = mesh(new THREE.TorusGeometry(0.45, 0.05, 8, 16), toonMat(0xd64541), 0, 3.7, 0.7);
-  rim.rotation.x = Math.PI / 2;
-  hoop.add(rim);
-  const net = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.26, 0.55, 8, 2, true),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.7 }));
-  net.position.set(0, 3.4, 0.7);
-  hoop.add(net);
-  hoop.position.set(43.3, 0, 28);
-  hoop.rotation.y = Math.PI / 2;
-  root.add(hoop);
-  colliders.push({ x: 43.3, z: 28, w: 1, d: 1 });
-  interactables.push({ id: 'basketball', x: 38, z: 28, r: 3.5, label: '🏀 Shoot hoops' });
+  // painted lines: border, centre line, centre circle
+  const line = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), toonMat(0xf2efe6)); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z); root.add(m); };
+  line(CL - 1, 0.18, CX, CZ - CW / 2 + 0.8); line(CL - 1, 0.18, CX, CZ + CW / 2 - 0.8); // sidelines
+  line(0.18, CW - 1.4, CX - CL / 2 + 0.8, CZ); line(0.18, CW - 1.4, CX + CL / 2 - 0.8, CZ); // baselines
+  line(0.2, CW - 1.4, CX, CZ); // centre line
+  { const ring = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.1, 28), toonMat(0xf2efe6)); ring.rotation.x = -Math.PI / 2; ring.position.set(CX, 0.05, CZ); root.add(ring); }
+
+  // hoop builder — built facing +x (rim in front of the backboard); `dir`<0 flips
+  // it to face -x. So both end hoops can face into the court.
+  function makeHoop(x, z, dir) {
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(0.14, 0.16, 4.4, 8), toonMat(0x46505a), -0.5, 2.2, 0)); // pole (behind, -x)
+    g.add(mesh(new THREE.BoxGeometry(0.12, 1.7, 2.6), toonMat(P.white), -0.2, 4.0, 0));            // backboard
+    g.add(mesh(new THREE.BoxGeometry(0.14, 0.8, 1.0), toonMat(0xe07840), -0.13, 3.75, 0, false));  // target square
+    const rim = mesh(new THREE.TorusGeometry(0.45, 0.05, 8, 16), toonMat(0xd64541), 0.3, 3.5, 0);  // rim (front, +x)
+    rim.rotation.x = Math.PI / 2; g.add(rim);
+    const net = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.26, 0.55, 8, 2, true),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.7 }));
+    net.position.set(0.3, 3.2, 0); g.add(net);
+    g.position.set(x, 0, z); g.rotation.y = dir < 0 ? Math.PI : 0; root.add(g);
+    colliders.push({ x, z, w: 1.2, d: 1.2 });
+  }
+  makeHoop(CX - CL / 2 + 1.4, CZ, 1);   // left hoop, rim faces +x (into court)
+  makeHoop(CX + CL / 2 - 1.4, CZ, -1);  // right hoop, rim faces -x (into court)
+  interactables.push({ id: 'basketball', x: CX, z: CZ, r: 4, label: '🏀 Play Basketball' });
 
   // ---- nature & props (tree/lamp/bench coords unchanged from v1) ----
   const treeSpots = [

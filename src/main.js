@@ -12,8 +12,9 @@ import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
   openPomodoroSetup, startPomodoro,
 } from './ui.js';
-import { initMinigameUI, startBasketball } from './minigames.js';
+import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
+import { createBasketball } from './basketball.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -129,6 +130,9 @@ for (const loc of Object.values(LOCATIONS)) {
   loc.def.root.visible = false;
   scene.add(loc.def.root);
 }
+
+const basketball = createBasketball(renderer);
+let bballActive = false;
 
 let currentLoc = null;
 let player = null;
@@ -292,7 +296,10 @@ function runInteract(it) {
     case 'exit_bedroom': switchLocation('dormCommon', { x: 8, z: -6.5 }); break;
     case 'shop': openShop(() => setWearables(player, state.equipped)); break;
     case 'decorate': enterEdit(); break;
-    case 'basketball': startBasketball(); break;
+    case 'basketball':
+      bballActive = true;
+      basketball.enter(() => { bballActive = false; basketball.exit(); });
+      break;
     case 'study_seat': beginStudy(it); break;
     case 'lounge': beginLounge(it); break;
     case 'stand_up': endLounge(); break;
@@ -524,6 +531,7 @@ function startGame() {
 }
 
 function frame(dt, t) {
+  if (bballActive) { basketball.update(dt); renderer.render(basketball.scene, basketball.camera); return; }
   if (!player || !currentLoc) { fx.composer.render(dt); return; }
 
   const loc = LOCATIONS[currentLoc].def;

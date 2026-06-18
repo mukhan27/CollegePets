@@ -237,6 +237,38 @@ html, body {
 /* hide the normal controls while editing */
 #hud.editing #joystick-zone, #hud.editing #interact-btn, #hud.editing #camera-zone, #hud.editing #edit-room-btn { display: none; }
 
+/* ---------- 3D basketball ---------- */
+#bball-hud { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+#bball-hud > * { pointer-events: auto; }
+#bball-top {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+  background: rgba(12,20,30,.6); border-radius: 999px; color: #fff; font-weight: 700;
+}
+#bball-time { opacity: .9; }
+#bball-msg {
+  position: absolute; top: 24%; left: 0; right: 0; text-align: center;
+  font-size: clamp(28px, 7vw, 54px); font-weight: 800; color: #ffd166;
+  text-shadow: 0 3px 16px rgba(0,0,0,.6); pointer-events: none;
+}
+#bball-meter {
+  position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%);
+  width: min(60vw, 320px); height: 18px; border-radius: 999px; pointer-events: none;
+  background: rgba(0,0,0,.45); overflow: hidden; border: 2px solid rgba(255,255,255,.3);
+}
+#bball-sweet { position: absolute; left: 74%; width: 14%; top: 0; bottom: 0; background: rgba(107,224,160,.55); }
+#bball-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #ffd166; }
+#bball-actions { position: absolute; right: 18px; bottom: 26px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.bb-btn {
+  border: none; border-radius: 999px; padding: 12px 18px; font-size: 15px; font-weight: 700;
+  background: rgba(255,255,255,.9); color: #20303f; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  touch-action: none; user-select: none;
+}
+.bb-btn:active { transform: translateY(1px); }
+.bb-shoot { background: #e07a33; color: #fff; font-size: 20px; padding: 20px 28px; }
+#bball-top .bb-btn { padding: 6px 14px; font-size: 13px; background: rgba(255,255,255,.85); }
+#hud.playing-bball #interact-btn, #hud.playing-bball #edit-room-btn { display: none; }
+
 /* ---------- Mini-game ---------- */
 #minigame-overlay { position: fixed; inset: 0; z-index: 40; background: #102030; }
 #minigame-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }

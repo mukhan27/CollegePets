@@ -28,7 +28,7 @@ Then open `http://localhost:3000` — on a phone, open your computer's LAN IP (e
 - **🐾 Pick a pet** — cat, dog, bear, duck, or hamster, with a custom name.
 - **💬 Chat** — walk up to any wandering student pet and talk to them (canned single-player brains, each with a personality).
 - **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). The screen locks into focus mode (hold 3s to give up). Completing a session pays **🪙 2/min**.
-- **🏀 Basketball** — at the court by the Rec Gym. Hold to charge, release to shoot. 🪙 5 per bucket.
+- **🏀 Basketball** — a full-court 3D **first-person** pickup game: move (joystick), aim (drag), time the **Shoot** meter, **Pass** to the open teammate, and **Jump** to dunk or block. Coins for baskets.
 - **🏛️ Lecture Hall** — a big-screen lecture hall with tiered seating + stage downstairs, restrooms, and a study mezzanine of pomodoro desks upstairs.
 - **🛍️ Campus Store** — buy hats, glasses, scarves (worn on your pet) and furniture for your room.
 - **🏠 Maple Dorm** — a furnished common room with sit-able couches, plus **your own bedroom** with a grid-based furniture editor (place, move & rotate furniture you own).

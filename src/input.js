@@ -1,7 +1,7 @@
 // Virtual joystick (touch) + WASD/arrow keys (desktop). Exposes a normalized move
 // vector, plus a camera yaw the player drags with on the right side of the screen.
 
-export const input = { x: 0, y: 0, active: false, camYaw: 0 };
+export const input = { x: 0, y: 0, active: false, camYaw: 0, camPitch: 0 };
 
 const keys = new Set();
 const KEYMAP = {
@@ -86,17 +86,18 @@ export function initInput() {
   // --- camera rotation: drag horizontally on the right side of the screen ---
   const camZone = document.getElementById('camera-zone');
   if (camZone) {
-    let camPid = null, lastX = 0;
+    let camPid = null, lastX = 0, lastY = 0;
     camZone.addEventListener('pointerdown', (e) => {
       if (camPid !== null) return;
-      camPid = e.pointerId; lastX = e.clientX;
+      camPid = e.pointerId; lastX = e.clientX; lastY = e.clientY;
       try { camZone.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
     });
     camZone.addEventListener('pointermove', (e) => {
       if (e.pointerId !== camPid) return;
       input.camYaw -= (e.clientX - lastX) * 0.006; // drag right → view swings around
-      lastX = e.clientX;
+      input.camPitch = Math.max(-1.2, Math.min(1.2, input.camPitch - (e.clientY - lastY) * 0.005)); // used by first-person modes
+      lastX = e.clientX; lastY = e.clientY;
       e.preventDefault();
     }, { passive: false });
     const endCam = (e) => { if (e.pointerId === camPid) camPid = null; };
