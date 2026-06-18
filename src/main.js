@@ -6,7 +6,7 @@ import { state, save, PET_TYPES, furnitureCount } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
-import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby } from './interiors.js';
+import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop } from './interiors.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
@@ -15,6 +15,7 @@ import {
 import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
+import { openTryOn, isTryOnOpen } from './tryon.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -91,6 +92,7 @@ const library = buildLibrary();
 const lectureLobby = buildLectureLobby();
 const lectureRoom = buildLectureRoom();
 const dormCommon = buildDormCommon();
+const shopInterior = buildShop();
 const bedroom = buildBedroom(state.room.layout);
 state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
 
@@ -111,6 +113,7 @@ library.camOffset = new THREE.Vector3(0, 11, 18);
 lectureLobby.camOffset = new THREE.Vector3(0, 11, 17);
 lectureRoom.camOffset = new THREE.Vector3(0, 13, 21);
 dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
+shopInterior.camOffset = new THREE.Vector3(0, 10, 16);
 bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
 // Per-location colour mood (exposure + tilt-shift grade). The library is graded
@@ -124,6 +127,7 @@ const LOCATIONS = {
   lectureLobby: { def: lectureLobby, name: '🏛️ Lecture Building', sky: 0x2a3340 },
   lectureRoom: { def: lectureRoom, name: '🏛️ Lecture Hall', sky: 0x1e2630 },
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
+  shopInterior: { def: shopInterior, name: '🛍️ Campus Store', sky: 0x3a2a20 },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
 for (const loc of Object.values(LOCATIONS)) {
@@ -295,7 +299,10 @@ function runInteract(it) {
     case 'exit_dorm': switchLocation('campus', { x: campus.doors.dorm.x, z: campus.doors.dorm.z + 1 }); break;
     case 'enter_bedroom': switchLocation('bedroom'); break;
     case 'exit_bedroom': switchLocation('dormCommon', { x: 8, z: -6.5 }); break;
-    case 'shop': openShop(() => setWearables(player, state.equipped)); break;
+    case 'shop': switchLocation('shopInterior'); break;
+    case 'exit_shop': switchLocation('campus', { x: campus.doors.shop.x, z: campus.doors.shop.z + 1 }); break;
+    case 'shop_buy': openShop(() => setWearables(player, state.equipped)); break;
+    case 'try_on': openTryOn(player, () => setWearables(player, state.equipped)); break;
     case 'decorate': enterEdit(); break;
     case 'basketball':
       bballActive = true;
@@ -547,7 +554,7 @@ function frame(dt, t) {
   if (!player || !currentLoc) { fx.composer.render(dt); return; }
 
   const loc = LOCATIONS[currentLoc].def;
-  const uiOpen = isModalOpen();
+  const uiOpen = isModalOpen() || isTryOnOpen();
   let moving = false;
 
   // restore the editor + refresh palette counts after the furniture shop closes

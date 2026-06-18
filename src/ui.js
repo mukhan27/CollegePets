@@ -2,6 +2,7 @@
 
 import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture } from './state.js';
 import { npcReply } from './npcs.js';
+import { wearablePreview, furniturePreview } from './itemPreview.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,7 +95,7 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
         const owned = owns(item.id);
         const equipped = state.equipped.hat === item.id || state.equipped.face === item.id || state.equipped.neck === item.id;
         html += `<div class="item-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" data-id="${item.id}">
-          <div class="item-icon">${item.icon}</div><div class="item-name">${item.name}</div>
+          <div class="item-icon"><img class="item-img" src="${wearablePreview(item.id)}" alt=""></div><div class="item-name">${item.name}</div>
           ${owned
             ? `<div class="item-status">${equipped ? 'Wearing ✓' : 'Tap to wear'}</div>`
             : `<div class="item-price">🪙 ${item.price}</div>`}</div>`;
@@ -103,7 +104,7 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
       for (const item of FURNITURE_CATALOG) {
         const n = furnitureCount(item.id);
         html += `<div class="item-card ${n > 0 ? 'owned' : ''}" data-id="${item.id}">
-          <div class="item-icon">${item.icon}</div><div class="item-name">${item.name}</div>
+          <div class="item-icon"><img class="item-img" src="${furniturePreview(item.id)}" alt=""></div><div class="item-name">${item.name}</div>
           <div class="item-status">${n > 0 ? `Own ${n} · ` : ''}🪙 ${item.price}</div>
           <div class="item-buy">Buy +1</div></div>`;
       }
