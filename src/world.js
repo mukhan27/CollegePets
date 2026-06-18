@@ -452,7 +452,7 @@ export function buildCampus() {
   }
 
   // ---- full basketball court (two hoops, centre line) ----
-  const CX = 36, CZ = 28, CL = 30, CW = 17; // centre, length(x), width(z)
+  const CX = 80, CZ = 26, CL = 36, CW = 22; // centre, length(x), width(z) — on the green at the east edge
   const court = new THREE.Mesh(new THREE.PlaneGeometry(CL, CW),
     new THREE.MeshToonMaterial({ map: courtTexture() }));
   court.rotation.x = -Math.PI / 2;
@@ -512,7 +512,7 @@ export function buildCampus() {
 
   const bushSpots = [[-24, -10], [24, 10], [-16, 26], [16, -28], [-44, 14], [44, -14], [-36, -36], [36, 36], [-64, 36], [70, -22]];
   bushSpots.forEach(([bx, bz], i) => root.add(makeBush(bx, bz, 0.8 + (i % 3) * 0.25)));
-  const rockSpots = [[-38, 22], [40, -30], [-18, -34], [20, 36], [-74, 24], [76, 14]];
+  const rockSpots = [[-38, 22], [40, -30], [-18, -34], [20, 36], [-74, 24], [96, -34]];
   rockSpots.forEach(([rx, rz], i) => {
     root.add(makeRock(rx, rz, 0.7 + (i % 3) * 0.3));
     colliders.push({ x: rx, z: rz, w: 1, d: 1 });
@@ -533,7 +533,7 @@ export function buildCampus() {
     Math.hypot(wx, wz) < 10;
   const insideBuilding = (wx, wz) => buildings.some(b =>
     Math.abs(wx - b.x) < b.w / 2 + 2 && Math.abs(wz - b.z) < b.d / 2 + 2)
-    || (Math.abs(wx - 36) < 9 && Math.abs(wz - 28) < 6);
+    || (Math.abs(wx - CX) < CL / 2 + 1.5 && Math.abs(wz - CZ) < CW / 2 + 1.5);
 
   let s = 12345;
   const rand = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };

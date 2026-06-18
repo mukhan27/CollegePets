@@ -219,16 +219,21 @@ export function courtTexture() {
   return canvasTexture(512, 320, (ctx, W, H) => {
     ctx.fillStyle = '#cf8455';
     ctx.fillRect(0, 0, W, H);
+    const keyW = 102, keyH = 110, cy = H / 2;
+    // painted keys (darker) at BOTH ends
     ctx.fillStyle = '#c2754a';
-    ctx.fillRect(W * 0.62, 0, W * 0.38, H);
+    ctx.fillRect(8, cy - keyH / 2, keyW, keyH);
+    ctx.fillRect(W - 8 - keyW, cy - keyH / 2, keyW, keyH);
     ctx.strokeStyle = '#f5f0e0';
     ctx.lineWidth = 5;
     ctx.strokeRect(8, 8, W - 16, H - 16);
     ctx.beginPath(); ctx.moveTo(W / 2, 8); ctx.lineTo(W / 2, H - 8); ctx.stroke();
-    ctx.beginPath(); ctx.arc(W / 2, H / 2, 42, 0, Math.PI * 2); ctx.stroke();
-    // key + arc at hoop end
-    ctx.strokeRect(W - 110, H / 2 - 55, 102, 110);
-    ctx.beginPath(); ctx.arc(W - 110, H / 2, 55, Math.PI / 2, Math.PI * 1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W / 2, cy, 42, 0, Math.PI * 2); ctx.stroke();
+    // key boxes + free-throw arcs, mirrored on each end
+    ctx.strokeRect(8, cy - keyH / 2, keyW, keyH);
+    ctx.beginPath(); ctx.arc(8 + keyW, cy, 55, Math.PI / 2, Math.PI * 1.5); ctx.stroke();
+    ctx.strokeRect(W - 8 - keyW, cy - keyH / 2, keyW, keyH);
+    ctx.beginPath(); ctx.arc(W - 8 - keyW, cy, 55, -Math.PI / 2, Math.PI / 2); ctx.stroke();
   });
 }
 

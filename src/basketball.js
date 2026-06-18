@@ -12,6 +12,7 @@ import { createPet } from './petFactory.js';
 
 const $ = (id) => document.getElementById(id);
 const G = 16;
+const SWEET_LO = 0.74, SWEET_HI = 0.88; // matches the green band in #bball-sweet (left 74%, width 14%)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 function launchVel(P, T, angleDeg) {
@@ -76,7 +77,9 @@ export function createBasketball({ parent, court }) {
   // ---- actions ----
   function launchShot(from, hoop, q, points, team) {
     const err = clamp(1 - q, 0, 1);
-    const t = new THREE.Vector3(hoop.x, hoop.y, hoop.z).add(new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.45), (Math.random() - 0.5) * 2).multiplyScalar(err * 1.3));
+    // squared falloff so high-quality shots are nearly dead-on; misses still scatter
+    const scatter = err * err * 0.9;
+    const t = new THREE.Vector3(hoop.x, hoop.y, hoop.z).add(new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.45), (Math.random() - 0.5) * 2).multiplyScalar(scatter));
     const v = launchVel(from, t, 55) || launchVel(from, t, 42) || new THREE.Vector3(hoop.x - from.x, 7, hoop.z - from.z);
     bs.pos.copy(from); bs.vel.copy(v); bs.inAir = true; owner = null;
     shot = { team, hoop, points, scored: false }; phase = 'shot';
@@ -85,14 +88,16 @@ export function createBasketball({ parent, court }) {
     if (phase !== 'play' || owner !== 'player' || !charging) return;
     charging = false; $('bball-meter').classList.add('hidden');
     const d = dist2(pl.position, RIGHT);
-    const open = clamp(dist2(pl.position, enemy.pos) / 3, 0.35, 1);
+    // timing: anything inside the green band counts as perfect; just outside still decent
+    const inGreen = meter >= SWEET_LO && meter <= SWEET_HI;
+    const meterF = inGreen ? 1 : clamp(1 - (Math.min(Math.abs(meter - SWEET_LO), Math.abs(meter - SWEET_HI))) / 0.16, 0.25, 1);
+    // being open / facing the rim only softens a good shot, never kills it
+    const open = clamp(dist2(pl.position, enemy.pos) / 2.4, 0.5, 1);
     const toHoop = Math.atan2(RIGHT.z - pl.position.z, RIGHT.x - pl.position.x);
-    const faceF = clamp(1 - Math.abs(angDiff(pl.rotation.y, toHoop)) / 1.2, 0.4, 1);
-    const sweet = 0.82, tol = clamp(0.34 - d * 0.012, 0.1, 0.34);
-    const meterF = clamp(1 - Math.abs(meter - sweet) / tol, 0, 1);
-    const q = meterF * open * faceF;
-    if (dist2(pl.position, enemy.pos) < 1.6 && enemy.jumping && q < 0.6) { setMsg('BLOCKED!'); bumpBall(); resetSoon('B'); return; }
-    launchShot(handOf('player'), RIGHT, q, d > 6.5 ? 3 : 2, 'A');
+    const faceF = clamp(1 - Math.abs(angDiff(pl.rotation.y, toHoop)) / 2.0, 0.6, 1);
+    const q = clamp(meterF * (0.55 + 0.45 * open * faceF), 0, 1);
+    if (dist2(pl.position, enemy.pos) < 1.5 && enemy.jumping && q < 0.55) { setMsg('BLOCKED!'); bumpBall(); resetSoon('B'); return; }
+    launchShot(handOf('player'), RIGHT, q, d > 7.5 ? 3 : 2, 'A');
   }
   function bumpBall() { bs.pos.copy(handOf('player')); bs.vel.set((Math.random() - 0.5) * 5, 4, (Math.random() - 0.5) * 5); bs.inAir = true; owner = null; shot = { team: 'A', hoop: RIGHT, points: 0, scored: true }; phase = 'shot'; }
   function playerPass() {
@@ -121,6 +126,22 @@ export function createBasketball({ parent, court }) {
     const chance = clamp(0.55 * face * (1 - d / 2.6), 0.05, 0.7);
     if (Math.random() < chance) { setMsg('STEAL! Your ball'); owner = 'player'; oppShootT = 0; enemy.blocked = false; }
     else setMsg('Missed the steal', 0.7);
+  }
+
+  // push two circular bodies (each with .x/.z) apart so they can't overlap
+  function collide(a, b, R) {
+    const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+    if (d > 0.0001 && d < R) { const p = (R - d) / 2, nx = dx / d, nz = dz / d; a.x -= nx * p; a.z -= nz * p; b.x += nx * p; b.z += nz * p; }
+  }
+  function separate() {
+    collide(pl.position, teammate.pos, 1.2);
+    collide(pl.position, enemy.pos, 1.2);
+    collide(teammate.pos, enemy.pos, 1.2);
+    pl.position.x = clamp(pl.position.x, B.minX, B.maxX); pl.position.z = clamp(pl.position.z, B.minZ, B.maxZ);
+    for (const e of [teammate, enemy]) {
+      e.pos.x = clamp(e.pos.x, B.minX, B.maxX); e.pos.z = clamp(e.pos.z, B.minZ, B.maxZ);
+      e.mesh.position.x = e.pos.x; e.mesh.position.z = e.pos.z;
+    }
   }
 
   // ---- per-frame ----
@@ -190,7 +211,7 @@ export function createBasketball({ parent, court }) {
     bs.vel.y -= G * dt; bs.pos.addScaledVector(bs.vel, dt);
     for (const h of [RIGHT, LEFT]) {
       if (bs.vel.y < 0 && prevY >= h.y && bs.pos.y < h.y) {
-        if ((bs.pos.x - h.x) ** 2 + (bs.pos.z - h.z) ** 2 < 0.4 * 0.4 && shot && !shot.scored && shot.hoop === h) onScore();
+        if ((bs.pos.x - h.x) ** 2 + (bs.pos.z - h.z) ** 2 < 0.58 * 0.58 && shot && !shot.scored && shot.hoop === h) onScore();
       }
     }
     ball.position.copy(bs.pos);
@@ -218,10 +239,18 @@ export function createBasketball({ parent, court }) {
     if (charging && !(phase === 'play' && owner === 'player')) { charging = false; $('bball-meter').classList.add('hidden'); }
     if (resetT > 0) { resetT -= dt; if (resetT <= 0) resetPossession(resetTeam); }
     if (pStealCool > 0) pStealCool -= dt;
-    if (charging) { meter += meterDir * dt * 1.5; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
+    if (charging) { meter += meterDir * dt * 1.15; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
     movePlayer(dt, t);
     aiTeammate(dt, t); aiEnemy(dt, t);
+    separate();
     if (bs.inAir) simBall(dt); else ballHold();
+    // contextual buttons: attack tools when you hold the ball, defense tools otherwise
+    const haveBall = phase === 'play' && owner === 'player';
+    const defending = phase === 'play' && owner === 'enemy';
+    $('bball-shoot').style.display = haveBall ? '' : 'none';
+    $('bball-pass').style.display = haveBall ? '' : 'none';
+    $('bball-steal').style.display = defending ? '' : 'none';
+    $('bball-block').style.display = defending ? '' : 'none';
     $('bball-score').textContent = `You ${scoreA} · Opp ${scoreB}`;
     $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft));
     if (msgT > 0) { msgT -= dt; if (msgT <= 0) setMsg(''); }

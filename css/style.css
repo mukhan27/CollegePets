@@ -258,15 +258,18 @@ html, body {
 }
 #bball-sweet { position: absolute; left: 74%; width: 14%; top: 0; bottom: 0; background: rgba(107,224,160,.55); }
 #bball-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #ffd166; }
-#bball-actions { position: absolute; right: 18px; bottom: 26px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+#bball-actions { position: absolute; right: 22px; bottom: 28px; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
 .bb-btn {
-  border: none; border-radius: 999px; padding: 12px 18px; font-size: 15px; font-weight: 700;
-  background: rgba(255,255,255,.9); color: #20303f; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  border: 1.5px solid rgba(255,255,255,.5); border-radius: 18px; padding: 16px 22px; min-width: 100px;
+  font-size: 16px; font-weight: 700; text-align: center; color: #fff; cursor: pointer;
+  background: rgba(255,255,255,.28); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  box-shadow: 0 4px 14px rgba(0,0,0,.25); text-shadow: 0 1px 3px rgba(0,0,0,.45);
   touch-action: none; user-select: none;
 }
-.bb-btn:active { transform: translateY(1px); }
-.bb-shoot { background: #e07a33; color: #fff; font-size: 20px; padding: 20px 28px; }
-#bball-top .bb-btn { padding: 6px 14px; font-size: 13px; background: rgba(255,255,255,.85); }
+.bb-btn:active { transform: translateY(1px); background: rgba(255,255,255,.42); }
+.bb-shoot { background: rgba(224,122,51,.6); border-color: rgba(255,235,210,.6); font-size: 20px; padding: 22px 30px; min-width: 124px; }
+.bb-shoot:active { background: rgba(224,122,51,.78); }
+#bball-top .bb-btn { padding: 6px 14px; min-width: 0; font-size: 13px; color: #20303f; background: rgba(255,255,255,.85); border-color: transparent; }
 #hud.playing-bball #interact-btn, #hud.playing-bball #edit-room-btn { display: none; }
 
 /* ---------- Mini-game ---------- */
