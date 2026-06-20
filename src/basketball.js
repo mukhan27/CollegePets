@@ -110,9 +110,12 @@ export function createBasketball({ parent, court }) {
     // release timing
     let timing, label = '';
     if (shooter.kind === 'human') {
-      const e = Math.abs(meter - SWEET);
-      timing = e < 0.035 ? 1.0 : e < 0.09 ? 0.82 : e < 0.16 ? 0.5 : 0.2;
-      label = e < 0.035 ? 'GREEN!' : (meter > SWEET ? 'Late' : 'Early');
+      if (isDunk) { timing = 0.95; label = 'DUNK'; } // dunks are about getting to the rim, not meter timing
+      else {
+        const e = Math.abs(meter - SWEET);
+        timing = e < 0.035 ? 1.0 : e < 0.09 ? 0.82 : e < 0.16 ? 0.5 : 0.2;
+        label = e < 0.035 ? 'GREEN!' : (meter > SWEET ? 'Late' : 'Early');
+      }
     } else {
       timing = 0.66 + Math.random() * 0.34;
     }
@@ -300,7 +303,7 @@ export function createBasketball({ parent, court }) {
   function playerShoot() {
     if (!charging || phase !== 'play' || holder !== A0) return;
     charging = false; $('bball-meter').classList.add('hidden');
-    const isDunk = airborne() && dist(A0.pos, RIGHT) < 2.3; // jump at the rim → dunk/layup
+    const isDunk = airborne() && dist(A0.pos, RIGHT) < 2.6; // jump at the rim → dunk (tap Shoot, no green needed)
     resolveShot(A0, isDunk);
   }
   function onJump() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }   // pure jump
