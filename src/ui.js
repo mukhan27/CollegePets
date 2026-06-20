@@ -1,6 +1,6 @@
 // DOM UI: modal dialogs, chat panel, shop, room decorator, pomodoro lock.
 
-import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, findFood, takeFromPantry } from './state.js';
+import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, findFood, takeFromPantry, clothesSlot } from './state.js';
 import { npcReply } from './npcs.js';
 import { wearablePreview, furniturePreview } from './itemPreview.js';
 import { track, applyNeeds, hasBuff, addFriendship, toast } from './systems.js';
@@ -166,7 +166,7 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
       if (state.coins < item.price) { notEnough(item.price); return; }
       buy(id); track('spend', item.price); render(); return;
     }
-    const slot = id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
+    const slot = clothesSlot(id);
     state.equipped[slot] = state.equipped[slot] === id ? null : id;
     save();
     if (onWearablesChanged) onWearablesChanged();

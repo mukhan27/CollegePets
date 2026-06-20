@@ -355,6 +355,56 @@ const WEARABLES = {
     head.add(g);
     return g;
   },
+  crown(head) {
+    const g = new THREE.Group();
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.42, 0.18, 14), toonMat(0xf2c14e));
+    band.castShadow = true; g.add(band);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.24, 6), toonMat(0xf2c14e));
+      spike.position.set(Math.cos(a) * 0.38, 0.18, Math.sin(a) * 0.38); g.add(spike);
+      const gem = ball(0.05, 0xe0556b); gem.position.set(Math.cos(a) * 0.38, 0.28, Math.sin(a) * 0.38); g.add(gem);
+    }
+    g.position.y = 0.52; head.add(g); return g;
+  },
+  party_hat(head) {
+    const g = new THREE.Group();
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.82, 16), toonMat(0xff5fa2));
+    cone.castShadow = true; g.add(cone);
+    for (const [y, c] of [[0.05, 0xffd166], [-0.18, 0x6be0a0]]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.03, 6, 16), toonMat(c)); ring.rotation.x = Math.PI / 2; ring.position.y = y; g.add(ring); }
+    const pom = ball(0.1, 0xfff0a0); pom.position.y = 0.46; g.add(pom);
+    g.position.y = 0.56; head.add(g); return g;
+  },
+  headphones(head) {
+    const g = new THREE.Group();
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 8, 20, 0, Math.PI), toonMat(0x2a2d34));
+    band.castShadow = true; g.add(band);
+    for (const s of [-1, 1]) {
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.13, 14), toonMat(0x33353b));
+      cup.rotation.z = Math.PI / 2; cup.position.set(s * 0.5, 0.02, 0); g.add(cup);
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 12), toonMat(0xff5fa2));
+      pad.rotation.z = Math.PI / 2; pad.position.set(s * 0.55, 0.02, 0); g.add(pad);
+    }
+    g.position.y = 0.16; head.add(g); return g;
+  },
+  sunglasses(head) {
+    const g = new THREE.Group();
+    const lensMat = toonMat(0x14181d);
+    for (const s of [-1, 1]) {
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 14), toonMat(0x2a2420));
+      rim.position.set(s * 0.2, 0.1, 0.47); g.add(rim);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.14, 14), lensMat);
+      lens.position.set(s * 0.2, 0.1, 0.475); g.add(lens);
+    }
+    const bridge = box(0.14, 0.03, 0.03, 0x2a2420); bridge.position.set(0, 0.12, 0.48); g.add(bridge);
+    head.add(g); return g;
+  },
+  flower(head) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; const petal = ball(0.08, 0xff8fb0, 1, 1, 0.6); petal.position.set(Math.cos(a) * 0.1, Math.sin(a) * 0.1, 0); g.add(petal); }
+    const center = ball(0.06, 0xffd166); g.add(center);
+    g.position.set(0.26, 0.45, 0.12); head.add(g); return g;
+  },
 };
 
 function capMesh(head, color) {

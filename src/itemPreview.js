@@ -5,11 +5,12 @@
 import * as THREE from 'three';
 import { createPet } from './petFactory.js';
 import { FURNITURE } from './furniture.js';
+import { clothesSlot } from './state.js';
 
 const SIZE = 140;
 let renderer, scene, camera;
 const cache = new Map();
-const slotOf = (id) => id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
+const slotOf = (id) => clothesSlot(id);
 
 function init() {
   if (renderer) return;

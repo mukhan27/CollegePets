@@ -3,11 +3,11 @@
 
 import * as THREE from 'three';
 import { createPet, setWearables } from './petFactory.js';
-import { state, save, owns, buy, CATALOG } from './state.js';
+import { state, save, owns, buy, CATALOG, clothesSlot } from './state.js';
 import { wearablePreview } from './itemPreview.js';
 
 const $ = (id) => document.getElementById(id);
-const slotOf = (id) => id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
+const slotOf = (id) => clothesSlot(id);
 
 let renderer, scene, camera, pet;
 let raf = null, spin = 0.4, dragging = false, lastX = 0, onChanged = null;

@@ -13,13 +13,18 @@ export const PET_TYPES = [
 // Wearables attach to the pet's head/neck. Decor goes in the dorm bedroom.
 export const CATALOG = {
   clothes: [
-    { id: 'cap_red',   icon: '🧢', name: 'Red Cap',      price: 50 },
-    { id: 'cap_blue',  icon: '🧢', name: 'Blue Cap',     price: 50 },
-    { id: 'beanie',    icon: '🎿', name: 'Beanie',       price: 60 },
-    { id: 'gradcap',   icon: '🎓', name: 'Grad Cap',     price: 150 },
-    { id: 'bow',       icon: '🎀', name: 'Hair Bow',     price: 40 },
-    { id: 'glasses',   icon: '👓', name: 'Smart Glasses',price: 80 },
-    { id: 'scarf',     icon: '🧣', name: 'Team Scarf',   price: 70 },
+    { id: 'cap_red',    icon: '🧢', name: 'Red Cap',       price: 50,  slot: 'hat' },
+    { id: 'cap_blue',   icon: '🧢', name: 'Blue Cap',      price: 50,  slot: 'hat' },
+    { id: 'beanie',     icon: '🎿', name: 'Beanie',        price: 60,  slot: 'hat' },
+    { id: 'gradcap',    icon: '🎓', name: 'Grad Cap',      price: 150, slot: 'hat' },
+    { id: 'party_hat',  icon: '🎉', name: 'Party Hat',     price: 45,  slot: 'hat' },
+    { id: 'flower',     icon: '🌸', name: 'Flower',        price: 55,  slot: 'hat' },
+    { id: 'headphones', icon: '🎧', name: 'Headphones',    price: 110, slot: 'hat' },
+    { id: 'crown',      icon: '👑', name: 'Golden Crown',  price: 220, slot: 'hat' },
+    { id: 'bow',        icon: '🎀', name: 'Hair Bow',      price: 40,  slot: 'hat' },
+    { id: 'glasses',    icon: '👓', name: 'Smart Glasses', price: 80,  slot: 'face' },
+    { id: 'sunglasses', icon: '🕶️', name: 'Shades',        price: 90,  slot: 'face' },
+    { id: 'scarf',      icon: '🧣', name: 'Team Scarf',    price: 70,  slot: 'neck' },
   ],
   decor: [
     { id: 'rug_blue',    icon: '🟦', name: 'Blue Rug',     price: 40,  slot: 'rug' },
@@ -37,6 +42,12 @@ export const CATALOG = {
 
 export function findItem(id) {
   return CATALOG.clothes.find(i => i.id === id) || CATALOG.decor.find(i => i.id === id) || null;
+}
+
+// which equip slot a clothing item uses (hat / face / neck)
+export function clothesSlot(id) {
+  const i = CATALOG.clothes.find(c => c.id === id);
+  return i ? i.slot : 'hat';
 }
 
 // Placeable bedroom furniture — bought repeatably; players own a quantity of
