@@ -581,11 +581,20 @@ function frame(dt, t) {
     basketball.update(dt, t);
     // same 3rd-person follow as the campus but pulled in closer to the player
     const off = BBALL_CAM_OFFSET;
+    const px = player.position.x, py = player.position.y, pz = player.position.z;
     const bcy = Math.cos(input.camYaw), bsy = Math.sin(input.camYaw);
-    const bx = player.position.x + (off.x * bcy + off.z * bsy);
-    const bz = player.position.z + (-off.x * bsy + off.z * bcy);
-    camera.position.lerp(new THREE.Vector3(bx, player.position.y + off.y, bz), Math.min(1, dt * 6));
-    camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
+    let bx = px + (off.x * bcy + off.z * bsy);
+    let bz = pz + (-off.x * bsy + off.z * bcy);
+    let by = py + off.y, lx = px, ly = py + 1.2, lz = pz, lerpK = Math.min(1, dt * 6);
+    const dunk = basketball.dunkCam();    // cinematic zoom while dunking
+    if (dunk) {
+      const s = dunk.strength, L = THREE.MathUtils.lerp;
+      bx = L(bx, px + (bx - px) * 0.5, s); bz = L(bz, pz + (bz - pz) * 0.5, s); by = L(by, py + off.y * 0.6, s);
+      lx = L(lx, dunk.focus.x, s * 0.5); ly = L(ly, dunk.focus.y, s * 0.6); lz = L(lz, dunk.focus.z, s * 0.5);
+      lerpK = Math.min(1, dt * 10);
+    }
+    camera.position.lerp(new THREE.Vector3(bx, by, bz), lerpK);
+    camera.lookAt(lx, ly, lz);
     fx.composer.render(dt);
     return;
   }

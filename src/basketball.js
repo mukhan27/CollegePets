@@ -44,7 +44,16 @@ export function createBasketball({ parent, court }) {
   }
   const BLUE = 0x3a78c8, RED = 0xd14b4b;
   const tmPet = makeNpc('dog', BLUE), e1Pet = makeNpc('bear', RED), e2Pet = makeNpc('cat', RED);
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 14), toonMat(0xe07a33)); ball.castShadow = true; group.add(ball);
+  // a real-looking basketball: orange sphere + black panel seams
+  const ball = new THREE.Group();
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 22, 16), toonMat(0xe07a33));
+  ballMesh.castShadow = true; ball.add(ballMesh);
+  const seamMat = new THREE.MeshBasicMaterial({ color: 0x140d05 });
+  for (const [rx, ry] of [[Math.PI / 2, 0], [0, 0], [0, Math.PI / 2]]) {
+    const s = new THREE.Mesh(new THREE.TorusGeometry(0.243, 0.012, 6, 30), seamMat);
+    s.rotation.set(rx, ry, 0); ball.add(s);
+  }
+  group.add(ball);
   const bs = { pos: new THREE.Vector3(), vel: new THREE.Vector3() };
 
   // ---- agents: one uniform shape for human + AI so logic is generic ----
@@ -65,6 +74,7 @@ export function createBasketball({ parent, court }) {
   let holder = A0, phase = 'play';      // play | shot | loose | pass | over
   let shot = null, passData = null, looseT = 0;
   let charging = false, meter = 0, meterDir = 1;   // shot charge meter (works on the ground or in the air)
+  let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
@@ -126,6 +136,7 @@ export function createBasketball({ parent, court }) {
     const from = handPoint(shooter);
     phase = 'shot'; holder = null; charging = false; $('bball-meter').classList.add('hidden');
     if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
+    if (isDunk && shooter.kind === 'human') { dunkT = 1.2; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z); if (make) setMsg('DUNK! 💥', 1.3); } // cinematic zoom
     shot = { team: shooter.team, hoop, points, willScore: make, type };
     const target = make
       ? new THREE.Vector3(hoop.x, hoop.y, hoop.z)
@@ -158,7 +169,7 @@ export function createBasketball({ parent, court }) {
     if (bs.pos.y <= 0.24) { bs.pos.y = 0.24; bs.vel.y = Math.abs(bs.vel.y) * 0.5; bs.vel.x *= 0.7; bs.vel.z *= 0.7; if (phase === 'shot') { phase = 'loose'; looseT = 0; shot = null; } }
     if (bs.pos.x < B.minX || bs.pos.x > B.maxX) { bs.vel.x *= -0.6; bs.pos.x = clamp(bs.pos.x, B.minX, B.maxX); }
     if (bs.pos.z < B.minZ || bs.pos.z > B.maxZ) { bs.vel.z *= -0.6; bs.pos.z = clamp(bs.pos.z, B.minZ, B.maxZ); }
-    ball.position.copy(bs.pos);
+    ball.position.copy(bs.pos); ball.rotation.x -= dt * 7; ball.rotation.y += dt * 3; // backspin
     if (phase === 'loose') {
       looseT += dt;
       if (bs.pos.y < 1.7 && looseT > 0.25) {
@@ -310,7 +321,8 @@ export function createBasketball({ parent, court }) {
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
     if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover(); }
     if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
-    if (charging) { meter += meterDir * dt * 1.3; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
+    if (charging) { const rate = airborne() ? 2.7 : 1.3; meter += meterDir * dt * rate; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
+    if (dunkT > 0) dunkT -= dt;
     if (pStealCool > 0) pStealCool -= dt;
 
     moveHuman(dt);
@@ -376,7 +388,13 @@ export function createBasketball({ parent, court }) {
     $('bball-hud').classList.remove('hidden');
     $('hud').classList.add('playing-bball');
   }
-  function exit() { active = false; group.visible = false; if (pl) pl.position.y = 0; input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
+  function exit() { active = false; group.visible = false; dunkT = 0; if (pl) pl.position.y = 0; input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
 
-  return { enter, exit, update, group, isActive: () => active };
+  // camera hint for main.js: during a dunk, returns a 0→1→0 zoom strength + focus
+  function dunkCam() {
+    if (dunkT <= 0) return null;
+    return { strength: Math.sin(clamp(dunkT / 1.2, 0, 1) * Math.PI), focus: dunkFocus };
+  }
+
+  return { enter, exit, update, group, dunkCam, isActive: () => active };
 }
