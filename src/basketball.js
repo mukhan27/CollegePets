@@ -75,6 +75,7 @@ export function createBasketball({ parent, court }) {
   let shot = null, passData = null, looseT = 0;
   let charging = false, meter = 0, meterDir = 1;   // shot charge meter (works on the ground or in the air)
   let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
+  let enemiesPaused = true;        // TEMP: opponents frozen so mechanics can be tested
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
@@ -247,6 +248,7 @@ export function createBasketball({ parent, court }) {
 
   // ---- AI ----
   function aiAgent(a, dt, t) {
+    if (enemiesPaused && a.team === 'B') { driveAI(a, a.pos.x, a.pos.z, 0, dt); return; } // frozen for testing
     if (phase === 'loose' || (phase === 'shot' && shot)) { driveAI(a, bs.pos.x, bs.pos.z, AI_SPD, dt); return; } // crash the boards
     if (phase !== 'play') { driveAI(a, a.pos.x, a.pos.z, 0, dt); return; }
     if (teamHas(a.team)) aiOffense(a, dt, t); else aiDefense(a, dt, t);
@@ -396,5 +398,6 @@ export function createBasketball({ parent, court }) {
     return { strength: Math.sin(clamp(dunkT / 1.2, 0, 1) * Math.PI), focus: dunkFocus };
   }
 
-  return { enter, exit, update, group, dunkCam, isActive: () => active };
+  return { enter, exit, update, group, dunkCam, isActive: () => active,
+    setEnemiesPaused: (v) => { enemiesPaused = v; } };
 }
