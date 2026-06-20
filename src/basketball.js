@@ -17,6 +17,7 @@ const $ = (id) => document.getElementById(id);
 const G = 16;
 const SWEET = 0.81;            // centre of the green meter band
 const HUMAN_SPD = 8.6, AI_SPD = 7.8, ACCEL = 9, JUMP_V = 6.3;
+const APEX = JUMP_V * JUMP_V / (2 * G);        // peak jump height — jump-shot timing peaks here
 const GRAB = 1.25, SHOTCLOCK = 16, DIFF = 0.92; // DIFF = opponent shooting factor
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
@@ -64,7 +65,7 @@ export function createBasketball({ parent, court }) {
   let pl = null;
   let holder = A0, phase = 'play';      // play | shot | loose | pass | over
   let shot = null, passData = null, looseT = 0;
-  let charging = false, meter = 0, meterDir = 1;
+  let armed = false, meter = 0;   // armed = a jump shot is gathering; meter = release value
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
@@ -82,6 +83,7 @@ export function createBasketball({ parent, court }) {
   function giveBall(a, msg) {
     holder = a; phase = 'play'; shot = null; passData = null;
     shotClock = SHOTCLOCK; a.shootGather = 0; a.shootT = 0;
+    armed = false; $('bball-meter').classList.add('hidden');
     if (msg) setMsg(msg, 0.8);
   }
   function turnover() {
@@ -121,7 +123,7 @@ export function createBasketball({ parent, court }) {
     const make = !blocked && Math.random() < pct;
 
     const from = handPoint(shooter);
-    phase = 'shot'; holder = null;
+    phase = 'shot'; holder = null; armed = false; $('bball-meter').classList.add('hidden');
     if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
     shot = { team: shooter.team, hoop, points, willScore: make, type };
     const target = make
@@ -278,17 +280,25 @@ export function createBasketball({ parent, court }) {
   }
 
   // ---- player actions ----
-  function playerShoot() {
-    if (!charging || phase !== 'play' || holder !== A0) return;
-    charging = false; $('bball-meter').classList.add('hidden');
-    resolveShot(A0);
+  const airborne = () => A0.jumping || A0.jy > 0.05;
+  function armJump() { A0.vy = JUMP_V; A0.jumping = true; armed = true; $('bball-meter').classList.remove('hidden'); }
+  function cancelArm() { armed = false; $('bball-meter').classList.add('hidden'); }
+  // Shoot: tap once to gather into a jump, tap again at the top of the jump to release.
+  function onShoot() {
+    if (phase !== 'play' || holder !== A0) return;
+    if (armed && airborne()) { meter = clamp(A0.jy / APEX, 0, 1); cancelArm(); resolveShot(A0); }
+    else if (!airborne()) armJump();
   }
+  // Jump: jump-shot when holding the ball (dunk at the rim); a free hop on defense.
+  function onJump() {
+    if (phase === 'play' && holder === A0 && !airborne()) {
+      if (dist(A0.pos, RIGHT) < 3.0) { resolveShot(A0, true); return; } // driving dunk
+      armJump(); return;                                                // jump shot — release with Shoot
+    }
+    if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; }             // defensive / rebound hop
+  }
+  function onBlock() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } } // contest hop
   function playerPass() { if (phase === 'play' && holder === A0) { passTo(A0, A1); setMsg('Pass', 0.5); } }
-  function playerJump() {
-    if (!A0.jumping) { A0.vy = JUMP_V; A0.jumping = true; }
-    if (phase === 'play' && holder === A0 && dist(A0.pos, RIGHT) < 3.0) resolveShot(A0, true); // driving dunk
-  }
-  function playerBlock() { if (!A0.jumping) { A0.vy = JUMP_V; A0.jumping = true; } } // hand up — contest is read on the shot
   function playerSteal() {
     if (phase !== 'play' || !holder || holder.team !== 'B' || pStealCool > 0) return;
     pStealCool = 0.7;
@@ -305,8 +315,12 @@ export function createBasketball({ parent, court }) {
     if (phase === 'over') return;
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
     if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover(); }
-    if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
-    if (charging) { meter += meterDir * dt * 1.3; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
+    // jump-shot release meter: fills with your jump height — tap Shoot near the top (green)
+    if (armed && !(phase === 'play' && holder === A0)) cancelArm();
+    if (armed) {
+      $('bball-fill').style.width = (clamp(A0.jy / APEX, 0, 1) * 100) + '%';
+      if (!A0.jumping && A0.jy <= 0.01) cancelArm(); // landed without releasing (pump fake)
+    }
     if (pStealCool > 0) pStealCool -= dt;
 
     moveHuman(dt);
@@ -341,20 +355,20 @@ export function createBasketball({ parent, court }) {
   }
 
   // ---- buttons (once) ----
-  const sb = $('bball-shoot');
-  sb.addEventListener('pointerdown', (e) => { e.preventDefault(); if (phase === 'play' && holder === A0) { charging = true; meter = 0; meterDir = 1; $('bball-meter').classList.remove('hidden'); } });
-  const rel = (e) => { if (e) e.preventDefault(); if (charging) playerShoot(); };
-  sb.addEventListener('pointerup', rel); sb.addEventListener('pointerleave', rel); sb.addEventListener('pointercancel', rel);
-  $('bball-pass').addEventListener('click', playerPass);
-  $('bball-steal').addEventListener('click', playerSteal);
-  $('bball-jump').addEventListener('click', playerJump);
-  $('bball-block').addEventListener('click', playerBlock);
+  // pointerdown (not click) so they fire instantly and work mid-move with a
+  // second thumb on the joystick (multi-touch)
+  const press = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
+  press('bball-shoot', onShoot);
+  press('bball-pass', playerPass);
+  press('bball-steal', playerSteal);
+  press('bball-jump', onJump);
+  press('bball-block', onBlock);
   $('bball-quit').addEventListener('click', () => endGame());
 
   function enter(player, cb) {
     pl = player; onExit = cb; active = true;
     A0.mesh = pl; A0.pos = pl.position;
-    scoreA = 0; scoreB = 0; makes = 0; timeLeft = 90; charging = false;
+    scoreA = 0; scoreB = 0; makes = 0; timeLeft = 90; armed = false;
     for (const a of agents) { a.vx = a.vz = a.jy = a.vy = 0; a.jumping = false; a.shootGather = 0; a.shootT = 0; a.stealCd = 0; }
     msgT = 0; setMsg('');
     // initial tip-off placement (this is the only positioning — play never resets after)
