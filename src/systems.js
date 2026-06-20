@@ -128,12 +128,22 @@ function genQuests() {
   save();
 }
 
+const stampToDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m, d); };
+const dayDiff = (a, b) => Math.round((stampToDate(a) - stampToDate(b)) / 86400000);
+
 export function newDayCheck() {
   const today = todayStamp();
   if (state.dayStamp !== today) {
     if (state.dayStamp !== null) { state.day++; state.stats.daysActive = (state.stats.daysActive || 1) + 1; }
     state.dayStamp = today;
     state.daily = { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] };
+    // daily login streak bonus
+    const prev = state.lastLogin;
+    state.loginStreak = (prev && dayDiff(today, prev) === 1) ? (state.loginStreak || 1) + 1 : 1;
+    state.lastLogin = today;
+    const bonus = 20 + Math.min(state.loginStreak, 7) * 10;
+    addCoins(bonus);
+    setTimeout(() => toast(`Day ${state.loginStreak} streak! +🪙${bonus}`, '🎁'), 400);
     genQuests();
     save();
     return true;

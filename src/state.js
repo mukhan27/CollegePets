@@ -100,6 +100,7 @@ function defaults() {
     needsTick: Date.now(),     // last time needs decayed (for offline decay)
     level: 1, xp: 0,
     day: 1, dayStamp: null,    // YYYY-M-D the current game day was started on
+    loginStreak: 0, lastLogin: null, // daily-streak bonus
     quests: [], questStamp: null,
     daily: { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] }, // resets each day
     friends: {},               // student name -> friendship points
