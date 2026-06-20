@@ -38,7 +38,7 @@ out, and play. Tap **📋** (top-right) any time for the **Campus** panel:
 - **🐾 Pick a pet** — cat, dog, bear, duck, or hamster, with a custom name.
 - **💬 Chat & gift** — walk up to any wandering student and talk (each has a personality); 🎁 gift them snacks to grow your friendship.
 - **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). Focus mode locks the screen; completing a session pays coins (a ☕ cold-brew buff boosts the payout).
-- **🏀 Basketball** — a full-court 3D 3rd-person pickup game (you + an animal teammate vs an opponent): move, aim, time the **Shoot** meter, **Pass**, **Jump**/dunk, **Block** & **Steal**. Coins for baskets.
+- **🏀 Basketball** — a skill-based 2-on-2 pickup game: real make-% from your release **timing × contest × shot type/distance**, live rebounds off misses, momentum movement, and smart defense. Move, time the **Shoot** meter, **Pass**, **Jump**/dunk, **Block** & **Steal** — possession flows, nothing teleports. Coins for baskets.
 - **🍽️ Dining Hall** — order food that restores your needs, sit at the communal tables, or **work a cooking shift** (serve the right dish before the timer) for tips.
 - **🎮 Student Union** — the campus arcade: **Trivia** and **Memory** mini-games, a coffee bar, hangout couches, a dance floor and a quest board.
 - **🏛️ Lecture Hall** — a big-screen hall with tiered seating + stage, and a study mezzanine of pomodoro desks upstairs.

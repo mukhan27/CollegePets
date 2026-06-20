@@ -569,7 +569,7 @@ function startGame() {
   showModal(`Welcome to Birchwood University, ${state.petName}! 🎉`,
     `Roam the campus with the <b>joystick</b> (or WASD) and hang out. Tap <b>📋</b> (top-right) for your <b>trophies, friends & stats</b>.<br><br>
      📚 <b>Library</b> — pomodoro study sessions earn coins<br>
-     🏀 <b>Court</b> — a full 3-on-3 pickup game<br>
+     🏀 <b>Court</b> — a skill-based 2-on-2 pickup game<br>
      🍽️ <b>Dining Hall</b> — grab food, fill up, work a shift<br>
      🎮 <b>Student Union</b> — arcade games & coffee<br>
      🦆 <b>Birch Pond</b> — fish and relax<br>

@@ -1,7 +1,9 @@
-// Basketball mini-game — played on the campus court in the main (toon-shaded)
-// scene with the normal 3rd-person follow camera, so the art style matches.
-// You (your pet) + an NPC teammate vs an NPC enemy. Pass, shoot, jump/dunk,
-// and block. Designed entity-first so it can become multiplayer later.
+// Basketball — a 2-on-2 half-court-feel pickup game in the campus toon scene
+// with the normal 3rd-person follow camera. Inspired by NBA 2K / Hoop Land:
+// shots are decided by a realistic make-% (release timing × contest × shot type
+// & distance), misses brick into live rebounds, defense actually contests, and
+// possession NEVER teleports players — the ball flows (makes inbound, misses are
+// rebounded, steals/blocks are live). Entity-first so it can go multiplayer.
 
 import * as THREE from 'three';
 import { input } from './input.js';
@@ -13,7 +15,9 @@ import { createPet } from './petFactory.js';
 
 const $ = (id) => document.getElementById(id);
 const G = 16;
-const SWEET_LO = 0.74, SWEET_HI = 0.88; // matches the green band in #bball-sweet (left 74%, width 14%)
+const SWEET = 0.81;            // centre of the green meter band
+const HUMAN_SPD = 8.6, AI_SPD = 7.8, ACCEL = 9, JUMP_V = 6.3;
+const GRAB = 1.25, SHOTCLOCK = 16, DIFF = 0.92; // DIFF = opponent shooting factor
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 function launchVel(P, T, angleDeg) {
@@ -27,252 +31,318 @@ function launchVel(P, T, angleDeg) {
 
 export function createBasketball({ parent, court }) {
   const B = court.bounds, RIGHT = court.right, LEFT = court.left; // team A attacks RIGHT, team B attacks LEFT
+  const CC = court.center;
   const group = new THREE.Group(); group.visible = false; parent.add(group);
 
-  // NPCs are real animal pets (matching the campus art) wearing a team-colored
-  // jersey band so you can tell teammate from opponent at a glance.
   function makeNpc(type, teamColor) {
     const pet = createPet(type, {});
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 8, 18), toonMat(teamColor));
     band.rotation.x = Math.PI / 2; band.position.y = 0.55; band.castShadow = true;
     pet.add(band);
     group.add(pet);
-    return { mesh: pet, pos: new THREE.Vector3(), jy: 0, vy: 0, jumping: false };
+    return pet;
   }
-  const teammate = makeNpc('dog', 0x3a78c8), enemy = makeNpc('bear', 0xd14b4b);
+  const BLUE = 0x3a78c8, RED = 0xd14b4b;
+  const tmPet = makeNpc('dog', BLUE), e1Pet = makeNpc('bear', RED), e2Pet = makeNpc('cat', RED);
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 14), toonMat(0xe07a33)); ball.castShadow = true; group.add(ball);
-  const bs = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), inAir: false };
+  const bs = { pos: new THREE.Vector3(), vel: new THREE.Vector3() };
+
+  // ---- agents: one uniform shape for human + AI so logic is generic ----
+  function agent(kind, team, mesh, attack, defend, seed) {
+    return { kind, team, mesh, pos: kind === 'human' ? null : new THREE.Vector3(), attack, defend,
+      vx: 0, vz: 0, jy: 0, vy: 0, jumping: false, seed, _moving: false,
+      shootGather: 0, shootT: 0, stealCd: 0 };
+  }
+  const A0 = agent('human', 'A', null, RIGHT, LEFT, 0.0);
+  const A1 = agent('ai', 'A', tmPet, RIGHT, LEFT, 1.3);
+  const B0 = agent('ai', 'B', e1Pet, LEFT, RIGHT, 2.1);
+  const B1 = agent('ai', 'B', e2Pet, LEFT, RIGHT, 3.7);
+  const agents = [A0, A1, B0, B1];
+  const teamA = [A0, A1], teamB = [B0, B1];
 
   // state
-  let pl = null;                 // the player's pet
-  let pjy = 0, pvy = 0, pjump = false;
-  let owner = 'player';          // player | tm | enemy | null
-  let phase = 'play';            // play | shot | over
-  let shot = null;               // { team:'A'|'B', target, points, scored }
+  let pl = null;
+  let holder = A0, phase = 'play';      // play | shot | loose | pass | over
+  let shot = null, passData = null, looseT = 0;
   let charging = false, meter = 0, meterDir = 1;
-  let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 75;
-  let msgT = 0, oppShootT = 0, stealCool = 0, pStealCool = 0, resetT = 0, resetTeam = null;
+  let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
+  let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
 
-  const setMsg = (t, d = 1.2) => { $('bball-msg').textContent = t; msgT = t ? d : 0; };
-  const teamOf = (o) => (o === 'enemy') ? 'B' : 'A';
-  const ent = (o) => o === 'player' ? { pos: pl.position, jy: pjy } : (o === 'tm' ? teammate : enemy);
-  function handOf(o) { const e = ent(o); const r = o === 'player' ? pl.rotation.y : (ent(o).mesh ? ent(o).mesh.rotation.y : 0); return new THREE.Vector3(e.pos.x, 1.5 + (e.jy || 0), e.pos.z); }
-  const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const setMsg = (t, d = 1.1) => { $('bball-msg').textContent = t; msgT = t ? d : 0; };
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const teamHas = (team) => holder && holder.team === team && phase === 'play';
+  const matesOf = (a) => (a.team === 'A' ? teamA : teamB).filter(x => x !== a);
+  const oppsOf = (a) => a.team === 'A' ? teamB : teamA;
+  const nearestOpp = (a) => oppsOf(a).reduce((b, c) => dist(c.pos, a.pos) < dist(b.pos, a.pos) ? c : b);
+  const rotOf = (a) => a.kind === 'human' ? pl.rotation.y : a.mesh.rotation.y;
+  const handPoint = (a) => { const r = rotOf(a); return new THREE.Vector3(a.pos.x + Math.sin(r) * 0.45, 1.6 + a.jy, a.pos.z + Math.cos(r) * 0.45); };
+  const nearestAgentToBall = () => agents.reduce((b, c) => dist(c.pos, bs.pos) < dist(b.pos, bs.pos) ? c : b);
 
-  function resetPossession(team) {
-    phase = 'play'; bs.inAir = false; shot = null; oppShootT = 0; stealCool = 0;
-    if (team === 'A') {
-      owner = 'player'; setMsg('Your ball', 0.9);
-      pl.position.set(court.center.x - 6, 0, court.center.z + (Math.random() - 0.5) * 6);
-      enemy.pos.set(pl.position.x + 3, 0, pl.position.z);
-      teammate.pos.set(court.center.x + 3, 0, court.center.z + (Math.random() > 0.5 ? 5 : -5));
+  function giveBall(a, msg) {
+    holder = a; phase = 'play'; shot = null; passData = null;
+    shotClock = SHOTCLOCK; a.shootGather = 0; a.shootT = 0;
+    if (msg) setMsg(msg, 0.8);
+  }
+  function turnover() {
+    const a = oppsOf(holder).reduce((b, c) => dist(c.pos, bs.pos) < dist(b.pos, bs.pos) ? c : b);
+    giveBall(a, 'Shot clock!');
+  }
+
+  // ---- shot resolution (the heart of the skill) ----
+  function resolveShot(shooter, isDunk = false) {
+    const hoop = shooter.attack;
+    const d = dist(shooter.pos, hoop);
+    const type = (isDunk || d < 2.0) ? 'rim' : d < 6.8 ? 'mid' : 'three';
+    const base = type === 'rim' ? (isDunk ? 0.93 : 0.7) : type === 'mid' ? 0.45 : 0.33;
+    const points = type === 'three' ? 3 : 2;
+    // release timing
+    let timing, label = '';
+    if (shooter.kind === 'human') {
+      const e = Math.abs(meter - SWEET);
+      timing = e < 0.035 ? 1.0 : e < 0.09 ? 0.82 : e < 0.16 ? 0.5 : 0.2;
+      label = e < 0.035 ? 'GREEN!' : (meter > SWEET ? 'Late' : 'Early');
     } else {
-      owner = 'enemy'; setMsg('Defend!', 0.9);
-      enemy.pos.set(court.center.x + 5, 0, court.center.z + (Math.random() - 0.5) * 4);
-      teammate.pos.set(court.center.x, 0, court.center.z + 4);
+      timing = 0.66 + Math.random() * 0.34;
     }
-  }
-  const resetSoon = (team, delay = 1.1) => { resetT = delay; resetTeam = team; };
+    // contest from the nearest defender
+    const def = nearestOpp(shooter), dd = dist(def.pos, shooter.pos);
+    let contest = dd > 3.2 ? 1.0 : dd > 2.2 ? 0.82 : dd > 1.4 ? 0.58 : 0.36;
+    if (def.jumping && dd < 2.2) contest *= 0.6;          // hand in the face
+    // facing the rim (turnaround/fadeaway penalty) + shooting on the move
+    const toH = Math.atan2(hoop.z - shooter.pos.z, hoop.x - shooter.pos.x);
+    const face = clamp(1 - Math.abs(angDiff(rotOf(shooter), toH)) / 2.4, 0.55, 1);
+    const movePen = Math.hypot(shooter.vx, shooter.vz) > 4 ? 0.86 : 1;
+    let pct = base * timing * contest * face * movePen;
+    if (shooter.team === 'B') pct *= DIFF;
+    pct = clamp(pct, 0.03, 0.95);
+    // block on a smothered, mistimed shot
+    const blocked = dd < 1.3 && def.jumping && timing < 0.55 && Math.random() < 0.55;
+    const make = !blocked && Math.random() < pct;
 
-  // ---- actions ----
-  function launchShot(from, hoop, q, points, team) {
-    const err = clamp(1 - q, 0, 1);
-    // squared falloff so high-quality shots are nearly dead-on; misses still scatter
-    const scatter = err * err * 0.9;
-    const t = new THREE.Vector3(hoop.x, hoop.y, hoop.z).add(new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.45), (Math.random() - 0.5) * 2).multiplyScalar(scatter));
-    const v = launchVel(from, t, 55) || launchVel(from, t, 42) || new THREE.Vector3(hoop.x - from.x, 7, hoop.z - from.z);
-    bs.pos.copy(from); bs.vel.copy(v); bs.inAir = true; owner = null;
-    shot = { team, hoop, points, scored: false }; phase = 'shot';
+    const from = handPoint(shooter);
+    phase = 'shot'; holder = null;
+    if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
+    shot = { team: shooter.team, hoop, points, willScore: make, type };
+    const target = make
+      ? new THREE.Vector3(hoop.x, hoop.y, hoop.z)
+      : new THREE.Vector3(hoop.x + (Math.random() - 0.5) * 1.2, hoop.y + 0.05, hoop.z + (Math.random() - 0.5) * 1.2);
+    const v = launchVel(from, target, type === 'rim' ? 47 : 53) || launchVel(from, target, 40) || new THREE.Vector3(target.x - from.x, 7, target.z - from.z);
+    bs.pos.copy(from); bs.vel.copy(v);
+    if (shooter.kind === 'human') setMsg(`${label}${make ? ' ✓' : ''}${contest < 0.6 ? ' · contested' : ''}`, 0.9);
   }
-  function playerShoot() {
-    if (phase !== 'play' || owner !== 'player' || !charging) return;
-    charging = false; $('bball-meter').classList.add('hidden');
-    const d = dist2(pl.position, RIGHT);
-    // timing: anything inside the green band counts as perfect; just outside still decent
-    const inGreen = meter >= SWEET_LO && meter <= SWEET_HI;
-    const meterF = inGreen ? 1 : clamp(1 - (Math.min(Math.abs(meter - SWEET_LO), Math.abs(meter - SWEET_HI))) / 0.16, 0.25, 1);
-    // being open / facing the rim only softens a good shot, never kills it
-    const open = clamp(dist2(pl.position, enemy.pos) / 2.4, 0.5, 1);
-    const toHoop = Math.atan2(RIGHT.z - pl.position.z, RIGHT.x - pl.position.x);
-    const faceF = clamp(1 - Math.abs(angDiff(pl.rotation.y, toHoop)) / 2.0, 0.6, 1);
-    const q = clamp(meterF * (0.55 + 0.45 * open * faceF), 0, 1);
-    if (dist2(pl.position, enemy.pos) < 1.5 && enemy.jumping && q < 0.55) { setMsg('BLOCKED!'); bumpBall(); resetSoon('B'); return; }
-    launchShot(handOf('player'), RIGHT, q, d > 7.5 ? 3 : 2, 'A');
-  }
-  function bumpBall() { bs.pos.copy(handOf('player')); bs.vel.set((Math.random() - 0.5) * 5, 4, (Math.random() - 0.5) * 5); bs.inAir = true; owner = null; shot = { team: 'A', hoop: RIGHT, points: 0, scored: true }; phase = 'shot'; }
-  function playerPass() {
-    if (phase !== 'play' || owner !== 'player') return;
-    const contested = dist2(pl.position, enemy.pos) < 2.4;
-    bs.pos.copy(handOf('player')); bs.inAir = false; owner = 'tm';
-    teammate.catchT = 0.0; teammate.willShoot = 0.55; teammate.contested = contested;
-    setMsg('Pass!', 0.8);
-  }
-  function playerJump() {
-    if (!pjump) { pvy = 6.5; pjump = true; }
-    if (phase === 'play' && owner === 'player' && dist2(pl.position, RIGHT) < 3.2) { setMsg('DUNK! +2'); launchShot(new THREE.Vector3(RIGHT.x - 0.6, 3.1, RIGHT.z), RIGHT, 1, 2, 'A'); }
-  }
-  function playerBlock() {
-    if (!pjump) { pvy = 6.5; pjump = true; }
-    if (phase === 'play' && owner === 'enemy' && oppShootT > 0 && dist2(pl.position, enemy.pos) < 2.6) { enemy.blocked = true; setMsg('BLOCK! Ball back', 1.3); }
-  }
-  function playerSteal() {
-    if (phase !== 'play' || owner !== 'enemy' || pStealCool > 0) return;
-    pStealCool = 0.7;
-    const d = dist2(pl.position, enemy.pos);
-    if (d > 2.2) { setMsg('Too far to steal', 0.7); return; }
-    // closer + facing the ball-handler = better odds
-    const toBall = Math.atan2(enemy.pos.z - pl.position.z, enemy.pos.x - pl.position.x);
-    const face = clamp(1 - Math.abs(angDiff(pl.rotation.y, toBall)) / 1.4, 0, 1);
-    const chance = clamp(0.55 * face * (1 - d / 2.6), 0.05, 0.7);
-    if (Math.random() < chance) { setMsg('STEAL! Your ball'); owner = 'player'; oppShootT = 0; enemy.blocked = false; }
-    else setMsg('Missed the steal', 0.7);
+  function knockLoose(from) {
+    bs.pos.copy(from); bs.vel.set((Math.random() - 0.5) * 4, 3.6, (Math.random() - 0.5) * 4);
+    phase = 'loose'; looseT = 0; shot = null; holder = null;
   }
 
-  // push two circular bodies (each with .x/.z) apart so they can't overlap
-  function collide(a, b, R) {
-    const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
-    if (d > 0.0001 && d < R) { const p = (R - d) / 2, nx = dx / d, nz = dz / d; a.x -= nx * p; a.z -= nz * p; b.x += nx * p; b.z += nz * p; }
-  }
-  function separate() {
-    collide(pl.position, teammate.pos, 1.2);
-    collide(pl.position, enemy.pos, 1.2);
-    collide(teammate.pos, enemy.pos, 1.2);
-    pl.position.x = clamp(pl.position.x, B.minX, B.maxX); pl.position.z = clamp(pl.position.z, B.minZ, B.maxZ);
-    for (const e of [teammate, enemy]) {
-      e.pos.x = clamp(e.pos.x, B.minX, B.maxX); e.pos.z = clamp(e.pos.z, B.minZ, B.maxZ);
-      e.mesh.position.x = e.pos.x; e.mesh.position.z = e.pos.z;
-    }
-  }
-
-  // ---- per-frame ----
-  function movePlayer(dt, t) {
-    const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
-    let moving = false;
-    if (input.active && phase !== 'over') {
-      const mx = input.x * cy + input.y * sy, mz = -input.x * sy + input.y * cy;
-      pl.position.x = clamp(pl.position.x + mx * 8 * dt, B.minX, B.maxX);
-      pl.position.z = clamp(pl.position.z + mz * 8 * dt, B.minZ, B.maxZ);
-      if (mx || mz) { pl.rotation.y = Math.atan2(mx, mz); moving = true; }
-    }
-    if (pjump) { pvy -= G * dt; pjy += pvy * dt; if (pjy <= 0) { pjy = 0; pjump = false; } }
-    pl.position.y = pjy;
-    if (pl.userData.animate) pl.userData.animate(t, moving);
-  }
-  function moveTo(e, tx, tz, spd, dt, t) {
-    const dx = tx - e.pos.x, dz = tz - e.pos.z, d = Math.hypot(dx, dz);
-    let moving = false;
-    if (d > 0.06 && spd > 0) { const s = Math.min(spd * dt, d); e.pos.x += dx / d * s; e.pos.z += dz / d * s; e.mesh.rotation.y = Math.atan2(dx, dz); moving = true; }
-    e.pos.x = clamp(e.pos.x, B.minX, B.maxX); e.pos.z = clamp(e.pos.z, B.minZ, B.maxZ);
-    if (e.jumping) { e.vy -= G * dt; e.jy += e.vy * dt; if (e.jy <= 0) { e.jy = 0; e.jumping = false; } }
-    e.mesh.position.set(e.pos.x, e.jy, e.pos.z);
-    if (e.mesh.userData.animate) e.mesh.userData.animate(t, moving);
-  }
-  function aiTeammate(dt, t) {
-    if (owner === 'tm') {
-      teammate.willShoot -= dt;
-      moveTo(teammate, teammate.pos.x, teammate.pos.z, 0, dt, t);
-      if (teammate.willShoot <= 0) { const d = dist2(teammate.pos, RIGHT); launchShot(new THREE.Vector3(teammate.pos.x, 1.6, teammate.pos.z), RIGHT, teammate.contested ? 0.95 : 0.72, d > 6.5 ? 3 : 2, 'A'); }
-      return;
-    }
-    if (teamOf(owner) === 'A') { // spot up open, away from the enemy, toward the right wing
-      const side = (court.center.z > enemy.pos.z) ? -4.5 : 4.5;
-      moveTo(teammate, RIGHT.x - 5, court.center.z + side, 4.5, dt, t);
-    } else { // help defend
-      moveTo(teammate, (enemy.pos.x + LEFT.x) / 2, enemy.pos.z, 4.2, dt, t);
-    }
-  }
-  function aiEnemy(dt, t) {
-    if (owner === 'enemy') {
-      // drive toward the left hoop with a 2D weave, then pull up and shoot
-      const dh = dist2(enemy.pos, LEFT);
-      if (dh > 5 && oppShootT === 0) {
-        const dx = LEFT.x - enemy.pos.x, dz = LEFT.z - enemy.pos.z, dl = Math.hypot(dx, dz);
-        const perpX = -dz / dl, perpZ = dx / dl, weave = Math.sin(t * 2.5) * 2.4;
-        moveTo(enemy, enemy.pos.x + dx / dl * 3 + perpX * weave, enemy.pos.z + dz / dl * 3 + perpZ * weave, 6, dt, t);
-      } else {
-        oppShootT += dt;
-        moveTo(enemy, enemy.pos.x, enemy.pos.z, 0, dt, t); // idle pull-up animation
-        if (oppShootT > 1.2) {
-          if (enemy.blocked) { enemy.blocked = false; scoreA += 0; resetPossession('A'); }
-          else launchShot(new THREE.Vector3(enemy.pos.x, 1.6, enemy.pos.z), LEFT, 0.84, 2, 'B');
-        }
-      }
-      return;
-    }
-    // defend the ball-handler: slide to stay between them and the right hoop (2D)
-    const h = owner === 'player' ? pl.position : teammate.pos;
-    const dx = RIGHT.x - h.x, dz = RIGHT.z - h.z, dl = Math.hypot(dx, dz) || 1;
-    moveTo(enemy, h.x + dx / dl * 1.9, h.z + dz / dl * 1.9, 6.2, dt, t);
-    if (stealCool > 0) stealCool -= dt;
-    if (owner === 'player' && stealCool <= 0 && dist2(enemy.pos, pl.position) < 1.3 && Math.random() < 0.4 * dt) { setMsg('Stolen!'); resetPossession('B'); }
-  }
+  // ---- ball simulation ----
   function simBall(dt) {
+    if (phase === 'pass') return simPass(dt);
     const prevY = bs.pos.y;
     bs.vel.y -= G * dt; bs.pos.addScaledVector(bs.vel, dt);
-    for (const h of [RIGHT, LEFT]) {
+    if (phase === 'shot' && shot) {
+      const h = shot.hoop;
       if (bs.vel.y < 0 && prevY >= h.y && bs.pos.y < h.y) {
-        if ((bs.pos.x - h.x) ** 2 + (bs.pos.z - h.z) ** 2 < 0.58 * 0.58 && shot && !shot.scored && shot.hoop === h) onScore();
+        const dxz = (bs.pos.x - h.x) ** 2 + (bs.pos.z - h.z) ** 2;
+        if (shot.willScore && dxz < 0.5 * 0.5) { onScore(); return; }
+        // brick off the rim → live rebound
+        bs.vel.x = (bs.pos.x - h.x) * 2 + (Math.random() - 0.5) * 2.5;
+        bs.vel.z = (bs.pos.z - h.z) * 2 + (Math.random() - 0.5) * 2.5;
+        bs.vel.y = 3.0; phase = 'loose'; looseT = 0; shot = null; setMsg('Off the rim!', 0.7);
       }
     }
+    if (bs.pos.y <= 0.24) { bs.pos.y = 0.24; bs.vel.y = Math.abs(bs.vel.y) * 0.5; bs.vel.x *= 0.7; bs.vel.z *= 0.7; if (phase === 'shot') { phase = 'loose'; looseT = 0; shot = null; } }
+    if (bs.pos.x < B.minX || bs.pos.x > B.maxX) { bs.vel.x *= -0.6; bs.pos.x = clamp(bs.pos.x, B.minX, B.maxX); }
+    if (bs.pos.z < B.minZ || bs.pos.z > B.maxZ) { bs.vel.z *= -0.6; bs.pos.z = clamp(bs.pos.z, B.minZ, B.maxZ); }
     ball.position.copy(bs.pos);
-    if (bs.pos.y <= 0.24) { bs.pos.y = 0.24; ball.position.copy(bs.pos); onLand(); }
+    if (phase === 'loose') {
+      looseT += dt;
+      if (bs.pos.y < 1.7 && looseT > 0.25) {
+        const a = nearestAgentToBall();
+        if (dist(a.pos, bs.pos) < GRAB) giveBall(a, a.team === 'A' ? 'Rebound!' : 'They rebound');
+      }
+      if (looseT > 6) giveBall(nearestAgentToBall());
+    }
+  }
+  function simPass(dt) {
+    const tgt = handPoint(passData.to);
+    const dx = tgt.x - bs.pos.x, dy = tgt.y - bs.pos.y, dz = tgt.z - bs.pos.z, d = Math.hypot(dx, dy, dz);
+    const step = Math.min(d, 17 * dt);
+    if (d > 0.001) { bs.pos.x += dx / d * step; bs.pos.y += dy / d * step; bs.pos.z += dz / d * step; }
+    ball.position.copy(bs.pos);
+    for (const o of oppsOf(passData.from)) if (dist(o.pos, bs.pos) < 0.85 && Math.abs(o.jy + 1.2 - bs.pos.y) < 1.4) { giveBall(o, 'Intercepted!'); return; }
+    if (d < 0.4) giveBall(passData.to);
   }
   function onScore() {
-    shot.scored = true;
-    if (shot.team === 'A') { scoreA += shot.points; makes++; setMsg('SWISH! +' + shot.points, 1.5); }
-    else { scoreB += shot.points; setMsg('They score', 1.2); }
-    resetSoon(shot.team === 'A' ? 'B' : 'A');
+    const s = shot;
+    if (s.team === 'A') { scoreA += s.points; makes++; setMsg('SWISH! +' + s.points, 1.4); }
+    else { scoreB += s.points; setMsg('They score +' + s.points, 1.2); }
+    const a = (s.team === 'A' ? teamB : teamA).reduce((b, c) => dist(c.pos, s.hoop) < dist(b.pos, s.hoop) ? c : b);
+    shot = null; giveBall(a); // conceding team inbounds — nobody teleports
   }
-  function onLand() {
-    bs.inAir = false;
-    if (shot && !shot.scored) { setMsg(shot.team === 'A' ? 'Miss!' : 'They miss', 1.0); resetSoon(shot.team === 'A' ? 'B' : 'A'); }
-  }
+  function passTo(from, to) { phase = 'pass'; bs.pos.copy(handPoint(from)); passData = { from, to }; holder = null; }
   function ballHold() {
-    if (owner === 'player') { const c = Math.cos(pl.rotation.y), s = Math.sin(pl.rotation.y); ball.position.set(pl.position.x + c * 0.5, 1.2 + pjy, pl.position.z + s * 0.5); }
-    else if (owner === 'tm') { const r = teammate.mesh.rotation.y; ball.position.set(teammate.pos.x + Math.sin(r) * 0.72, 1.0 + teammate.jy, teammate.pos.z + Math.cos(r) * 0.72); }
-    else if (owner === 'enemy') { const r = enemy.mesh.rotation.y; ball.position.set(enemy.pos.x + Math.sin(r) * 0.72, 1.0 + enemy.jy, enemy.pos.z + Math.cos(r) * 0.72); }
+    if (phase !== 'play' || !holder) return;
+    const a = holder, r = rotOf(a);
+    ball.position.set(a.pos.x + Math.sin(r) * 0.5, 1.15 + a.jy, a.pos.z + Math.cos(r) * 0.5);
   }
 
+  // ---- movement ----
+  function jumpPhysics(a, dt) { if (a.jumping) { a.vy -= G * dt; a.jy += a.vy * dt; if (a.jy <= 0) { a.jy = 0; a.jumping = false; } } }
+  function moveHuman(dt) {
+    const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
+    let tvx = 0, tvz = 0, moving = false;
+    if (input.active && phase !== 'over') {
+      const mx = input.x * cy + input.y * sy, mz = -input.x * sy + input.y * cy, m = Math.hypot(mx, mz);
+      if (m > 0.01) { const sp = HUMAN_SPD * Math.min(1, m); tvx = mx / m * sp; tvz = mz / m * sp; }
+    }
+    A0.vx += (tvx - A0.vx) * Math.min(1, dt * ACCEL);
+    A0.vz += (tvz - A0.vz) * Math.min(1, dt * ACCEL);
+    A0.pos.x += A0.vx * dt; A0.pos.z += A0.vz * dt;
+    const sp = Math.hypot(A0.vx, A0.vz);
+    if (sp > 0.3) { pl.rotation.y = Math.atan2(A0.vx, A0.vz); moving = true; }
+    jumpPhysics(A0, dt); A0._moving = moving;
+  }
+  function driveAI(a, tx, tz, spd, dt) {
+    const dx = tx - a.pos.x, dz = tz - a.pos.z, d = Math.hypot(dx, dz);
+    let tvx = 0, tvz = 0;
+    if (d > 0.15 && spd > 0) { tvx = dx / d * spd; tvz = dz / d * spd; }
+    a.vx += (tvx - a.vx) * Math.min(1, dt * ACCEL);
+    a.vz += (tvz - a.vz) * Math.min(1, dt * ACCEL);
+    a.pos.x += a.vx * dt; a.pos.z += a.vz * dt;
+    const sp = Math.hypot(a.vx, a.vz);
+    if (sp > 0.4) a.mesh.rotation.y = Math.atan2(a.vx, a.vz);
+    jumpPhysics(a, dt); a._moving = sp > 0.6;
+  }
+  function separate() {
+    for (let i = 0; i < agents.length; i++) for (let j = i + 1; j < agents.length; j++) {
+      const a = agents[i].pos, b = agents[j].pos, dx = b.x - a.x, dz = b.z - a.z, dd = Math.hypot(dx, dz);
+      if (dd > 0.0001 && dd < 1.15) { const p = (1.15 - dd) / 2, nx = dx / dd, nz = dz / dd; a.x -= nx * p; a.z -= nz * p; b.x += nx * p; b.z += nz * p; }
+    }
+    for (const a of agents) { a.pos.x = clamp(a.pos.x, B.minX, B.maxX); a.pos.z = clamp(a.pos.z, B.minZ, B.maxZ); }
+  }
+  function finalize(t) {
+    for (const a of agents) {
+      if (a.kind === 'human') pl.position.y = a.jy;
+      else a.mesh.position.set(a.pos.x, a.jy, a.pos.z);
+      const anim = a.kind === 'human' ? pl.userData.animate : a.mesh.userData.animate;
+      if (anim) anim(t, a._moving);
+    }
+  }
+
+  // ---- AI ----
+  function aiAgent(a, dt, t) {
+    if (phase === 'loose' || (phase === 'shot' && shot)) { driveAI(a, bs.pos.x, bs.pos.z, AI_SPD, dt); return; } // crash the boards
+    if (phase !== 'play') { driveAI(a, a.pos.x, a.pos.z, 0, dt); return; }
+    if (teamHas(a.team)) aiOffense(a, dt, t); else aiDefense(a, dt, t);
+  }
+  function aiOffense(a, dt, t) {
+    const hoop = a.attack;
+    if (a === holder) {
+      a.shootT += dt;
+      const d = dist(a.pos, hoop), def = nearestOpp(a), dd = dist(def.pos, a.pos);
+      if (a.shootGather > 0) { a.shootGather -= dt; driveAI(a, a.pos.x, a.pos.z, 0, dt); if (a.shootGather <= 0) resolveShot(a, d < 1.8); return; }
+      const open = dd > 2.5;
+      if (d < 9 && (open || shotClock < 4 || (d < 2.0 && dd > 1.2))) { a.shootGather = 0.34; return; }
+      // pressured? kick to an open teammate
+      const mate = matesOf(a)[0];
+      if (mate && dd < 1.7) { const md = nearestOpp(mate); if (dist(md.pos, mate.pos) > 3) { passTo(a, mate); return; } }
+      // drive at the rim with a weave
+      const dx = hoop.x - a.pos.x, dz = hoop.z - a.pos.z, dl = Math.hypot(dx, dz) || 1, px = -dz / dl, pz = dx / dl, w = Math.sin(t * 2 + a.seed) * 1.4;
+      driveAI(a, a.pos.x + dx / dl * 3 + px * w, a.pos.z + dz / dl * 3 + pz * w, AI_SPD, dt);
+    } else {
+      const side = holder.pos.z > CC.z ? -1 : 1;             // spot up opposite the ball
+      const inward = Math.sign(CC.x - hoop.x) || 1;          // pull toward mid-court, not off the baseline
+      driveAI(a, hoop.x + inward * 5.5, CC.z + side * 4.8, AI_SPD * 0.9, dt);
+    }
+  }
+  function assignment(a) {
+    // 2v2 man defense: the defender closest to the ball-handler takes them
+    if (!holder) return nearestOpp(a);
+    const mates = a.team === 'A' ? teamA : teamB;
+    const closestToBall = mates.reduce((b, c) => dist(c.pos, holder.pos) < dist(b.pos, holder.pos) ? c : b);
+    if (a === closestToBall) return holder;
+    return oppsOf(a).find(o => o !== holder) || holder;
+  }
+  function aiDefense(a, dt, t) {
+    const man = assignment(a), mh = man.attack;
+    const dx = mh.x - man.pos.x, dz = mh.z - man.pos.z, dl = Math.hypot(dx, dz) || 1;
+    const gap = man === holder ? 1.25 : 1.9;
+    driveAI(a, man.pos.x + dx / dl * gap, man.pos.z + dz / dl * gap, AI_SPD * 1.02, dt);
+    a.stealCd -= dt;
+    if (man === holder && dist(a.pos, man.pos) < 1.55) {
+      if (man.shootGather > 0 && !a.jumping && Math.random() < 0.10) { a.jumping = true; a.vy = 6.0; } // contest
+      if (dist(a.pos, man.pos) < 1.25 && a.stealCd <= 0) { a.stealCd = 1.3; if (Math.random() < 0.18) giveBall(a, a.team === 'A' ? 'Steal!' : 'They steal'); }
+    }
+  }
+
+  // ---- player actions ----
+  function playerShoot() {
+    if (!charging || phase !== 'play' || holder !== A0) return;
+    charging = false; $('bball-meter').classList.add('hidden');
+    resolveShot(A0);
+  }
+  function playerPass() { if (phase === 'play' && holder === A0) { passTo(A0, A1); setMsg('Pass', 0.5); } }
+  function playerJump() {
+    if (!A0.jumping) { A0.vy = JUMP_V; A0.jumping = true; }
+    if (phase === 'play' && holder === A0 && dist(A0.pos, RIGHT) < 3.0) resolveShot(A0, true); // driving dunk
+  }
+  function playerBlock() { if (!A0.jumping) { A0.vy = JUMP_V; A0.jumping = true; } } // hand up — contest is read on the shot
+  function playerSteal() {
+    if (phase !== 'play' || !holder || holder.team !== 'B' || pStealCool > 0) return;
+    pStealCool = 0.7;
+    const bh = holder, d = dist(A0.pos, bh.pos);
+    if (d > 2.0) { setMsg('Too far to steal', 0.6); return; }
+    const toBall = Math.atan2(bh.pos.z - A0.pos.z, bh.pos.x - A0.pos.x);
+    const face = clamp(1 - Math.abs(angDiff(pl.rotation.y, toBall)) / 1.5, 0, 1);
+    if (Math.random() < clamp(0.5 * face * (1 - d / 2.4), 0.05, 0.62)) giveBall(A0, 'STEAL! 🤚');
+    else setMsg('Missed the steal', 0.6);
+  }
+
+  // ---- main update ----
   function update(dt, t) {
     if (phase === 'over') return;
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
-    if (charging && !(phase === 'play' && owner === 'player')) { charging = false; $('bball-meter').classList.add('hidden'); }
-    if (resetT > 0) { resetT -= dt; if (resetT <= 0) resetPossession(resetTeam); }
+    if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover(); }
+    if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
+    if (charging) { meter += meterDir * dt * 1.3; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
     if (pStealCool > 0) pStealCool -= dt;
-    if (charging) { meter += meterDir * dt * 1.15; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
-    movePlayer(dt, t);
-    aiTeammate(dt, t); aiEnemy(dt, t);
+
+    moveHuman(dt);
+    for (const a of [A1, B0, B1]) aiAgent(a, dt, t);
     separate();
-    if (bs.inAir) simBall(dt); else ballHold();
-    // contextual buttons: attack tools when you hold the ball, defense tools otherwise
-    const haveBall = phase === 'play' && owner === 'player';
-    const defending = phase === 'play' && owner === 'enemy';
+    finalize(t);
+    if (phase === 'shot' || phase === 'loose' || phase === 'pass') simBall(dt); else ballHold();
+
+    const haveBall = phase === 'play' && holder === A0;
+    const defending = phase === 'play' && holder && holder.team === 'B';
     $('bball-shoot').style.display = haveBall ? '' : 'none';
     $('bball-pass').style.display = haveBall ? '' : 'none';
     $('bball-steal').style.display = defending ? '' : 'none';
     $('bball-block').style.display = defending ? '' : 'none';
     $('bball-score').textContent = `You ${scoreA} · Opp ${scoreB}`;
-    $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft));
+    const sc = phase === 'play' && holder ? ` · ⏲${Math.ceil(Math.max(0, shotClock))}` : '';
+    $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft)) + sc;
     if (msgT > 0) { msgT -= dt; if (msgT <= 0) setMsg(''); }
   }
 
   function endGame() {
     phase = 'over';
-    const coins = scoreA * 4 + makes;
+    const coins = scoreA * 4 + makes * 2;
     addCoins(coins);
     if (makes > 0) track('hoops', makes);
     state.stats.hoopsScored = (state.stats.hoopsScored || 0) + makes;
     if (scoreA > scoreB) { track('games', 1); state.stats.gamesWon = (state.stats.gamesWon || 0) + 1; }
     applyNeeds({ fun: 24, hunger: -8 });
     $('bball-hud').classList.add('hidden');
-    const win = scoreA > scoreB ? 'You win! 🎉' : scoreA === scoreB ? "It's a tie!" : 'Opponents win.';
-    showModal('🏀 Final whistle!', `${win}<br>You scored <b>${scoreA}</b> (opp ${scoreB}) on <b>${makes}</b> baskets.<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);
+    const win = scoreA > scoreB ? 'You win! 🎉' : scoreA === scoreB ? "It's a tie!" : 'Opponents win — run it back!';
+    showModal('🏀 Final whistle!', `${win}<br>You ${scoreA} · Opp ${scoreB} · <b>${makes}</b> baskets.<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);
   }
 
   // ---- buttons (once) ----
   const sb = $('bball-shoot');
-  sb.addEventListener('pointerdown', (e) => { e.preventDefault(); if (phase === 'play' && owner === 'player') { charging = true; meter = 0; meterDir = 1; $('bball-meter').classList.remove('hidden'); } });
+  sb.addEventListener('pointerdown', (e) => { e.preventDefault(); if (phase === 'play' && holder === A0) { charging = true; meter = 0; meterDir = 1; $('bball-meter').classList.remove('hidden'); } });
   const rel = (e) => { if (e) e.preventDefault(); if (charging) playerShoot(); };
   sb.addEventListener('pointerup', rel); sb.addEventListener('pointerleave', rel); sb.addEventListener('pointercancel', rel);
   $('bball-pass').addEventListener('click', playerPass);
@@ -283,11 +353,18 @@ export function createBasketball({ parent, court }) {
 
   function enter(player, cb) {
     pl = player; onExit = cb; active = true;
-    scoreA = 0; scoreB = 0; makes = 0; timeLeft = 75; charging = false; pjy = 0; pvy = 0; pjump = false;
-    resetT = 0; msgT = 0; setMsg('');
+    A0.mesh = pl; A0.pos = pl.position;
+    scoreA = 0; scoreB = 0; makes = 0; timeLeft = 90; charging = false;
+    for (const a of agents) { a.vx = a.vz = a.jy = a.vy = 0; a.jumping = false; a.shootGather = 0; a.shootT = 0; a.stealCd = 0; }
+    msgT = 0; setMsg('');
+    // initial tip-off placement (this is the only positioning — play never resets after)
+    pl.position.set(CC.x - 5, 0, CC.z);
+    A1.pos.set(CC.x - 3, 0, CC.z + 4.5);
+    B0.pos.set(CC.x + 1.5, 0, CC.z - 1);
+    B1.pos.set(CC.x + 3.5, 0, CC.z + 3.5);
     group.visible = true;
-    input.camYaw = -Math.PI / 2; input.camPitch = 0; // start with the court ahead
-    resetPossession('A');
+    input.camYaw = -Math.PI / 2; input.camPitch = 0;
+    giveBall(A0, 'Your ball — go!');
     $('bball-meter').classList.add('hidden');
     $('bball-hud').classList.remove('hidden');
     $('hud').classList.add('playing-bball');
