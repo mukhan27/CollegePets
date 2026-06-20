@@ -82,7 +82,8 @@ function defaults() {
     equipped: { hat: null, face: null, neck: null },
     room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red', layout: null },
     furniture: { bed: 1, desk: 1, nightstand: 1, bookshelf: 1, rug: 1, plant: 1, lamp: 1, beanbag: 1 }, // owned counts
-    stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1 },
+    stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1, fishCaught: 0 },
+    fishLog: {},               // emoji -> count caught
     // ---- campus-life layer ----
     needs: { energy: 90, hunger: 80, social: 70, fun: 70 },
     needsTick: Date.now(),     // last time needs decayed (for offline decay)

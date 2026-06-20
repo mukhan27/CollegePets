@@ -233,8 +233,8 @@ function renderCampus() {
       <div>🏀 ${s.hoopsScored || 0} baskets</div>
       <div>🍽️ ${s.mealsEaten || 0} meals</div>
       <div>🎮 ${s.gamesWon || 0} games won</div>
+      <div>🎣 ${s.fishCaught || 0} fish</div>
       <div>📅 ${s.daysActive || 1} days on campus</div>
-      <div>💛 ${Object.keys(state.friends).length} friends</div>
     </div>`;
   }
   html += '</div>';

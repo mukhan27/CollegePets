@@ -445,3 +445,17 @@ html, body {
   background: #f1e7d4; font-size: 13px; padding: 2px 5px; cursor: pointer; line-height: 1.2; }
 .food-gift:active { transform: translateY(1px); }
 .dh-hint { font-size: 12px; color: #8a7a64; margin-bottom: 6px; }
+
+/* ---------- Fishing ---------- */
+#fish-overlay { position: fixed; inset: 0; z-index: 62;
+  background: radial-gradient(120% 90% at 50% 30%, #2a6b86 0%, #163b4c 75%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+#fish-pic { font-size: clamp(80px, 22vw, 150px); line-height: 1; filter: drop-shadow(0 8px 16px rgba(0,0,0,.45)); }
+#fish-msg { color: #eaf4f8; font-size: 18px; font-weight: 700; text-align: center; max-width: 80vw; }
+.fish-rare { color: #ffd166; }
+.fish-btn { border: none; border-radius: 16px; padding: 16px 34px; font-size: 19px; font-weight: 800;
+  color: #14323f; background: #ffd166; cursor: pointer; box-shadow: 0 5px 0 #d4a437; }
+.fish-btn:disabled { opacity: .6; box-shadow: none; }
+.fish-btn:active { transform: translateY(3px); box-shadow: none; }
+.fish-btn.reel { background: #6be0a0; color: #0d3a26; box-shadow: 0 5px 0 #3aa873; animation: reelpulse .5s infinite; }
+@keyframes reelpulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }

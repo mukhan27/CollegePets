@@ -624,6 +624,7 @@ export function buildCampus() {
       seatPos: { x: bx, z: bz, y: 0 }, sitY: 0.62, face, stepBack: { x: bx - nx * 1.6, z: bz - nz * 1.6 } });
   };
   relaxBench(PX - 8.5, PZ); relaxBench(PX + 8.5, PZ); relaxBench(PX, PZ - 8.5);
+  interactables.push({ id: 'fish', x: PX + 4.5, z: PZ + 5, r: 2.2, label: '🎣 Go fishing' });
   for (const [tx, tz] of [[PX - 10, PZ - 7], [PX + 10, PZ + 7], [PX - 4, PZ + 10]]) {
     root.add(makeTree(tx, tz, 0.9, tx + tz)); colliders.push({ x: tx, z: tz, w: 1.2, d: 1.2 });
   }

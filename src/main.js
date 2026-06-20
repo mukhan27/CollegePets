@@ -9,6 +9,7 @@ import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, startCookJob, initDiningUI } from './dining.js';
 import { startTrivia, startMemory, initArcadeUI } from './arcade.js';
+import { startFishing, initFishingUI } from './fishing.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
@@ -320,6 +321,7 @@ function runInteract(it) {
     case 'study_seat': beginStudy(it); break;
     case 'lounge': beginLounge(it); break;
     case 'relax': beginLounge(it); applyNeeds({ fun: 16, social: 10, energy: 6 }); toast('Ahh… that\'s relaxing.', '🌳'); break;
+    case 'fish': startFishing(); break;
     case 'stand_up': endLounge(); break;
     case 'vending':
       showModal('🥤 Vending machine', 'You grab a fizzy soda. Refreshing! (+ vibes, no charge — RA covered it)');
@@ -673,6 +675,7 @@ initChatUI();
 initMinigameUI();
 initDiningUI();
 initArcadeUI();
+initFishingUI();
 setupSelectScreen();
 renderer.setAnimationLoop(tick);
 
