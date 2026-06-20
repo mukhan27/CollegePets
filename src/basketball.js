@@ -5,8 +5,9 @@
 
 import * as THREE from 'three';
 import { input } from './input.js';
-import { addCoins } from './state.js';
+import { addCoins, state } from './state.js';
 import { showModal } from './ui.js';
+import { track, applyNeeds } from './systems.js';
 import { toonMat } from './textures.js';
 import { createPet } from './petFactory.js';
 
@@ -260,8 +261,13 @@ export function createBasketball({ parent, court }) {
     phase = 'over';
     const coins = scoreA * 4 + makes;
     addCoins(coins);
+    if (makes > 0) track('hoops', makes);
+    state.stats.hoopsScored = (state.stats.hoopsScored || 0) + makes;
+    if (scoreA > scoreB) { track('games', 1); state.stats.gamesWon = (state.stats.gamesWon || 0) + 1; }
+    applyNeeds({ fun: 24, energy: -12, hunger: -8 });
     $('bball-hud').classList.add('hidden');
-    showModal('🏀 Final whistle!', `You scored <b>${scoreA}</b> (opp ${scoreB}) on <b>${makes}</b> baskets.<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);
+    const win = scoreA > scoreB ? 'You win! 🎉' : scoreA === scoreB ? "It's a tie!" : 'Opponents win.';
+    showModal('🏀 Final whistle!', `${win}<br>You scored <b>${scoreA}</b> (opp ${scoreB}) on <b>${makes}</b> baskets.<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);
   }
 
   // ---- buttons (once) ----

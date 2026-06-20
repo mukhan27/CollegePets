@@ -3,6 +3,7 @@
 import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture } from './state.js';
 import { npcReply } from './npcs.js';
 import { wearablePreview, furniturePreview } from './itemPreview.js';
+import { track, applyNeeds, hasBuff, addFriendship } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,7 +30,8 @@ export function isModalOpen() {
   return !$('modal').classList.contains('hidden')
     || !$('chat-panel').classList.contains('hidden')
     || !$('focus-overlay').classList.contains('hidden')
-    || !$('minigame-overlay').classList.contains('hidden');
+    || !$('minigame-overlay').classList.contains('hidden')
+    || !$('campus-panel').classList.contains('hidden');
 }
 
 // ----------------------------------------------------------- chat
@@ -46,6 +48,8 @@ export function openChat(npc, onClose) {
   addChatMsg('them', npc.def.greet);
   $('chat-panel').classList.remove('hidden');
   $('chat-input').value = '';
+  track('chats', 1, npc.def.name);   // counts unique students/day
+  addFriendship(npc.def.name, 8);    // saying hi builds the friendship
 }
 
 function addChatMsg(who, text) {
@@ -64,6 +68,7 @@ function sendChat() {
   inp.value = '';
   addChatMsg('me', text);
   const npc = activeNpc;
+  addFriendship(npc.def.name, 3); applyNeeds({ social: 4 });
   setTimeout(() => {
     if (activeNpc === npc) addChatMsg('them', npcReply(npc.def, text));
   }, 500 + Math.random() * 600);
@@ -130,14 +135,14 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
     if (tab === 'furniture') {
       const item = FURNITURE_CATALOG.find(f => f.id === id);
       if (state.coins < item.price) { notEnough(item.price); return; }
-      buyFurniture(id);
+      buyFurniture(id); track('spend', item.price);
       render();
       return;
     }
     const item = CATALOG.clothes.find(i => i.id === id);
     if (!owns(id)) {
       if (state.coins < item.price) { notEnough(item.price); return; }
-      buy(id); render(); return;
+      buy(id); track('spend', item.price); render(); return;
     }
     const slot = id === 'glasses' ? 'face' : id === 'scarf' ? 'neck' : 'hat';
     state.equipped[slot] = state.equipped[slot] === id ? null : id;
@@ -277,9 +282,12 @@ function phaseComplete(mode, ctx) {
   clearInterval(focusTimer); focusTimer = null;
   if (mode === 'focus') {
     ctx.reward = ctx.focusMin * 2;
+    if (hasBuff('focus')) ctx.reward = Math.round(ctx.reward * 1.5); // cold-brew focus buff
     state.stats.focusMinutes += ctx.focusMin;
     state.stats.pomodorosDone++;
     addCoins(ctx.reward);
+    track('studyMin', ctx.focusMin);
+    applyNeeds({ energy: -10, fun: -6, hunger: -6 }); // studying is tiring & makes you peckish
     if (ctx.breakMin > 0) beginPhase('break', ctx.breakMin, ctx);
     else finishSession(true, ctx, false);
   } else {

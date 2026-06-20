@@ -329,3 +329,58 @@ html, body {
 .tryon-item.on { border-color: #ff9f43; background: #fff4e3; }
 .tryon-item.on .ti-tag { color: #d2791f; font-weight: 700; }
 .tryon-item.locked .ti-tag { color: #b07a18; font-weight: 700; }
+
+/* ---------- Campus-life HUD: level pill, needs, menu ---------- */
+#hud-level { display: flex; align-items: center; gap: 6px; }
+.xp-mini { display: inline-block; width: 38px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+.xp-mini > span { display: block; height: 100%; width: 0%; background: #7ec8e3; transition: width .3s; }
+#menu-btn { pointer-events: auto; border: none; cursor: pointer; font-size: 15px; }
+#needs-hud { position: absolute; top: max(46px, calc(env(safe-area-inset-top) + 38px)); left: 12px;
+  display: flex; flex-direction: column; gap: 4px; background: rgba(20,32,44,.5);
+  padding: 7px 9px; border-radius: 12px; backdrop-filter: blur(4px); }
+.need { display: flex; align-items: center; gap: 6px; }
+.need-ic { font-size: 12px; width: 16px; text-align: center; }
+.need-bar { display: inline-block; width: 76px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; }
+.need-bar > span { display: block; height: 100%; width: 100%; border-radius: 4px; transition: width .4s, background .4s; }
+
+/* ---------- Campus panel ---------- */
+.cp-head { display: flex; align-items: center; margin-bottom: 8px; }
+.cp-head h2 { flex: 1; margin: 0; }
+.cp-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.cp-tab { flex: 1; padding: 8px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;
+  background: #e8dcc8; color: #6b5b3e; }
+.cp-tab.active { background: #ff9f43; color: #fff; }
+.cp-day { font-weight: bold; color: #2c3e50; margin: 4px 0 8px; }
+.cp-empty { color: #8a7a64; font-size: 14px; padding: 8px 0; }
+.cp-bar { height: 8px; border-radius: 5px; background: #e7ddcb; overflow: hidden; margin: 3px 0; }
+.cp-bar-fill { height: 100%; border-radius: 5px; transition: width .3s; }
+.cp-quest { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #ece2d2;
+  border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.cp-quest.done { border-color: #6be0a0; }
+.cp-quest.claimed { opacity: .55; }
+.cp-q-icon { font-size: 24px; }
+.cp-q-main { flex: 1; min-width: 0; }
+.cp-q-text { font-weight: bold; color: #2c3e50; font-size: 14px; }
+.cp-q-sub { font-size: 12px; color: #8a7a64; }
+.cp-q-btn { border: none; border-radius: 10px; padding: 8px 12px; font-weight: bold; cursor: pointer;
+  background: #ff9f43; color: #fff; }
+.cp-q-btn:disabled { background: #d8cdbb; color: #fff; cursor: default; }
+.cp-friend { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #ece2d2;
+  border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; }
+.cp-f-icon { font-size: 22px; }
+.cp-f-name { font-weight: bold; color: #2c3e50; }
+.cp-f-tier { font-size: 12px; color: #8a7a64; }
+.cp-xp { font-size: 13px; color: #5a6b7a; margin-bottom: 10px; }
+.cp-needs .cp-need { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #44505e; margin-bottom: 4px; }
+.cp-needs .cp-need > span:first-child { width: 92px; }
+.cp-needs .cp-need .cp-bar { flex: 1; }
+.cp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px;
+  font-size: 13px; color: #44505e; }
+.cp-stats > div { background: #f3ece0; border-radius: 8px; padding: 7px 9px; }
+
+/* ---------- Toast ---------- */
+#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(20px); z-index: 80; pointer-events: none;
+  background: rgba(24,18,30,.9); color: #fff; font-weight: 700; padding: 11px 18px; border-radius: 999px;
+  display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity .25s, transform .25s; max-width: 80vw; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

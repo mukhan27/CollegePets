@@ -16,6 +16,7 @@ import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
+import { initSystems, tickSystems, track } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -526,16 +527,17 @@ function startGame() {
   $('hud').classList.remove('hidden');
   $('hud-name').textContent = state.petName;
   $('coin-count').textContent = state.coins;
+  initSystems();
 
   switchLocation('campus');
   showModal(`Welcome to Birchwood University, ${state.petName}! 🎉`,
-    `Roam the campus with the <b>joystick</b> (or WASD).<br><br>
-     📚 <b>Library</b> — sit down for a pomodoro study session (earns coins)<br>
-     💬 <b>Students</b> — walk up to a pet and chat<br>
-     🏀 <b>Court</b> — shoot some hoops<br>
-     🏛️ <b>Lecture Hall</b> — a lobby leading to a big-screen hall, plus upstairs study desks<br>
-     🛍️ <b>Campus Store</b> — clothes & room decor<br>
-     🏠 <b>Maple Dorm</b> — your customizable room`);
+    `Roam the campus with the <b>joystick</b> (or WASD). Tap <b>📋</b> (top-right) any time for your <b>daily quests, friends & stats</b>.<br><br>
+     📋 <b>Daily quests</b> — study, ball, eat, socialize → earn 🪙 & level up<br>
+     ⚡🍔💬🎉 <b>Needs</b> (top-left) — eat, sleep, hang out & play to keep them up<br>
+     📚 <b>Library</b> — pomodoro study sessions earn coins<br>
+     🍽️ <b>Dining Hall</b> — grab food, fill up, work a shift<br>
+     🎮 <b>Student Union</b> — arcade mini-games with friends<br>
+     🛍️ <b>Campus Store</b> · 🏀 <b>Court</b> · 🏠 <b>Maple Dorm</b> — shop, hoops & your room`);
 }
 
 function frame(dt, t) {
@@ -552,6 +554,8 @@ function frame(dt, t) {
     return;
   }
   if (!player || !currentLoc) { fx.composer.render(dt); return; }
+
+  tickSystems(dt); // needs decay, buff expiry, HUD bars
 
   const loc = LOCATIONS[currentLoc].def;
   const uiOpen = isModalOpen() || isTryOnOpen();

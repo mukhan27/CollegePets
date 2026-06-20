@@ -40,8 +40,16 @@
 <div id="hud" class="hidden">
   <div id="hud-top">
     <div class="hud-pill" id="hud-identity">🐾 <span id="hud-name"></span></div>
+    <div class="hud-pill" id="hud-level">⭐ <span id="level-num">1</span><span class="xp-mini"><span id="xp-fill"></span></span></div>
     <div class="hud-pill" id="hud-location">🏫 Campus</div>
     <div class="hud-pill" id="hud-coins">🪙 <span id="coin-count">0</span></div>
+    <button class="hud-pill" id="menu-btn">📋</button>
+  </div>
+  <div id="needs-hud">
+    <div class="need"><span class="need-ic">⚡</span><span class="need-bar"><span id="need-energy-fill"></span></span></div>
+    <div class="need"><span class="need-ic">🍔</span><span class="need-bar"><span id="need-hunger-fill"></span></span></div>
+    <div class="need"><span class="need-ic">💬</span><span class="need-bar"><span id="need-social-fill"></span></span></div>
+    <div class="need"><span class="need-ic">🎉</span><span class="need-bar"><span id="need-fun-fill"></span></span></div>
   </div>
   <div id="camera-zone"></div>
   <div id="joystick-zone">
@@ -64,6 +72,14 @@
     <button id="re-delete" class="re-btn re-danger">🗑 Remove</button>
   </div>
   <div id="re-palette"></div>
+</div>
+
+<!-- Campus Life panel (quests / friends / me) -->
+<div id="campus-panel" class="overlay hidden">
+  <div class="panel">
+    <div class="cp-head"><h2>🏫 Campus Life</h2><button class="close-x" id="campus-close">✕</button></div>
+    <div id="campus-body"></div>
+  </div>
 </div>
 
 <!-- Generic modal dialog -->

@@ -56,6 +56,23 @@ export const FURNITURE_CATALOG = [
   { id: 'rug',        icon: '🟪', name: 'Rug',         price: 35 },
 ];
 
+// Dining-hall menu. Each food restores needs (and some give a study/fun buff);
+// foods can also be gifted to friends. `buff` is an optional named effect.
+export const FOOD_CATALOG = [
+  { id: 'pizza',    icon: '🍕', name: 'Pizza Slice',   price: 12, hunger: 28, energy: 6,  fun: 8 },
+  { id: 'burger',   icon: '🍔', name: 'Cheeseburger',  price: 16, hunger: 36, energy: 10 },
+  { id: 'salad',    icon: '🥗', name: 'Garden Salad',  price: 14, hunger: 22, energy: 14 },
+  { id: 'sushi',    icon: '🍣', name: 'Sushi Combo',   price: 22, hunger: 34, energy: 12, fun: 6 },
+  { id: 'ramen',    icon: '🍜', name: 'Spicy Ramen',   price: 15, hunger: 30, energy: 16 },
+  { id: 'coffee',   icon: '☕', name: 'Cold Brew',     price: 8,  hunger: 4,  energy: 26, buff: 'focus' },
+  { id: 'boba',     icon: '🧋', name: 'Boba Tea',      price: 10, hunger: 8,  energy: 10, fun: 16 },
+  { id: 'donut',    icon: '🍩', name: 'Sprinkle Donut',price: 6,  hunger: 14, energy: 8,  fun: 12 },
+  { id: 'taco',     icon: '🌮', name: 'Taco Trio',     price: 13, hunger: 30, energy: 8,  fun: 6 },
+  { id: 'icecream', icon: '🍦', name: 'Ice Cream',     price: 7,  hunger: 10, energy: 4,  fun: 20 },
+];
+
+export function findFood(id) { return FOOD_CATALOG.find(f => f.id === id) || null; }
+
 function defaults() {
   return {
     petType: null,
@@ -65,8 +82,31 @@ function defaults() {
     equipped: { hat: null, face: null, neck: null },
     room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red', layout: null },
     furniture: { bed: 1, desk: 1, nightstand: 1, bookshelf: 1, rug: 1, plant: 1, lamp: 1, beanbag: 1 }, // owned counts
-    stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0 },
+    stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1 },
+    // ---- campus-life layer ----
+    needs: { energy: 90, hunger: 80, social: 70, fun: 70 },
+    needsTick: Date.now(),     // last time needs decayed (for offline decay)
+    level: 1, xp: 0,
+    day: 1, dayStamp: null,    // YYYY-M-D the current game day was started on
+    quests: [], questStamp: null,
+    daily: { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] }, // resets each day
+    friends: {},               // npc name -> friendship points
+    pantry: {},                // owned food/gift items: id -> count
+    pet2: null,                // a second adopted pet (companion), future use
+    buffs: {},                 // name -> expiry timestamp
   };
+}
+
+// Backfill any missing nested fields so older saves keep working after updates.
+function ensureShape(s) {
+  const d = defaults();
+  for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
+  for (const k of ['stats', 'needs', 'daily', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped']) {
+    if (typeof s[k] !== 'object' || s[k] === null) s[k] = d[k];
+    else if (d[k] && !Array.isArray(d[k])) for (const f of Object.keys(d[k])) if (s[k][f] === undefined) s[k][f] = d[k][f];
+  }
+  if (!Array.isArray(s.quests)) s.quests = [];
+  return s;
 }
 
 export const state = load();
@@ -74,7 +114,7 @@ export const state = load();
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) return Object.assign(defaults(), JSON.parse(raw));
+    if (raw) return ensureShape(Object.assign(defaults(), JSON.parse(raw)));
   } catch (e) { /* corrupted save — start fresh */ }
   return defaults();
 }
@@ -113,5 +153,24 @@ export function buy(id) {
   save();
   const el = document.getElementById('coin-count');
   if (el) el.textContent = state.coins;
+  return true;
+}
+
+function refreshCoins() { const el = document.getElementById('coin-count'); if (el) el.textContent = state.coins; }
+
+// pantry: owned food / giftable items
+export function pantryCount(id) { return (state.pantry && state.pantry[id]) || 0; }
+export function addToPantry(id, n = 1) { state.pantry[id] = (state.pantry[id] || 0) + n; save(); }
+export function takeFromPantry(id, n = 1) {
+  if (pantryCount(id) < n) return false;
+  state.pantry[id] -= n; if (state.pantry[id] <= 0) delete state.pantry[id];
+  save(); return true;
+}
+export function buyFood(id) {
+  const f = findFood(id);
+  if (!f || state.coins < f.price) return false;
+  state.coins -= f.price;
+  addToPantry(id, 1);
+  refreshCoins();
   return true;
 }
