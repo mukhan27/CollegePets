@@ -320,7 +320,7 @@ function runInteract(it) {
       break;
     case 'study_seat': beginStudy(it); break;
     case 'lounge': beginLounge(it); break;
-    case 'relax': beginLounge(it); applyNeeds({ fun: 16, social: 10, energy: 6 }); toast('Ahh… that\'s relaxing.', '🌳'); break;
+    case 'relax': beginLounge(it); applyNeeds({ fun: 16, social: 10 }); toast('Ahh… that\'s relaxing.', '🌳'); break;
     case 'fish': startFishing(); break;
     case 'stand_up': endLounge(); break;
     case 'vending':
@@ -336,22 +336,21 @@ function runInteract(it) {
     case 'arcade_trivia': startTrivia(); break;
     case 'arcade_memory': startMemory(); break;
     case 'arcade_hoops_info': showModal('🏀 Hoops', 'Real hoops are on the court outside — head east past the dorms for a full 3-on-3 game!'); break;
-    case 'quest_board': openCampus('quests'); break;
+    case 'quest_board': openCampus('awards'); break;
     case 'sleep': doSleep(); break;
   }
 }
 
 function doSleep() {
-  showModal('😴 Take a nap?', 'Rest up to fully restore your energy. A new day means fresh quests!', [
+  showModal('😴 Take a nap?', 'Curl up for a cozy nap — a fresh day rolls your login streak.', [
     { label: 'Sleep 💤', onClick: () => {
       const fade = $('sleep-fade'); if (fade) { fade.classList.add('show'); setTimeout(() => fade.classList.remove('show'), 1400); }
-      state.needs.energy = 100;
-      applyNeeds({ hunger: -10, social: -6, fun: -2 });
+      applyNeeds({ social: 8, fun: 10 });
       const newDay = newDayCheck();
       save();
       setTimeout(() => {
-        toast('Good morning! Energy restored.', '🌅');
-        if (newDay) showModal(`🌅 Day ${state.day}`, 'A fresh day on campus — new daily quests are waiting on your 📋 menu!');
+        toast('Good morning! ☀️', '🌅');
+        if (newDay) showModal(`🌅 Day ${state.day}`, 'A fresh day on campus. Go hang out, play some games, and decorate your space!');
       }, 700);
     } },
     { label: 'Not now', primary: false },
@@ -568,13 +567,13 @@ function startGame() {
 
   switchLocation('campus');
   showModal(`Welcome to Birchwood University, ${state.petName}! 🎉`,
-    `Roam the campus with the <b>joystick</b> (or WASD). Tap <b>📋</b> (top-right) any time for your <b>daily quests, friends & stats</b>.<br><br>
-     📋 <b>Daily quests</b> — study, ball, eat, socialize → earn 🪙 & level up<br>
-     ⚡🍔💬🎉 <b>Needs</b> (top-left) — eat, sleep, hang out & play to keep them up<br>
+    `Roam the campus with the <b>joystick</b> (or WASD) and hang out. Tap <b>📋</b> (top-right) for your <b>trophies, friends & stats</b>.<br><br>
      📚 <b>Library</b> — pomodoro study sessions earn coins<br>
+     🏀 <b>Court</b> — a full 3-on-3 pickup game<br>
      🍽️ <b>Dining Hall</b> — grab food, fill up, work a shift<br>
-     🎮 <b>Student Union</b> — arcade mini-games with friends<br>
-     🛍️ <b>Campus Store</b> · 🏀 <b>Court</b> · 🏠 <b>Maple Dorm</b> — shop, hoops & your room`);
+     🎮 <b>Student Union</b> — arcade games & coffee<br>
+     🦆 <b>Birch Pond</b> — fish and relax<br>
+     🛍️ <b>Campus Store</b> · 🏠 <b>Maple Dorm</b> — deck out your pet & room`);
 }
 
 function frame(dt, t) {

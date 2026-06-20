@@ -54,7 +54,7 @@ function reel() {
   const f = pick();
   state.fishLog[f.e] = (state.fishLog[f.e] || 0) + 1;
   if (f.rare !== 'junk') state.stats.fishCaught = (state.stats.fishCaught || 0) + 1;
-  addCoins(f.coins); applyNeeds({ fun: 12, energy: -2 }); save();
+  addCoins(f.coins); applyNeeds({ fun: 12 }); save();
   const tag = f.rare === 'rare' ? ' <span class="fish-rare">✨ RARE ✨</span>' : f.rare === 'junk' ? ' (junk)' : '';
   $('fish-pic').textContent = f.e;
   setUI('result', `You caught a <b>${f.name}</b>${tag}!<br>+🪙 ${f.coins}`);

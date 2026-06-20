@@ -67,19 +67,19 @@ export const FURNITURE_CATALOG = [
   { id: 'rug',        icon: '🟪', name: 'Rug',         price: 35 },
 ];
 
-// Dining-hall menu. Each food restores needs (and some give a study/fun buff);
-// foods can also be gifted to friends. `buff` is an optional named effect.
+// Dining-hall menu. Each food tops up the gentle hunger/fun meters (and cold brew
+// gives a study focus buff); foods can also be gifted to friends.
 export const FOOD_CATALOG = [
-  { id: 'pizza',    icon: '🍕', name: 'Pizza Slice',   price: 12, hunger: 28, energy: 6,  fun: 8 },
-  { id: 'burger',   icon: '🍔', name: 'Cheeseburger',  price: 16, hunger: 36, energy: 10 },
-  { id: 'salad',    icon: '🥗', name: 'Garden Salad',  price: 14, hunger: 22, energy: 14 },
-  { id: 'sushi',    icon: '🍣', name: 'Sushi Combo',   price: 22, hunger: 34, energy: 12, fun: 6 },
-  { id: 'ramen',    icon: '🍜', name: 'Spicy Ramen',   price: 15, hunger: 30, energy: 16 },
-  { id: 'coffee',   icon: '☕', name: 'Cold Brew',     price: 8,  hunger: 4,  energy: 26, buff: 'focus' },
-  { id: 'boba',     icon: '🧋', name: 'Boba Tea',      price: 10, hunger: 8,  energy: 10, fun: 16 },
-  { id: 'donut',    icon: '🍩', name: 'Sprinkle Donut',price: 6,  hunger: 14, energy: 8,  fun: 12 },
-  { id: 'taco',     icon: '🌮', name: 'Taco Trio',     price: 13, hunger: 30, energy: 8,  fun: 6 },
-  { id: 'icecream', icon: '🍦', name: 'Ice Cream',     price: 7,  hunger: 10, energy: 4,  fun: 20 },
+  { id: 'pizza',    icon: '🍕', name: 'Pizza Slice',   price: 12, hunger: 30, fun: 10 },
+  { id: 'burger',   icon: '🍔', name: 'Cheeseburger',  price: 16, hunger: 40, fun: 6 },
+  { id: 'salad',    icon: '🥗', name: 'Garden Salad',  price: 14, hunger: 30, fun: 8 },
+  { id: 'sushi',    icon: '🍣', name: 'Sushi Combo',   price: 22, hunger: 40, fun: 10 },
+  { id: 'ramen',    icon: '🍜', name: 'Spicy Ramen',   price: 15, hunger: 38, fun: 8 },
+  { id: 'coffee',   icon: '☕', name: 'Cold Brew',     price: 8,  hunger: 6,  fun: 6, buff: 'focus' },
+  { id: 'boba',     icon: '🧋', name: 'Boba Tea',      price: 10, hunger: 10, fun: 18 },
+  { id: 'donut',    icon: '🍩', name: 'Sprinkle Donut',price: 6,  hunger: 16, fun: 14 },
+  { id: 'taco',     icon: '🌮', name: 'Taco Trio',     price: 13, hunger: 34, fun: 8 },
+  { id: 'icecream', icon: '🍦', name: 'Ice Cream',     price: 7,  hunger: 12, fun: 22 },
 ];
 
 export function findFood(id) { return FOOD_CATALOG.find(f => f.id === id) || null; }
@@ -95,14 +95,12 @@ function defaults() {
     furniture: { bed: 1, desk: 1, nightstand: 1, bookshelf: 1, rug: 1, plant: 1, lamp: 1, beanbag: 1 }, // owned counts
     stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1, fishCaught: 0 },
     fishLog: {},               // emoji -> count caught
-    // ---- campus-life layer ----
-    needs: { energy: 90, hunger: 80, social: 70, fun: 70 },
+    // ---- campus-life layer (gentle, never-punishing flavor meters) ----
+    needs: { hunger: 80, social: 70, fun: 70 },
     needsTick: Date.now(),     // last time needs decayed (for offline decay)
     level: 1, xp: 0,
     day: 1, dayStamp: null,    // YYYY-M-D the current game day was started on
     loginStreak: 0, lastLogin: null, // daily-streak bonus
-    quests: [], questStamp: null,
-    daily: { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] }, // resets each day
     friends: {},               // student name -> friendship points
     achievements: {},          // unlocked achievement ids
     pantry: {},                // owned food/gift items: id -> count
@@ -115,11 +113,12 @@ function defaults() {
 function ensureShape(s) {
   const d = defaults();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['stats', 'needs', 'daily', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped']) {
+  for (const k of ['stats', 'needs', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped']) {
     if (typeof s[k] !== 'object' || s[k] === null) s[k] = d[k];
     else if (d[k] && !Array.isArray(d[k])) for (const f of Object.keys(d[k])) if (s[k][f] === undefined) s[k][f] = d[k][f];
   }
-  if (!Array.isArray(s.quests)) s.quests = [];
+  delete s.needs.energy;       // energy meter retired
+  delete s.quests; delete s.questStamp; delete s.daily; // quest system retired
   return s;
 }
 

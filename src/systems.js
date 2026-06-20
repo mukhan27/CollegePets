@@ -1,6 +1,6 @@
-// Campus-life systems: needs (energy/hunger/social/fun), XP & levels, daily
-// quests, friendship, food/buffs, and the unified "Campus" menu panel. Pure
-// state + DOM (no Three.js), so it's easy to reason about and test.
+// Campus-life systems: gentle flavor needs (hunger/social/fun), XP & levels,
+// friendship, food/buffs, achievements, and the unified "Campus" menu panel.
+// Pure state + DOM (no Three.js), so it's easy to reason about and test.
 
 import { state, save, addCoins, FOOD_CATALOG, findFood, pantryCount, takeFromPantry } from './state.js';
 
@@ -8,23 +8,15 @@ const $ = (id) => document.getElementById(id);
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
 
+// Gentle hangout meters — they only ever go *up* from activities and drift down
+// very slowly; nothing in the game is gated on them.
 export const NEEDS = [
-  { key: 'energy', icon: '⚡', label: 'Energy', color: '#ffd166' },
   { key: 'hunger', icon: '🍔', label: 'Hunger', color: '#ff9f43' },
   { key: 'social', icon: '💬', label: 'Social', color: '#6be0a0' },
   { key: 'fun',    icon: '🎉', label: 'Fun',    color: '#7ec8e3' },
 ];
-// per-minute decay
-const DECAY = { energy: 1.6, hunger: 2.2, social: 1.5, fun: 1.6 };
-
-const QUEST_TEMPLATES = [
-  { id: 'study', icon: '📚', type: 'studyMin', verb: 'Study for', unit: 'min', goals: [25, 50], reward: 35 },
-  { id: 'hoops', icon: '🏀', type: 'hoops',    verb: 'Score',      unit: 'baskets', goals: [3, 6], reward: 25 },
-  { id: 'chat',  icon: '💬', type: 'chats',    verb: 'Chat with',  unit: 'students', goals: [2, 3], reward: 20 },
-  { id: 'spend', icon: '🛍️', type: 'spend',    verb: 'Spend',      unit: 'coins', goals: [40, 80], reward: 15 },
-  { id: 'meals', icon: '🍽️', type: 'meals',    verb: 'Eat',        unit: 'meals', goals: [1, 2], reward: 18 },
-  { id: 'games', icon: '🎮', type: 'games',    verb: 'Win',        unit: 'mini-games', goals: [1, 2], reward: 30 },
-];
+// per-minute drift (slow; purely cosmetic)
+const DECAY = { hunger: 1.2, social: 0.9, fun: 0.9 };
 
 export function xpForLevel(l) { return 80 + (l - 1) * 60; } // xp needed to go from level l → l+1
 
@@ -114,20 +106,7 @@ export function addXp(n) {
   save(); renderNeeds(); checkAchievements();
 }
 
-// ---------------------------------------------------------------- quests
-function genQuests() {
-  const pool = [...QUEST_TEMPLATES];
-  const picks = [];
-  while (picks.length < 3 && pool.length) {
-    const t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-    const goal = t.goals[Math.floor(Math.random() * t.goals.length)];
-    picks.push({ id: t.id, icon: t.icon, type: t.type, verb: t.verb, unit: t.unit, goal, reward: t.reward, claimed: false });
-  }
-  state.quests = picks;
-  state.questStamp = todayStamp();
-  save();
-}
-
+// ---------------------------------------------------------------- day / streak
 const stampToDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m, d); };
 const dayDiff = (a, b) => Math.round((stampToDate(a) - stampToDate(b)) / 86400000);
 
@@ -136,7 +115,6 @@ export function newDayCheck() {
   if (state.dayStamp !== today) {
     if (state.dayStamp !== null) { state.day++; state.stats.daysActive = (state.stats.daysActive || 1) + 1; }
     state.dayStamp = today;
-    state.daily = { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] };
     // daily login streak bonus
     const prev = state.lastLogin;
     state.loginStreak = (prev && dayDiff(today, prev) === 1) ? (state.loginStreak || 1) + 1 : 1;
@@ -144,48 +122,22 @@ export function newDayCheck() {
     const bonus = 20 + Math.min(state.loginStreak, 7) * 10;
     addCoins(bonus);
     setTimeout(() => toast(`Day ${state.loginStreak} streak! +🪙${bonus}`, '🎁'), 400);
-    genQuests();
     save();
     return true;
   }
-  if (!state.quests || !state.quests.length) genQuests();
   return false;
 }
 
+// Activity hook: grants XP + a small flavor-need bump, then re-checks achievements.
+// (Per-activity stats are incremented at the call sites.)
 export function track(type, amount = 1, meta = null) {
-  if (state.daily[type] === undefined) state.daily[type] = 0;
-  // chats count unique students per day
-  if (type === 'chats' && meta) {
-    if (state.daily.chatNames.includes(meta)) return;
-    state.daily.chatNames.push(meta);
-    state.daily.chats = state.daily.chatNames.length;
-  } else {
-    state.daily[type] += amount;
-  }
-  // small need/xp nudges for doing things
   if (type === 'chats') applyNeeds({ social: 10 });
   if (type === 'games') addXp(8);
   if (type === 'hoops') addXp(amount);
   if (type === 'studyMin') addXp(Math.round(amount / 5));
-  // surface quest completions
-  for (const q of state.quests) {
-    if (q.type === type && !q.claimed && !q._done && (state.daily[q.type] || 0) >= q.goal) {
-      q._done = true;
-      toast(`Quest ready: ${q.verb} ${q.goal} ${q.unit}`, q.icon);
-    }
-  }
   save();
   checkAchievements();
   if (isCampusOpen()) renderCampus();
-}
-
-function claimQuest(i) {
-  const q = state.quests[i];
-  if (!q || q.claimed || (state.daily[q.type] || 0) < q.goal) return;
-  q.claimed = true;
-  addCoins(q.reward); addXp(20);
-  toast(`+🪙${q.reward} · ${q.verb} ${q.goal} ${q.unit} done!`, '✅');
-  save(); renderCampus();
 }
 
 // ---------------------------------------------------------------- friendship
@@ -212,7 +164,7 @@ export function eat(foodId, { fromPantry = true } = {}) {
   const f = findFood(foodId);
   if (!f) return false;
   if (fromPantry && !takeFromPantry(foodId)) return false;
-  applyNeeds({ hunger: f.hunger || 0, energy: f.energy || 0, fun: f.fun || 0 });
+  applyNeeds({ hunger: f.hunger || 0, fun: f.fun || 0 });
   state.stats.mealsEaten = (state.stats.mealsEaten || 0) + 1;
   track('meals', 1);
   if (f.buff === 'focus') { grantBuff('focus', 30); toast(`${f.name} — focus boost for studying!`, f.icon); }
@@ -221,7 +173,7 @@ export function eat(foodId, { fromPantry = true } = {}) {
 }
 
 // ---------------------------------------------------------------- Campus panel
-let campusTab = 'quests';
+let campusTab = 'awards';
 export function isCampusOpen() { const el = $('campus-panel'); return el && !el.classList.contains('hidden'); }
 export function openCampus(tab) { campusTab = tab || campusTab; checkAchievements(); $('campus-panel').classList.remove('hidden'); renderCampus(); }
 export function closeCampus() { $('campus-panel').classList.add('hidden'); }
@@ -230,26 +182,10 @@ function bar(v, color) { return `<div class="cp-bar"><div class="cp-bar-fill" st
 
 function renderCampus() {
   const body = $('campus-body');
-  const tabs = [['quests', '📋'], ['awards', '🏆'], ['friends', '💛'], ['me', '🐾']];
+  const tabs = [['awards', '🏆'], ['friends', '💛'], ['me', '🐾']];
   let html = `<div class="cp-tabs">${tabs.map(([k, l]) => `<button class="cp-tab ${campusTab === k ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</div><div class="cp-content">`;
 
-  if (campusTab === 'quests') {
-    html += `<div class="cp-day">Day ${state.day} · Daily Quests</div>`;
-    if (!state.quests.length) html += `<p class="cp-empty">No quests right now — check back tomorrow!</p>`;
-    state.quests.forEach((q, i) => {
-      const prog = Math.min(state.daily[q.type] || 0, q.goal);
-      const done = prog >= q.goal;
-      html += `<div class="cp-quest ${q.claimed ? 'claimed' : done ? 'done' : ''}">
-        <div class="cp-q-icon">${q.icon}</div>
-        <div class="cp-q-main">
-          <div class="cp-q-text">${q.verb} ${q.goal} ${q.unit}</div>
-          ${bar(prog / q.goal * 100, '#6be0a0')}
-          <div class="cp-q-sub">${prog}/${q.goal} · 🪙${q.reward}</div>
-        </div>
-        <button class="cp-q-btn" data-claim="${i}" ${q.claimed || !done ? 'disabled' : ''}>${q.claimed ? '✓' : done ? 'Claim' : '…'}</button>
-      </div>`;
-    });
-  } else if (campusTab === 'friends') {
+  if (campusTab === 'friends') {
     const names = Object.keys(state.friends);
     html += `<div class="cp-day">Campus Friends</div>`;
     if (!names.length) html += `<p class="cp-empty">Walk up to students and chat to make friends!</p>`;
@@ -290,7 +226,6 @@ function renderCampus() {
   html += '</div>';
   body.innerHTML = html;
   body.querySelectorAll('.cp-tab').forEach(b => b.addEventListener('click', () => { campusTab = b.dataset.tab; renderCampus(); }));
-  body.querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', () => claimQuest(+b.dataset.claim)));
 }
 
 // ---------------------------------------------------------------- init
@@ -301,6 +236,4 @@ export function initSystems() {
   renderNeeds();
   $('campus-close')?.addEventListener('click', closeCampus);
   $('menu-btn')?.addEventListener('click', () => (isCampusOpen() ? closeCampus() : openCampus()));
-  // mark quests already satisfied (so claim works) without spamming toasts
-  for (const q of state.quests) if ((state.daily[q.type] || 0) >= q.goal) q._done = true;
 }

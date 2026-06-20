@@ -264,7 +264,7 @@ export function createBasketball({ parent, court }) {
     if (makes > 0) track('hoops', makes);
     state.stats.hoopsScored = (state.stats.hoopsScored || 0) + makes;
     if (scoreA > scoreB) { track('games', 1); state.stats.gamesWon = (state.stats.gamesWon || 0) + 1; }
-    applyNeeds({ fun: 24, energy: -12, hunger: -8 });
+    applyNeeds({ fun: 24, hunger: -8 });
     $('bball-hud').classList.add('hidden');
     const win = scoreA > scoreB ? 'You win! 🎉' : scoreA === scoreB ? "It's a tie!" : 'Opponents win.';
     showModal('🏀 Final whistle!', `${win}<br>You scored <b>${scoreA}</b> (opp ${scoreB}) on <b>${makes}</b> baskets.<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);

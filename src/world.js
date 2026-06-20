@@ -601,7 +601,7 @@ export function buildCampus() {
   colliders.push({ x: -20, z: 8, w: 2.8, d: 2.6 });
 
   // ---- pond park: a calm corner of the quad to sit and relax ----
-  const PX = -40, PZ = -14;
+  const PX = -70, PZ = 12; // open west lawn, well clear of the library and the central path
   const pond = new THREE.Mesh(new THREE.CircleGeometry(6, 36),
     new THREE.MeshToonMaterial({ color: P.water, emissive: 0x1d5868, emissiveIntensity: 0.5 }));
   pond.rotation.x = -Math.PI / 2; pond.position.set(PX, 0.05, PZ); root.add(pond);

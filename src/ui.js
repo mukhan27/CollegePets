@@ -309,7 +309,7 @@ function phaseComplete(mode, ctx) {
     state.stats.pomodorosDone++;
     addCoins(ctx.reward);
     track('studyMin', ctx.focusMin);
-    applyNeeds({ energy: -10, fun: -6, hunger: -6 }); // studying is tiring & makes you peckish
+    applyNeeds({ fun: -6, hunger: -6 }); // studying makes you peckish
     if (ctx.breakMin > 0) beginPhase('break', ctx.breakMin, ctx);
     else finishSession(true, ctx, false);
   } else {

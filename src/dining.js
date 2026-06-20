@@ -10,11 +10,11 @@ const $ = (id) => document.getElementById(id);
 // ----------------------------------------------------------- food menu
 export function openFoodMenu() {
   function render() {
-    let html = `<p class="dh-bal">🪙 ${state.coins} &nbsp; ⚡ ${Math.round(state.needs.energy)} &nbsp; 🍔 ${Math.round(state.needs.hunger)}</p>
+    let html = `<p class="dh-bal">🪙 ${state.coins} &nbsp; 🍔 ${Math.round(state.needs.hunger)} &nbsp; 🎉 ${Math.round(state.needs.fun)}</p>
       <p class="dh-hint">Tap to eat now · 🎁 to stock up for gifting friends</p>
       <div class="item-grid">`;
     for (const f of FOOD_CATALOG) {
-      const fx = [f.hunger ? `🍔+${f.hunger}` : '', f.energy ? `⚡+${f.energy}` : '', f.fun ? `🎉+${f.fun}` : '', f.buff === 'focus' ? '📚 focus' : ''].filter(Boolean).join(' ');
+      const fx = [f.hunger ? `🍔+${f.hunger}` : '', f.fun ? `🎉+${f.fun}` : '', f.buff === 'focus' ? '📚 focus' : ''].filter(Boolean).join(' ');
       html += `<div class="item-card food-card" data-id="${f.id}">
         <button class="food-gift" data-stock="${f.id}" title="Stock up to gift">🎁</button>
         <div class="item-icon">${f.icon}</div>
@@ -125,7 +125,7 @@ function endCook() {
   $('cook-overlay').classList.add('hidden');
   const dishes = cook.score, coins = dishes * 3;
   addCoins(coins);
-  applyNeeds({ energy: -16, social: 8, fun: 6 });
+  applyNeeds({ social: 8, fun: 6 });
   if (dishes >= 12) track('games', 1); // a solid shift counts as a "win"
   const cb = cook.onDone; cook = null;
   showModal('👨‍🍳 Shift over!', `You served <b>${dishes}</b> dishes!<br>Tips earned: <b>🪙 ${coins}</b>`, [{ label: 'Nice', onClick: () => { if (cb) cb(); } }]);

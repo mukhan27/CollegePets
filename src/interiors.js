@@ -1202,8 +1202,8 @@ export function buildStudentUnion() {
   // ---- quest board near the entrance ----
   add(tb(2.6, 3.0, 0.2, 0x6e4a2e), -W / 2 + 1.0, 2.2, 6);
   add(tb(2.2, 2.5, 0.06, 0xf3ecd8), -W / 2 + 1.1, 2.3, 6);
-  const qsign = textSprite('📋 Quests'); qsign.position.set(-W / 2 + 1.1, 4.0, 6); root.add(qsign);
-  interactables.push({ id: 'quest_board', x: -W / 2 + 2.6, z: 6, r: 2.2, label: '📋 Check quests' });
+  const qsign = textSprite('🏆 Trophies'); qsign.position.set(-W / 2 + 1.1, 4.0, 6); root.add(qsign);
+  interactables.push({ id: 'quest_board', x: -W / 2 + 2.6, z: 6, r: 2.2, label: '🏆 Trophies & stats' });
 
   // ---- lighting (point lights only; neon comes from emissive meshes) ----
   root.add(new THREE.AmbientLight(0x9a8ac0, 0.5));
