@@ -509,7 +509,7 @@ export function buildCampus() {
     { id: 'lecture', x: -20, z: 56, w: 26, h: 12, d: 13, color: P.wallSage, roofColor: P.roofGreen,
       wallStyle: 'brick', label: '🏛️ Hawthorne Hall', prompt: null },
     { id: 'cafeteria', x: 24, z: 56, w: 20, h: 8, d: 12, color: P.wallPeach, roofColor: P.roofRed,
-      chimney: true, label: '🍕 Dining Hall', prompt: '🍕 Grab a snack' },
+      chimney: true, label: '🍽️ Dining Hall', prompt: '🍽️ Enter Dining Hall' },
   ];
 
   const doors = {};

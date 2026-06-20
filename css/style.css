@@ -384,3 +384,30 @@ html, body {
   background: rgba(24,18,30,.9); color: #fff; font-weight: 700; padding: 11px 18px; border-radius: 999px;
   display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity .25s, transform .25s; max-width: 80vw; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Dining hall ---------- */
+.dh-bal { font-weight: 700; color: #6b5b3e; margin-bottom: 6px; }
+.food-card .food-fx { font-size: 11px; color: #5a8a5a; margin: 2px 0; }
+
+/* cooking shift mini-game */
+#cook-overlay { position: fixed; inset: 0; z-index: 62;
+  background: radial-gradient(120% 90% at 50% 30%, #3a2f28 0%, #241c17 75%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+#cook-top { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; padding: 8px 16px; color: #fff; font-weight: 800;
+  background: rgba(0,0,0,.4); border-radius: 999px; }
+#cook-combo { color: #ffb04a; }
+#cook-stage { text-align: center; }
+#cook-label { color: #f0e6d6; font-weight: 700; margin-bottom: 6px; }
+#cook-order { font-size: clamp(70px, 18vw, 140px); line-height: 1; filter: drop-shadow(0 6px 14px rgba(0,0,0,.5)); }
+#cook-order.good { animation: cookgood .3s; }
+#cook-order.bad { animation: cookbad .3s; }
+@keyframes cookgood { 0% { transform: scale(1); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes cookbad { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
+#cook-timer { width: min(70vw, 360px); height: 12px; border-radius: 8px; background: rgba(255,255,255,.18);
+  overflow: hidden; margin: 12px auto 0; }
+#cook-timer-fill { height: 100%; width: 100%; background: #6be0a0; border-radius: 8px; transition: width .08s linear; }
+#cook-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+.cook-btn { width: 76px; height: 76px; border-radius: 18px; border: none; font-size: 38px;
+  background: rgba(255,255,255,.92); cursor: pointer; box-shadow: 0 5px 0 rgba(0,0,0,.28); }
+.cook-btn:active { transform: translateY(3px); box-shadow: none; }

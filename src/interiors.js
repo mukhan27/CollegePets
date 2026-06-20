@@ -1042,6 +1042,92 @@ export function buildShop() {
   return { root, colliders, interactables, bounds, spawn };
 }
 
+// ------------------------------------------------------------ dining hall
+// A lively campus dining hall: a serving counter (order food), long communal
+// tables with benches you can sit at, a kitchen grill where you can work a shift
+// (cooking mini-game), bright windows and a menu board.
+export function buildDiningHall() {
+  const root = new THREE.Group();
+  const colliders = [];
+  const interactables = [];
+  const W = 32, D = 22;
+  const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
+  root.add(makeRoom(W, D, { wall: 0xf3e7d0 }));
+
+  const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
+  const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
+  const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), toonMat(c)); m.castShadow = true; return m; };
+  const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
+  const emi = (c, e, i = 0.5) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
+  const shade = (x, z, sx, sz = sx) => { const dd = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); dd.rotation.x = -Math.PI / 2; dd.position.set(x, 0.02, z); root.add(dd); };
+
+  // checkerboard-ish floor + warm trim
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#d8b98a', '#bd9866') }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; floor.receiveShadow = true; root.add(floor);
+  for (const [w, d, x, z] of [[W, 0.3, 0, -D / 2 + 0.3], [0.3, D, -W / 2 + 0.3, 0], [0.3, D, W / 2 - 0.3, 0]]) {
+    add(tb(w, 0.5, d, 0xd8c4a6), x, 0.25, z); add(tb(w, 0.7, d, 0xc0392b), x, 1.15, z); add(tb(w, 0.3, d, 0xfff1dd), x, 4.82, z);
+  }
+
+  // ---- serving counter along the back, with a sneeze-guard and food trays ----
+  const bz = -D / 2 + 1.6;
+  add(tb(W - 6, 1.2, 1.8, 0xb5895a), 0, 0.6, bz);
+  add(tb(W - 6, 0.16, 2.1, 0xcfa978), 0, 1.3, bz);
+  for (let i = 0; i < 6; i++) add(tb(2.2, 0.16, 1.1, [0xd95b4a, 0xffd166, 0x6be0a0, 0x7ec8e3, 0xe8748c, 0xf2a35c][i]), -10 + i * 4, 1.42, bz - 0.1); // food trays
+  add(tb(W - 6.4, 0.1, 0.1, 0xbfe0ea), 0, 2.3, bz + 0.7); // glass guard rail
+  for (const sx of [-(W - 6) / 2 + 0.4, (W - 6) / 2 - 0.4]) add(cyl(0.04, 0.04, 1.0, 6, 0xcfcfd6), sx, 1.85, bz + 0.7);
+  colliders.push({ x: 0, z: bz, w: W - 6, d: 2.0 }); shade(0, bz, W - 5, 3.2);
+  const menu = add(tb(7, 2.4, 0.2, 0x2c3530), 9, 3.3, -D / 2 + 0.5); // menu board
+  const sign = textSprite('🍽️ Dining Hall'); sign.position.set(-7, 3.6, -D / 2 + 0.7); root.add(sign);
+  interactables.push({ id: 'order_food', x: 0, z: bz + 2.6, r: 2.6, label: '🍽️ Order food' });
+
+  // ---- kitchen grill (work a shift) on the right ----
+  const kx = W / 2 - 2.2;
+  add(tb(3.2, 1.1, 3.2, 0x9aa0a6), kx, 0.55, -3);             // metal counter
+  add(tb(2.6, 0.18, 2.6, 0x3a3f44), kx, 1.16, -3);            // grill top
+  for (const gx of [-0.7, 0.7]) for (const gz of [-0.7, 0.7]) add(new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), emi(0xd95b4a, 0xff6b3a, 0.5)), kx + gx, 1.27, -3 + gz).rotation.x = -Math.PI / 2; // burners glow
+  add(cyl(0.5, 0.55, 2.2, 14, 0xb8bdc2), kx, 3.4, -3);        // exhaust hood
+  colliders.push({ x: kx, z: -3, w: 3.4, d: 3.4 }); shade(kx, -3, 4, 4);
+  interactables.push({ id: 'cook_job', x: kx - 2.2, z: -3, r: 2.4, label: '👨‍🍳 Work a shift' });
+
+  // ---- communal tables with benches you can sit at to eat ----
+  function diningTable(x, z) {
+    add(tb(2.4, 0.18, 5.0, 0x8a5a36), x, 1.0, z);             // tabletop
+    for (const sx of [-0.9, 0.9]) add(tb(0.2, 1.0, 4.4, 0x6e4626), x + sx, 0.5, z); // legs
+    // a couple of plates/cups for life
+    add(cyl(0.32, 0.32, 0.06, 14, 0xffffff), x - 0.4, 1.12, z - 1.4);
+    add(cyl(0.18, 0.16, 0.28, 10, 0xd95b4a), x + 0.5, 1.22, z + 0.6);
+    colliders.push({ x, z, w: 2.6, d: 5.2 }); shade(x, z, 4.2, 6);
+    for (const s of [-1, 1]) { // benches both sides → sit & eat
+      add(tb(2.0, 0.5, 0.6, 0xa9743f), x + s * 1.7, 0.5, z);
+      interactables.push({ id: 'dine', x: x + s * 2.5, z, r: 2.2, label: '🍴 Sit & eat',
+        seatPos: { x: x + s * 1.7, z, y: 0 }, sitY: 0.95, face: s > 0 ? -Math.PI / 2 : Math.PI / 2,
+        stepBack: { x: x + s * 2.6, z } });
+    }
+  }
+  diningTable(-8, 3.5);
+  diningTable(-2, 3.5);
+
+  // ---- windows, plants, pendant lights (no glowing bulb meshes) ----
+  const winGlass = emi(0xeaf6ff, 0xcfe6f4, 0.5);
+  function win(cx, cy, cz, ry) {
+    const grp = new THREE.Group();
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.8, 0.18), toonMat(0xfff1dd)); grp.add(fr);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 0.1), winGlass); grp.add(gl);
+    grp.position.set(cx, cy, cz); grp.rotation.y = ry; root.add(grp);
+  }
+  win(-W / 2 + 0.25, 3.0, 4, Math.PI / 2); win(-W / 2 + 0.25, 3.0, -4, Math.PI / 2);
+  root.add(new THREE.AmbientLight(0xfff2dc, 0.55));
+  for (const [lx, lz] of [[-8, 3], [0, 3], [-6, -6], [6, 2]]) { const pl = new THREE.PointLight(0xffe6b8, 1.0, 15, 2); pl.position.set(lx, 4.7, lz); root.add(pl); }
+  function plant(x, z) { add(cyl(0.4, 0.32, 0.7, 12, 0xb5703f), x, 0.35, z); add(cyl(0.1, 0.13, 1.4, 8, 0x6e4a2e), x, 1.3, z); for (const [px, py, pz, r] of [[0, 2.2, 0, 0.7], [0.35, 2.0, 0.15, 0.5], [-0.35, 2.05, -0.15, 0.5]]) add(sph(r, 0x4f8a45), x + px, py, z + pz); shade(x, z, 1.6, 1.6); colliders.push({ x, z, w: 1, d: 1 }); }
+  plant(-W / 2 + 2, D / 2 - 3); plant(W / 2 - 2, D / 2 - 3);
+
+  addExitPad(root, 0, D / 2 - 1.4);
+  interactables.push({ id: 'exit_dining', x: 0, z: D / 2 - 1.6, r: 2.2, label: '🚪 Leave Dining Hall' });
+  const spawn = { x: 0, z: D / 2 - 4 };
+  return { root, colliders, interactables, bounds, spawn };
+}
+
 // ------------------------------------------------------------ bedroom
 // A revamped dorm bedroom with a grid-based decorating editor: every piece of
 // furniture lives in a `layout` (type + grid cell + rotation) that the player

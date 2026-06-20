@@ -6,7 +6,8 @@ import { state, save, PET_TYPES, furnitureCount } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
-import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop } from './interiors.js';
+import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall } from './interiors.js';
+import { openFoodMenu, startCookJob, initDiningUI } from './dining.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
@@ -94,6 +95,7 @@ const lectureLobby = buildLectureLobby();
 const lectureRoom = buildLectureRoom();
 const dormCommon = buildDormCommon();
 const shopInterior = buildShop();
+const diningHall = buildDiningHall();
 const bedroom = buildBedroom(state.room.layout);
 state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
 
@@ -115,6 +117,7 @@ lectureLobby.camOffset = new THREE.Vector3(0, 11, 17);
 lectureRoom.camOffset = new THREE.Vector3(0, 13, 21);
 dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
 shopInterior.camOffset = new THREE.Vector3(0, 10, 16);
+diningHall.camOffset = new THREE.Vector3(0, 11, 17);
 bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
 // Per-location colour mood (exposure + tilt-shift grade). The library is graded
@@ -129,6 +132,7 @@ const LOCATIONS = {
   lectureRoom: { def: lectureRoom, name: '🏛️ Lecture Hall', sky: 0x1e2630 },
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
   shopInterior: { def: shopInterior, name: '🛍️ Campus Store', sky: 0x3a2a20 },
+  diningHall: { def: diningHall, name: '🍽️ Dining Hall', sky: 0x2e2620 },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
 for (const loc of Object.values(LOCATIONS)) {
@@ -315,9 +319,11 @@ function runInteract(it) {
     case 'vending':
       showModal('🥤 Vending machine', 'You grab a fizzy soda. Refreshing! (+ vibes, no charge — RA covered it)');
       break;
-    case 'cafeteria':
-      showModal('🍕 Dining Hall', 'You grab a slice of legendary dining-hall pizza. It\'s… edible! Energy restored. 💪');
-      break;
+    case 'cafeteria': switchLocation('diningHall'); break;
+    case 'exit_dining': switchLocation('campus', { x: campus.doors.cafeteria.x, z: campus.doors.cafeteria.z + 1 }); break;
+    case 'order_food': openFoodMenu(); break;
+    case 'cook_job': startCookJob(); break;
+    case 'dine': beginLounge(it); openFoodMenu(); break;
   }
 }
 
@@ -636,6 +642,7 @@ function tick() {
 initInput();
 initChatUI();
 initMinigameUI();
+initDiningUI();
 setupSelectScreen();
 renderer.setAnimationLoop(tick);
 
