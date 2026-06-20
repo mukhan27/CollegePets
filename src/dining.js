@@ -1,7 +1,7 @@
 // Dining hall interactions: a food-ordering menu and a "work a shift" cooking
 // mini-game (serve the right dish before the timer runs out).
 
-import { state, addCoins, FOOD_CATALOG, findFood } from './state.js';
+import { state, addCoins, FOOD_CATALOG, findFood, buyFood } from './state.js';
 import { showModal } from './ui.js';
 import { eat, toast, applyNeeds, track } from './systems.js';
 
@@ -11,10 +11,12 @@ const $ = (id) => document.getElementById(id);
 export function openFoodMenu() {
   function render() {
     let html = `<p class="dh-bal">🪙 ${state.coins} &nbsp; ⚡ ${Math.round(state.needs.energy)} &nbsp; 🍔 ${Math.round(state.needs.hunger)}</p>
+      <p class="dh-hint">Tap to eat now · 🎁 to stock up for gifting friends</p>
       <div class="item-grid">`;
     for (const f of FOOD_CATALOG) {
       const fx = [f.hunger ? `🍔+${f.hunger}` : '', f.energy ? `⚡+${f.energy}` : '', f.fun ? `🎉+${f.fun}` : '', f.buff === 'focus' ? '📚 focus' : ''].filter(Boolean).join(' ');
       html += `<div class="item-card food-card" data-id="${f.id}">
+        <button class="food-gift" data-stock="${f.id}" title="Stock up to gift">🎁</button>
         <div class="item-icon">${f.icon}</div>
         <div class="item-name">${f.name}</div>
         <div class="food-fx">${fx}</div>
@@ -23,6 +25,13 @@ export function openFoodMenu() {
     }
     html += '</div>';
     showModal('🍽️ Order food', html, [{ label: 'Done', primary: false }]);
+    $('modal-body').querySelectorAll('[data-stock]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const f = findFood(b.dataset.stock);
+      if (!buyFood(f.id)) { toast('Not enough coins for that', '🪙'); return; }
+      toast(`Bagged a ${f.name} to gift`, '🎁');
+      render();
+    }));
     $('modal-body').querySelectorAll('.food-card').forEach(c => c.addEventListener('click', () => {
       const f = findFood(c.dataset.id);
       if (state.coins < f.price) { toast('Not enough coins for that', '🪙'); return; }

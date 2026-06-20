@@ -1293,6 +1293,7 @@ export function buildBedroom(initialLayout) {
   const pad = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), emi(0xe75480, 0x5c1d33, 0.5));
   pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.04, -1); root.add(pad);
   interactables.push({ id: 'decorate', x: 0, z: -1, r: 2.2, label: '🎨 Edit room' });
+  interactables.push({ id: 'sleep', x: -5, z: -3, r: 2.6, label: '😴 Sleep' }); // rest by the bed
   addExitPad(root, 0, D / 2 - 1.8);
   interactables.push({ id: 'exit_bedroom', x: 0, z: D / 2 - 1.8, r: 2, label: '🚪 Back to common room' });
 

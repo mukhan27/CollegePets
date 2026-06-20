@@ -18,7 +18,7 @@ import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
-import { initSystems, tickSystems, track, openCampus } from './systems.js';
+import { initSystems, tickSystems, track, openCampus, applyNeeds, newDayCheck, toast } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -334,7 +334,25 @@ function runInteract(it) {
     case 'arcade_memory': startMemory(); break;
     case 'arcade_hoops_info': showModal('🏀 Hoops', 'Real hoops are on the court outside — head east past the dorms for a full 3-on-3 game!'); break;
     case 'quest_board': openCampus('quests'); break;
+    case 'sleep': doSleep(); break;
   }
+}
+
+function doSleep() {
+  showModal('😴 Take a nap?', 'Rest up to fully restore your energy. A new day means fresh quests!', [
+    { label: 'Sleep 💤', onClick: () => {
+      const fade = $('sleep-fade'); if (fade) { fade.classList.add('show'); setTimeout(() => fade.classList.remove('show'), 1400); }
+      state.needs.energy = 100;
+      applyNeeds({ hunger: -10, social: -6, fun: -2 });
+      const newDay = newDayCheck();
+      save();
+      setTimeout(() => {
+        toast('Good morning! Energy restored.', '🌅');
+        if (newDay) showModal(`🌅 Day ${state.day}`, 'A fresh day on campus — new daily quests are waiting on your 📋 menu!');
+      }, 700);
+    } },
+    { label: 'Not now', primary: false },
+  ]);
 }
 
 interactBtn.addEventListener('click', () => {
