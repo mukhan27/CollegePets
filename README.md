@@ -23,17 +23,30 @@ Then open `http://localhost:3000` — on a phone, open your computer's LAN IP (e
 | Left-thumb joystick / WASD | Move your pet |
 | Yellow button / `E` | Context action (enter, chat, sit, play) |
 
+### Campus life
+
+Your pet has four **needs** — ⚡ Energy, 🍔 Hunger, 💬 Social, 🎉 Fun — shown top-left.
+They drain over time and you top them up by living campus life: eat, sleep, hang
+out, and play. Tap **📋** (top-right) any time for the **Campus** panel:
+
+- **📋 Daily quests** — study, score baskets, chat, eat, win mini-games → earn 🪙 and **level up** (levels pay coin bonuses).
+- **💛 Friends** — every student has a friendship tier that rises as you chat and gift; reach Bestie.
+- **🐾 Me** — your level, XP, needs and lifetime stats.
+
 ### Things to do
 
 - **🐾 Pick a pet** — cat, dog, bear, duck, or hamster, with a custom name.
-- **💬 Chat** — walk up to any wandering student pet and talk to them (canned single-player brains, each with a personality).
-- **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). The screen locks into focus mode (hold 3s to give up). Completing a session pays **🪙 2/min**.
-- **🏀 Basketball** — a full-court 3D **first-person** pickup game: move (joystick), aim (drag), time the **Shoot** meter, **Pass** to the open teammate, and **Jump** to dunk or block. Coins for baskets.
-- **🏛️ Lecture Hall** — a big-screen lecture hall with tiered seating + stage downstairs, restrooms, and a study mezzanine of pomodoro desks upstairs.
-- **🛍️ Campus Store** — buy hats, glasses, scarves (worn on your pet) and furniture for your room.
-- **🏠 Maple Dorm** — a furnished common room with sit-able couches, plus **your own bedroom** with a grid-based furniture editor (place, move & rotate furniture you own).
+- **💬 Chat & gift** — walk up to any wandering student and talk (each has a personality); 🎁 gift them snacks to grow your friendship.
+- **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). Focus mode locks the screen; completing a session pays coins (a ☕ cold-brew buff boosts the payout).
+- **🏀 Basketball** — a full-court 3D 3rd-person pickup game (you + an animal teammate vs an opponent): move, aim, time the **Shoot** meter, **Pass**, **Jump**/dunk, **Block** & **Steal**. Coins for baskets.
+- **🍽️ Dining Hall** — order food that restores your needs, sit at the communal tables, or **work a cooking shift** (serve the right dish before the timer) for tips.
+- **🎮 Student Union** — the campus arcade: **Trivia** and **Memory** mini-games, a coffee bar, hangout couches, a dance floor and a quest board.
+- **🏛️ Lecture Hall** — a big-screen hall with tiered seating + stage, and a study mezzanine of pomodoro desks upstairs.
+- **🛍️ Campus Store** — walk in, browse real item previews, buy hats/glasses/scarves & furniture, and use the **fitting-room mirror** to try outfits on your pet live.
+- **🏠 Maple Dorm** — a furnished common room with sit-able couches, plus **your own bedroom** with a grid-based furniture editor — and a bed to **sleep** and restore energy.
+- **🦆 Birch Pond** — a quiet park corner with benches to sit and relax.
 
-Progress (pet, coins, purchases, room decor, study stats) is saved in `localStorage`.
+Progress (pet, coins, purchases, room decor, needs, level, quests, friends, stats) is saved in `localStorage`.
 
 ## 🗂️ Code layout
 
@@ -43,16 +56,34 @@ css/style.css       HUD, panels, joystick, focus-lock styling
 vendor/three.module.js  vendored Three.js (no CDN / no npm needed at runtime)
 src/
   main.js           scene, camera, game loop, location switching, interactions
-  world.js          outdoor campus (buildings, quad, court, trees)
-  interiors.js      library, dorm common room, customizable bedroom
+  world.js          outdoor campus (buildings, quad, court, pond, trees)
+  interiors.js      library, dorm, bedroom, shop, dining hall, student union
+  furniture.js      shared furniture mesh registry (bedroom + shop previews)
   petFactory.js     low-poly pets + wearable attachments
   npcs.js           wandering students, speech bubbles, chat brain
-  ui.js             modals, chat panel, shop, decorator, pomodoro lock
-  minigames.js      basketball (canvas 2D)
-  state.js          save/load, coins, item catalog
+  systems.js        needs, XP/levels, daily quests, friendship, Campus panel
+  ui.js             modals, chat, shop, decorator, pomodoro lock, gifting
+  itemPreview.js    offscreen 3D thumbnails for shop/try-on
+  tryon.js          fitting-room live try-on view
+  dining.js         food ordering + cooking shift mini-game
+  arcade.js         trivia + memory mini-games
+  basketball.js     3D 3rd-person basketball game
+  state.js          save/load, coins, item + food catalogs
   input.js          virtual joystick + keyboard
 ```
 
-## 🔭 Next steps (multiplayer)
+## 🔭 Multiplayer direction
 
-The chat panel, NPC roster, and location system are built so NPCs can be swapped for real connected players later (e.g. WebSocket presence + chat relay).
+This is a **multiplayer game at heart** — the long-term vision is a shared campus
+where the other pets are **real students**, not NPCs. The current wandering
+students are throwaway placeholders so the campus isn't empty while building out
+the single-player systems; they'll be replaced by networked players (presence +
+chat relay). Everything else is designed to be multiplayer-friendly:
+
+- **Needs, XP/levels, quests, economy, customization, jobs and mini-games** are
+  all per-player and server-syncable — no NPC dependency.
+- The location/interaction system streams players in/out of rooms cleanly.
+- Friendship/gifting carries over directly to real players.
+
+New gameplay work focuses on shared-world content (mini-games, jobs, customization,
+events), not NPC behavior.
