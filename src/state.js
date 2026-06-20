@@ -91,7 +91,8 @@ function defaults() {
     day: 1, dayStamp: null,    // YYYY-M-D the current game day was started on
     quests: [], questStamp: null,
     daily: { studyMin: 0, hoops: 0, chats: 0, spend: 0, meals: 0, games: 0, chatNames: [] }, // resets each day
-    friends: {},               // npc name -> friendship points
+    friends: {},               // student name -> friendship points
+    achievements: {},          // unlocked achievement ids
     pantry: {},                // owned food/gift items: id -> count
     pet2: null,                // a second adopted pet (companion), future use
     buffs: {},                 // name -> expiry timestamp

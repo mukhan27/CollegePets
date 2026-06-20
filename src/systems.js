@@ -28,6 +28,31 @@ const QUEST_TEMPLATES = [
 
 export function xpForLevel(l) { return 80 + (l - 1) * 60; } // xp needed to go from level l → l+1
 
+// solo, multiplayer-agnostic milestones (no NPC dependency)
+const ACHIEVEMENTS = [
+  { id: 'lvl5',     icon: '⭐', name: 'Rising Star',  desc: 'Reach level 5',          goal: 5,   cur: () => state.level },
+  { id: 'study100', icon: '📚', name: 'Bookworm',     desc: 'Study 100 minutes',      goal: 100, cur: () => Math.round(state.stats.focusMinutes || 0) },
+  { id: 'hoops50',  icon: '🏀', name: 'Baller',       desc: 'Score 50 baskets',       goal: 50,  cur: () => state.stats.hoopsScored || 0 },
+  { id: 'meals20',  icon: '🍽️', name: 'Foodie',       desc: 'Eat 20 meals',           goal: 20,  cur: () => state.stats.mealsEaten || 0 },
+  { id: 'games10',  icon: '🎮', name: 'Arcade Pro',   desc: 'Win 10 mini-games',      goal: 10,  cur: () => state.stats.gamesWon || 0 },
+  { id: 'fish25',   icon: '🎣', name: 'Angler',       desc: 'Catch 25 fish',          goal: 25,  cur: () => state.stats.fishCaught || 0 },
+  { id: 'days7',    icon: '📅', name: 'Regular',      desc: 'Spend 7 days on campus',  goal: 7,   cur: () => state.stats.daysActive || 1 },
+  { id: 'fits5',    icon: '🧢', name: 'Fashionista',  desc: 'Own 5 outfit items',     goal: 5,   cur: () => state.owned.length },
+];
+const ACH_REWARD = 50;
+
+export function checkAchievements() {
+  let any = false;
+  for (const a of ACHIEVEMENTS) {
+    if (!state.achievements[a.id] && a.cur() >= a.goal) {
+      state.achievements[a.id] = true; any = true;
+      addCoins(ACH_REWARD);
+      toast(`Achievement: ${a.name}! +🪙${ACH_REWARD}`, a.icon);
+    }
+  }
+  if (any) { save(); if (isCampusOpen()) renderCampus(); }
+}
+
 // ---------------------------------------------------------------- toasts
 let toastTimer = null;
 export function toast(msg, icon = '✨') {
@@ -86,7 +111,7 @@ export function addXp(n) {
     addCoins(bonus);
     toast(`Level ${state.level}! +🪙${bonus}`, '⭐');
   }
-  save(); renderNeeds();
+  save(); renderNeeds(); checkAchievements();
 }
 
 // ---------------------------------------------------------------- quests
@@ -140,6 +165,7 @@ export function track(type, amount = 1, meta = null) {
     }
   }
   save();
+  checkAchievements();
   if (isCampusOpen()) renderCampus();
 }
 
@@ -187,14 +213,14 @@ export function eat(foodId, { fromPantry = true } = {}) {
 // ---------------------------------------------------------------- Campus panel
 let campusTab = 'quests';
 export function isCampusOpen() { const el = $('campus-panel'); return el && !el.classList.contains('hidden'); }
-export function openCampus(tab) { campusTab = tab || campusTab; $('campus-panel').classList.remove('hidden'); renderCampus(); }
+export function openCampus(tab) { campusTab = tab || campusTab; checkAchievements(); $('campus-panel').classList.remove('hidden'); renderCampus(); }
 export function closeCampus() { $('campus-panel').classList.add('hidden'); }
 
 function bar(v, color) { return `<div class="cp-bar"><div class="cp-bar-fill" style="width:${clamp(v)}%;background:${v < 22 ? '#e15b5b' : color}"></div></div>`; }
 
 function renderCampus() {
   const body = $('campus-body');
-  const tabs = [['quests', '📋 Quests'], ['friends', '💛 Friends'], ['me', '🐾 Me']];
+  const tabs = [['quests', '📋'], ['awards', '🏆'], ['friends', '💛'], ['me', '🐾']];
   let html = `<div class="cp-tabs">${tabs.map(([k, l]) => `<button class="cp-tab ${campusTab === k ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</div><div class="cp-content">`;
 
   if (campusTab === 'quests') {
@@ -222,6 +248,20 @@ function renderCampus() {
       html += `<div class="cp-friend"><span class="cp-f-icon">${t.icon}</span>
         <div class="cp-f-main"><div class="cp-f-name">${n}</div><div class="cp-f-tier">${t.label} · ${friendPoints(n)} pts</div></div></div>`;
     });
+  } else if (campusTab === 'awards') {
+    const got = ACHIEVEMENTS.filter(a => state.achievements[a.id]).length;
+    html += `<div class="cp-day">Achievements · ${got}/${ACHIEVEMENTS.length}</div>`;
+    for (const a of ACHIEVEMENTS) {
+      const cur = Math.min(a.cur(), a.goal), done = !!state.achievements[a.id];
+      html += `<div class="cp-quest ${done ? 'done' : ''}">
+        <div class="cp-q-icon">${a.icon}</div>
+        <div class="cp-q-main">
+          <div class="cp-q-text">${a.name}${done ? ' ✓' : ''}</div>
+          ${bar(cur / a.goal * 100, '#ffd166')}
+          <div class="cp-q-sub">${a.desc} · ${cur}/${a.goal}</div>
+        </div>
+      </div>`;
+    }
   } else {
     const s = state.stats;
     html += `<div class="cp-day">${state.petName} · Level ${state.level}</div>
@@ -247,6 +287,7 @@ function renderCampus() {
 export function initSystems() {
   applyOfflineDecay();
   newDayCheck();
+  checkAchievements();
   renderNeeds();
   $('campus-close')?.addEventListener('click', closeCampus);
   $('menu-btn')?.addEventListener('click', () => (isCampusOpen() ? closeCampus() : openCampus()));
