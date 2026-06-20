@@ -411,3 +411,26 @@ html, body {
 .cook-btn { width: 76px; height: 76px; border-radius: 18px; border: none; font-size: 38px;
   background: rgba(255,255,255,.92); cursor: pointer; box-shadow: 0 5px 0 rgba(0,0,0,.28); }
 .cook-btn:active { transform: translateY(3px); box-shadow: none; }
+
+/* ---------- Arcade mini-games ---------- */
+.arc-top { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; padding: 8px 16px; color: #fff; font-weight: 800;
+  background: rgba(0,0,0,.45); border-radius: 999px; }
+#trivia-overlay, #memory-overlay { position: fixed; inset: 0; z-index: 62;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+#trivia-overlay { background: radial-gradient(120% 90% at 50% 25%, #243a52 0%, #15202e 75%); }
+#memory-overlay { background: radial-gradient(120% 90% at 50% 25%, #3a2444 0%, #1d1526 75%); }
+#trivia-card { width: min(560px, 92vw); background: rgba(255,255,255,.96); border-radius: 18px; padding: 20px; }
+#trivia-q { font-size: 19px; font-weight: 800; color: #233; margin-bottom: 14px; }
+#trivia-options { display: flex; flex-direction: column; gap: 10px; }
+.trivia-opt { text-align: left; padding: 13px 16px; border-radius: 12px; border: 2px solid #d8ccb8;
+  background: #fbf6ec; font-size: 15px; font-weight: 600; color: #2c3e50; cursor: pointer; }
+.trivia-opt:active { transform: translateY(1px); }
+.trivia-opt.correct { background: #c7f0d4; border-color: #6be0a0; }
+.trivia-opt.wrong { background: #f6cccc; border-color: #e15b5b; }
+#memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: min(420px, 90vw); }
+.mem-card { aspect-ratio: 1; border-radius: 14px; border: none; font-size: clamp(26px, 8vw, 40px);
+  background: linear-gradient(160deg, #6a5acd, #4a3aad); color: #fff; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,.3); }
+.mem-card.up { background: #fff; }
+.mem-card.done { opacity: .45; }
+.mem-card:active { transform: translateY(2px); box-shadow: none; }

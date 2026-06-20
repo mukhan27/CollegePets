@@ -1128,6 +1128,93 @@ export function buildDiningHall() {
   return { root, colliders, interactables, bounds, spawn };
 }
 
+// ------------------------------------------------------------ student union
+// A social game room: neon arcade cabinets (trivia & memory mini-games), a
+// coffee bar, comfy couches to hang out, a quest board, and a little dance
+// floor — the campus hangout.
+export function buildStudentUnion() {
+  const root = new THREE.Group();
+  const colliders = [];
+  const interactables = [];
+  const W = 30, D = 24;
+  const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
+  root.add(makeRoom(W, D, { wall: 0x3a3550 })); // moody purple walls for the neon
+
+  const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
+  const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
+  const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), toonMat(c)); m.castShadow = true; return m; };
+  const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
+  const emi = (c, e, i = 0.8) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
+  const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
+  const shade = (x, z, sx, sz = sx) => { const dd = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); dd.rotation.x = -Math.PI / 2; dd.position.set(x, 0.02, z); root.add(dd); };
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0x2a2740));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; floor.receiveShadow = true; root.add(floor);
+  // glowing dance-floor tiles
+  const tileCols = [0xff5fa2, 0x5fd0ff, 0xffd166, 0x6be0a0];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++)
+    add(new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), emi(tileCols[(i + j) % 4], tileCols[(i + j) % 4], 0.35)), -6 + i * 1.5, 0.03, 4 + j * 1.5).rotation.x = -Math.PI / 2;
+
+  // ---- neon arcade cabinets along the back wall ----
+  function cabinet(x, label, id, scrColor) {
+    const g = new THREE.Group();
+    g.add(tb(2.2, 4.0, 1.4, 0x26233a));                                  // body
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.3), emi(scrColor, scrColor, 0.7)); scr.position.set(0, 2.7, 0.72); g.add(scr);
+    g.add((() => { const m = tb(2.0, 0.5, 0.6, 0x16141f); m.position.set(0, 1.5, 0.5); return m; })()); // control deck
+    for (const bx of [-0.4, 0, 0.4]) { const b = sph(0.12, [0xff5fa2, 0xffd166, 0x6be0a0][(bx + 1) * 2 % 3 | 0]); b.position.set(bx, 1.78, 0.78); g.add(b); }
+    // neon side strips
+    for (const s of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.6, 0.08), emi(scrColor, scrColor, 0.9)); st.position.set(s * 1.06, 2.1, 0.7); g.add(st); }
+    g.position.set(x, 0, -D / 2 + 0.9); root.add(g);
+    colliders.push({ x, z: -D / 2 + 0.9, w: 2.4, d: 1.6 });
+    const sign = textSprite(label); sign.position.set(x, 4.6, -D / 2 + 0.9); root.add(sign);
+    interactables.push({ id, x, z: -D / 2 + 2.6, r: 2.2, label });
+  }
+  cabinet(-7, '🧠 Trivia', 'arcade_trivia', 0x5fd0ff);
+  cabinet(-2.5, '🃏 Memory', 'arcade_memory', 0xff5fa2);
+  cabinet(2, '🏀 Hoops', 'arcade_hoops_info', 0xffd166); // flavour cabinet → hint to the court
+
+  // ---- coffee bar on the right ----
+  const bx = W / 2 - 2;
+  add(tb(3.4, 1.2, 1.6, 0x5a3b28), bx, 0.6, -4);
+  add(tb(3.6, 0.16, 1.9, 0x744a30), bx, 1.3, -4);
+  add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx - 0.8, 1.55, -4); // espresso machine
+  add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx - 0.2, 1.55, -4);
+  add(new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.2), emi(0xff5fa2, 0xff5fa2, 0.6)), bx, 3.2, -D / 2 + 0.5).rotation.y = 0; // neon "CAFE" glow panel
+  colliders.push({ x: bx, z: -4, w: 3.6, d: 1.8 }); shade(bx, -4, 4.4, 2.6);
+  interactables.push({ id: 'order_food', x: bx - 2.4, z: -4, r: 2.4, label: '☕ Order drinks' });
+
+  // ---- couches to hang out (loungeable) ----
+  function couch(x, z, ry, c) {
+    const g = new THREE.Group();
+    g.add((() => { const m = tb(3.4, 0.5, 1.5, c); m.position.y = 0.5; return m; })());
+    g.add((() => { const m = tb(3.4, 0.9, 0.4, c); m.position.set(0, 1.0, -0.55); return m; })());
+    for (const s of [-1, 1]) g.add((() => { const m = tb(0.4, 0.8, 1.5, c); m.position.set(s * 1.7, 0.9, 0); return m; })());
+    g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
+    const a = Math.abs(Math.sin(ry));
+    colliders.push({ x, z, w: 3.8 * (1 - a) + 1.8 * a, d: 1.8 * (1 - a) + 3.8 * a }); shade(x, z, 4.4, 2.4);
+    const fx = Math.sin(ry), fz = Math.cos(ry);
+    interactables.push({ id: 'lounge', x: x + fx * 2.4, z: z + fz * 2.4, r: 2.4, label: '🛋️ Hang out',
+      seatPos: { x, z, y: 0 }, sitY: 1.0, face: ry, stepBack: { x: x + fx * 2.2, z: z + fz * 2.2 } });
+  }
+  couch(8, 6, Math.PI, 0x4a6ea8);
+  couch(11, 2, -Math.PI / 2, 0xc0567a);
+
+  // ---- quest board near the entrance ----
+  add(tb(2.6, 3.0, 0.2, 0x6e4a2e), -W / 2 + 1.0, 2.2, 6);
+  add(tb(2.2, 2.5, 0.06, 0xf3ecd8), -W / 2 + 1.1, 2.3, 6);
+  const qsign = textSprite('📋 Quests'); qsign.position.set(-W / 2 + 1.1, 4.0, 6); root.add(qsign);
+  interactables.push({ id: 'quest_board', x: -W / 2 + 2.6, z: 6, r: 2.2, label: '📋 Check quests' });
+
+  // ---- lighting (point lights only; neon comes from emissive meshes) ----
+  root.add(new THREE.AmbientLight(0x9a8ac0, 0.5));
+  for (const [lx, lz] of [[-5, 5], [6, 0], [-8, -6], [8, 6]]) { const pl = new THREE.PointLight(0xc8b4ff, 1.0, 16, 2); pl.position.set(lx, 4.7, lz); root.add(pl); }
+
+  addExitPad(root, 0, D / 2 - 1.4);
+  interactables.push({ id: 'exit_union', x: 0, z: D / 2 - 1.6, r: 2.2, label: '🚪 Leave Student Union' });
+  const spawn = { x: 0, z: D / 2 - 4 };
+  return { root, colliders, interactables, bounds, spawn };
+}
+
 // ------------------------------------------------------------ bedroom
 // A revamped dorm bedroom with a grid-based decorating editor: every piece of
 // furniture lives in a `layout` (type + grid cell + rotation) that the player

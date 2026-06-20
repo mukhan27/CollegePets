@@ -6,8 +6,9 @@ import { state, save, PET_TYPES, furnitureCount } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
-import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall } from './interiors.js';
+import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, startCookJob, initDiningUI } from './dining.js';
+import { startTrivia, startMemory, initArcadeUI } from './arcade.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
@@ -17,7 +18,7 @@ import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
-import { initSystems, tickSystems, track } from './systems.js';
+import { initSystems, tickSystems, track, openCampus } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -96,6 +97,7 @@ const lectureRoom = buildLectureRoom();
 const dormCommon = buildDormCommon();
 const shopInterior = buildShop();
 const diningHall = buildDiningHall();
+const studentUnion = buildStudentUnion();
 const bedroom = buildBedroom(state.room.layout);
 state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
 
@@ -118,6 +120,7 @@ lectureRoom.camOffset = new THREE.Vector3(0, 13, 21);
 dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
 shopInterior.camOffset = new THREE.Vector3(0, 10, 16);
 diningHall.camOffset = new THREE.Vector3(0, 11, 17);
+studentUnion.camOffset = new THREE.Vector3(0, 12, 18);
 bedroom.camOffset = new THREE.Vector3(0, 8, 12);
 
 // Per-location colour mood (exposure + tilt-shift grade). The library is graded
@@ -133,6 +136,7 @@ const LOCATIONS = {
   dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
   shopInterior: { def: shopInterior, name: '🛍️ Campus Store', sky: 0x3a2a20 },
   diningHall: { def: diningHall, name: '🍽️ Dining Hall', sky: 0x2e2620 },
+  studentUnion: { def: studentUnion, name: '🎮 Student Union', sky: 0x241f33 },
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
 for (const loc of Object.values(LOCATIONS)) {
@@ -324,6 +328,12 @@ function runInteract(it) {
     case 'order_food': openFoodMenu(); break;
     case 'cook_job': startCookJob(); break;
     case 'dine': beginLounge(it); openFoodMenu(); break;
+    case 'lecture': switchLocation('studentUnion'); break;
+    case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
+    case 'arcade_trivia': startTrivia(); break;
+    case 'arcade_memory': startMemory(); break;
+    case 'arcade_hoops_info': showModal('🏀 Hoops', 'Real hoops are on the court outside — head east past the dorms for a full 3-on-3 game!'); break;
+    case 'quest_board': openCampus('quests'); break;
   }
 }
 
@@ -643,6 +653,7 @@ initInput();
 initChatUI();
 initMinigameUI();
 initDiningUI();
+initArcadeUI();
 setupSelectScreen();
 renderer.setAnimationLoop(tick);
 
