@@ -319,6 +319,7 @@ function runInteract(it) {
       break;
     case 'study_seat': beginStudy(it); break;
     case 'lounge': beginLounge(it); break;
+    case 'relax': beginLounge(it); applyNeeds({ fun: 16, social: 10, energy: 6 }); toast('Ahh… that\'s relaxing.', '🌳'); break;
     case 'stand_up': endLounge(); break;
     case 'vending':
       showModal('🥤 Vending machine', 'You grab a fizzy soda. Refreshing! (+ vibes, no charge — RA covered it)');

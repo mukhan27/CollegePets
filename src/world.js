@@ -600,6 +600,36 @@ export function buildCampus() {
   root.add(makePicnicTable(-20, 8, 0.4));
   colliders.push({ x: -20, z: 8, w: 2.8, d: 2.6 });
 
+  // ---- pond park: a calm corner of the quad to sit and relax ----
+  const PX = -40, PZ = -14;
+  const pond = new THREE.Mesh(new THREE.CircleGeometry(6, 36),
+    new THREE.MeshToonMaterial({ color: P.water, emissive: 0x1d5868, emissiveIntensity: 0.5 }));
+  pond.rotation.x = -Math.PI / 2; pond.position.set(PX, 0.05, PZ); root.add(pond);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(6, 6.7, 36), toonMat(0xbdb4a2));
+  rim.rotation.x = -Math.PI / 2; rim.position.set(PX, 0.06, PZ); root.add(rim);
+  for (const [lx, lz] of [[-2, 1], [1.6, -1.4], [2.6, 1.3], [-0.5, -2.2]]) {
+    const pad = mesh(new THREE.CircleGeometry(0.55, 12), toonMat(0x4f8a45), PX + lx, 0.07, PZ + lz, false);
+    pad.rotation.x = -Math.PI / 2; root.add(pad);
+  }
+  const duck = mesh(new THREE.SphereGeometry(0.4, 12, 10), toonMat(0xf2d65a), PX + 0.6, 0.32, PZ - 0.6);
+  duck.add(mesh(new THREE.SphereGeometry(0.24, 10, 8), toonMat(0xf2d65a), 0, 0.28, 0.32, false));
+  duck.add(mesh(new THREE.ConeGeometry(0.1, 0.22, 8), toonMat(0xe0922f), 0, 0.28, 0.55, false));
+  root.add(duck);
+  const relaxBench = (bx, bz) => {
+    const dx = PX - bx, dz = PZ - bz, d = Math.hypot(dx, dz) || 1, nx = dx / d, nz = dz / d;
+    const face = Math.atan2(nx, nz);
+    root.add(makeBench(bx, bz, face));
+    colliders.push({ x: bx, z: bz, w: 2.6, d: 1.2 });
+    interactables.push({ id: 'relax', x: bx + nx * 1.7, z: bz + nz * 1.7, r: 2.2, label: '🌳 Relax by the pond',
+      seatPos: { x: bx, z: bz, y: 0 }, sitY: 0.62, face, stepBack: { x: bx - nx * 1.6, z: bz - nz * 1.6 } });
+  };
+  relaxBench(PX - 8.5, PZ); relaxBench(PX + 8.5, PZ); relaxBench(PX, PZ - 8.5);
+  for (const [tx, tz] of [[PX - 10, PZ - 7], [PX + 10, PZ + 7], [PX - 4, PZ + 10]]) {
+    root.add(makeTree(tx, tz, 0.9, tx + tz)); colliders.push({ x: tx, z: tz, w: 1.2, d: 1.2 });
+  }
+  for (const [bx2, bz2] of [[PX - 6, PZ + 5], [PX + 6, PZ - 5]]) root.add(makeBush(bx2, bz2, 1.0));
+  const pondSign = textSprite('🦆 Birch Pond'); pondSign.position.set(PX, 2.6, PZ + 6.8); root.add(pondSign);
+
   // ---- instanced grass tufts + flowers (kept off the paths) ----
   const isSand = (wx, wz) =>
     Math.abs(wz) < 4.5 || Math.abs(wx) < 4.5 ||
