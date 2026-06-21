@@ -54,6 +54,36 @@ export function createBasketball({ parent, court }) {
     s.rotation.set(rx, ry, 0); ball.add(s);
   }
   group.add(ball);
+
+  // confetti pool (reused) for made baskets + dunks
+  const CONF_COLORS = [0xff5fa2, 0x5fd0ff, 0xffd166, 0x6be0a0, 0xff8b3a, 0xb98bff, 0xffffff];
+  const confetti = [];
+  for (let i = 0; i < 44; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.13), new THREE.MeshBasicMaterial({ color: CONF_COLORS[i % CONF_COLORS.length], side: THREE.DoubleSide }));
+    m.visible = false; group.add(m);
+    confetti.push({ mesh: m, vx: 0, vy: 0, vz: 0, sx: 0, sy: 0, sz: 0, life: 0 });
+  }
+  let confNext = 0;
+  function burstConfetti(p, n = 26) {
+    for (let i = 0; i < n; i++) {
+      const c = confetti[confNext++ % confetti.length];
+      c.mesh.visible = true; c.mesh.position.set(p.x, p.y, p.z);
+      const ang = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 3.5;
+      c.vx = Math.cos(ang) * sp; c.vy = 3 + Math.random() * 3.5; c.vz = Math.sin(ang) * sp;
+      c.sx = (Math.random() - 0.5) * 14; c.sy = (Math.random() - 0.5) * 14; c.sz = (Math.random() - 0.5) * 14;
+      c.life = 1.1 + Math.random() * 0.7;
+    }
+  }
+  function updateConfetti(dt) {
+    for (const c of confetti) {
+      if (!c.mesh.visible) continue;
+      c.life -= dt; if (c.life <= 0) { c.mesh.visible = false; continue; }
+      c.vy -= 9 * dt;
+      c.mesh.position.x += c.vx * dt; c.mesh.position.y += c.vy * dt; c.mesh.position.z += c.vz * dt;
+      c.mesh.rotation.x += c.sx * dt; c.mesh.rotation.y += c.sy * dt; c.mesh.rotation.z += c.sz * dt;
+    }
+  }
+
   const bs = { pos: new THREE.Vector3(), vel: new THREE.Vector3() };
 
   // ---- agents: one uniform shape for human + AI so logic is generic ----
@@ -75,6 +105,8 @@ export function createBasketball({ parent, court }) {
   let shot = null, passData = null, looseT = 0;
   let charging = false, meter = 0, meterDir = 1;   // shot charge meter (works on the ground or in the air)
   let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
+  let dunkAnim = null;             // active dunk slam animation
+  let gathered = false, stopT = 0; const gatherPos = new THREE.Vector3(); // travel rule
   let enemiesPaused = true;        // TEMP: opponents frozen so mechanics can be tested
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
   let msgT = 0, pStealCool = 0;
@@ -93,6 +125,7 @@ export function createBasketball({ parent, court }) {
   function giveBall(a, msg) {
     holder = a; phase = 'play'; shot = null; passData = null;
     shotClock = SHOTCLOCK; a.shootGather = 0; a.shootT = 0;
+    gathered = false; stopT = 0;
     if (msg) setMsg(msg, 0.8);
   }
   function turnover() {
@@ -138,9 +171,14 @@ export function createBasketball({ parent, court }) {
     const make = !blocked && Math.random() < pct;
 
     const from = handPoint(shooter);
-    phase = 'shot'; holder = null; charging = false; $('bball-meter').classList.add('hidden');
+    holder = null; charging = false; $('bball-meter').classList.add('hidden'); gathered = false;
     if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
-    if (isDunk && shooter.kind === 'human') { dunkT = 1.2; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z); if (make) setMsg('DUNK! 💥', 1.3); } // cinematic zoom
+    if (isDunk && shooter.kind === 'human') {  // big slam with a cinematic zoom
+      dunkT = 1.3; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z);
+      if (make) { startDunk(shooter, hoop, points); return; }
+      setMsg('Rejected at the rim!', 0.9); phase = 'shot'; knockLoose(from); return;
+    }
+    phase = 'shot';
     shot = { team: shooter.team, hoop, points, willScore: make, type };
     const target = make
       ? new THREE.Vector3(hoop.x, hoop.y, hoop.z)
@@ -148,6 +186,44 @@ export function createBasketball({ parent, court }) {
     const v = launchVel(from, target, type === 'rim' ? 47 : 53) || launchVel(from, target, 40) || new THREE.Vector3(target.x - from.x, 7, target.z - from.z);
     bs.pos.copy(from); bs.vel.copy(v);
     if (shooter.kind === 'human') setMsg(`${label}${make ? ' ✓' : ''}${contest < 0.6 ? ' · contested' : ''}`, 0.9);
+  }
+
+  // ---- dunk slam animation: rise to the rim, hammer it down, confetti ----
+  function startDunk(shooter, hoop, points) {
+    phase = 'dunk'; holder = null;
+    dunkAnim = { t: 0, dur: 0.8, team: shooter.team, points, scored: false,
+      from: new THREE.Vector3(A0.pos.x, A0.jy, A0.pos.z),
+      rim: new THREE.Vector3(hoop.x - 0.55, hoop.y, hoop.z) };
+  }
+  function dunkUpdate(dt) {
+    const a = dunkAnim; a.t += dt;
+    const p = clamp(a.t / a.dur, 0, 1);
+    const up = clamp(p / 0.5, 0, 1);                       // approach + rise (0→1 by halfway)
+    const down = p > 0.55 ? (p - 0.55) / 0.45 : 0;          // come back down
+    A0.pos.x = THREE.MathUtils.lerp(a.from.x, a.rim.x, up);
+    A0.pos.z = THREE.MathUtils.lerp(a.from.z, a.rim.z, up);
+    A0.jy = 2.0 * Math.sin(up * Math.PI / 2) * (1 - down * 0.9); // hang up at the rim, then drop
+    pl.position.set(A0.pos.x, A0.jy, A0.pos.z);
+    pl.rotation.y = Math.atan2(a.rim.x - a.from.x || 0.001, a.rim.z - a.from.z);
+    pl.rotation.x = -0.6 * Math.sin(up * Math.PI / 2) * (1 - down); // lean into the slam
+    A0._moving = false;
+    if (p < 0.55) {
+      ball.position.set(A0.pos.x, A0.jy + 1.9, A0.pos.z);   // cock the ball overhead
+    } else if (!a.scored) {
+      a.scored = true;                                       // SLAM
+      ball.position.set(a.rim.x, a.rim.y, a.rim.z);
+      if (a.team === 'A') { scoreA += a.points; makes++; } else scoreB += a.points;
+      setMsg('💥 SLAM DUNK! +' + a.points, 1.5);
+      burstConfetti({ x: a.rim.x, y: a.rim.y + 0.25, z: a.rim.z }, 32);
+    } else {
+      ball.position.set(a.rim.x, a.rim.y - down * 2.2, a.rim.z); // through the net
+    }
+    if (p >= 1) {
+      pl.rotation.x = 0; A0.jy = 0; pl.position.y = 0;
+      const team = a.team, rim = a.rim; dunkAnim = null;
+      const opps = team === 'A' ? teamB : teamA;
+      giveBall(opps.reduce((b, c) => dist(c.pos, rim) < dist(b.pos, rim) ? c : b));
+    }
   }
   function knockLoose(from) {
     bs.pos.copy(from); bs.vel.set((Math.random() - 0.5) * 4, 3.6, (Math.random() - 0.5) * 4);
@@ -196,14 +272,22 @@ export function createBasketball({ parent, court }) {
     const s = shot;
     if (s.team === 'A') { scoreA += s.points; makes++; setMsg('SWISH! +' + s.points, 1.4); }
     else { scoreB += s.points; setMsg('They score +' + s.points, 1.2); }
+    burstConfetti({ x: s.hoop.x, y: s.hoop.y + 0.25, z: s.hoop.z }, 22);
     const a = (s.team === 'A' ? teamB : teamA).reduce((b, c) => dist(c.pos, s.hoop) < dist(b.pos, s.hoop) ? c : b);
     shot = null; giveBall(a); // conceding team inbounds — nobody teleports
   }
   function passTo(from, to) { phase = 'pass'; bs.pos.copy(handPoint(from)); passData = { from, to }; holder = null; }
-  function ballHold() {
+  function ballHold(t) {
     if (phase !== 'play' || !holder) return;
-    const a = holder, r = rotOf(a);
-    ball.position.set(a.pos.x + Math.sin(r) * 0.5, 1.15 + a.jy, a.pos.z + Math.cos(r) * 0.5);
+    const a = holder, r = rotOf(a), fx = Math.sin(r), fz = Math.cos(r);
+    if (Math.hypot(a.vx, a.vz) > 1.6 && a.jy < 0.05) {
+      // dribbling: ball bounces at the player's front-right, near the floor
+      const bounce = Math.abs(Math.sin(t * 9));
+      ball.position.set(a.pos.x + fx * 0.22 + Math.cos(r) * 0.4, 0.26 + bounce * 0.62, a.pos.z + fz * 0.22 - Math.sin(r) * 0.4);
+    } else {
+      // held in front of the chest with both hands
+      ball.position.set(a.pos.x + fx * 0.42, 1.1 + a.jy, a.pos.z + fz * 0.42);
+    }
   }
 
   // ---- movement ----
@@ -309,6 +393,20 @@ export function createBasketball({ parent, court }) {
   function onJump() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }   // pure jump
   function onBlock() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }  // contest hop
   function playerPass() { if (phase === 'play' && holder === A0) { passTo(A0, A1); setMsg('Pass', 0.5); } }
+  // travel rule: dribble on the move, but once you stop (pick up your dribble)
+  // you must stay put — driving off again is a turnover.
+  function checkTravel(dt) {
+    if (phase !== 'play' || holder !== A0) { gathered = false; stopT = 0; return; }
+    if (A0.jy > 0.05) return;                       // a jump (to shoot) isn't a travel
+    const sp = Math.hypot(A0.vx, A0.vz);
+    if (!gathered) {
+      if (sp < 1.0) { stopT += dt; if (stopT > 0.12) { gathered = true; gatherPos.copy(A0.pos); } }
+      else stopT = 0;
+    } else if (dist(A0.pos, gatherPos) > 1.7) {
+      setMsg('Travel! 🚶 Turnover', 1.3);
+      turnover();
+    }
+  }
   function playerSteal() {
     if (phase !== 'play' || !holder || holder.team !== 'B' || pStealCool > 0) return;
     pStealCool = 0.7;
@@ -330,11 +428,14 @@ export function createBasketball({ parent, court }) {
     if (dunkT > 0) dunkT -= dt;
     if (pStealCool > 0) pStealCool -= dt;
 
-    moveHuman(dt);
+    if (phase === 'dunk') { dunkUpdate(dt); }
+    else { moveHuman(dt); checkTravel(dt); }
     for (const a of [A1, B0, B1]) aiAgent(a, dt, t);
     separate();
     finalize(t);
-    if (phase === 'shot' || phase === 'loose' || phase === 'pass') simBall(dt); else ballHold();
+    updateConfetti(dt);
+    if (phase === 'shot' || phase === 'loose' || phase === 'pass') simBall(dt);
+    else if (phase === 'play') ballHold(t);
 
     const haveBall = phase === 'play' && holder === A0;
     const defending = phase === 'play' && holder && holder.team === 'B';
@@ -393,7 +494,7 @@ export function createBasketball({ parent, court }) {
     $('bball-hud').classList.remove('hidden');
     $('hud').classList.add('playing-bball');
   }
-  function exit() { active = false; group.visible = false; dunkT = 0; if (pl) pl.position.y = 0; input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
+  function exit() { active = false; group.visible = false; dunkT = 0; dunkAnim = null; if (pl) { pl.position.y = 0; pl.rotation.x = 0; } input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
 
   // camera hint for main.js: during a dunk, returns a 0→1→0 zoom strength + focus
   function dunkCam() {
