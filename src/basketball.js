@@ -107,7 +107,7 @@ export function createBasketball({ parent, court }) {
   let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
   let dunkAnim = null;             // active dunk slam animation
   let dribbled = false, locked = false, stopT = 0; // once you stop dribbling you're locked in place
-  let enemiesPaused = true;        // TEMP: opponents frozen so mechanics can be tested
+  let enemiesPaused = false;       // opponents active
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
@@ -280,8 +280,8 @@ export function createBasketball({ parent, court }) {
       const bounce = Math.abs(Math.sin(t * 9));
       ball.position.set(a.pos.x + fx * 0.22 + Math.cos(r) * 0.4, 0.26 + bounce * 0.62, a.pos.z + fz * 0.22 - Math.sin(r) * 0.4);
     } else {
-      // held in front of the chest with both hands
-      ball.position.set(a.pos.x + fx * 0.42, 1.1 + a.jy, a.pos.z + fz * 0.42);
+      // held in front of the body at hand height (clear of the chest/neck)
+      ball.position.set(a.pos.x + fx * 0.6, 0.85 + a.jy, a.pos.z + fz * 0.6);
     }
   }
 
