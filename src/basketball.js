@@ -106,7 +106,7 @@ export function createBasketball({ parent, court }) {
   let charging = false, meter = 0, meterDir = 1;   // shot charge meter (works on the ground or in the air)
   let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
   let dunkAnim = null;             // active dunk slam animation
-  let gathered = false, stopT = 0; const gatherPos = new THREE.Vector3(); // travel rule
+  let gathered = false, usedDribble = false, stopT = 0; const gatherPos = new THREE.Vector3(); // travel rule
   let enemiesPaused = true;        // TEMP: opponents frozen so mechanics can be tested
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
   let msgT = 0, pStealCool = 0;
@@ -125,14 +125,14 @@ export function createBasketball({ parent, court }) {
   function giveBall(a, msg) {
     holder = a; phase = 'play'; shot = null; passData = null;
     shotClock = SHOTCLOCK; a.shootGather = 0; a.shootT = 0;
-    gathered = false; stopT = 0;
+    gathered = false; usedDribble = false; stopT = 0;
     if (msg) setMsg(msg, 0.8);
   }
-  function turnover() {
-    const a = oppsOf(holder).reduce((b, c) => dist(c.pos, bs.pos) < dist(b.pos, bs.pos) ? c : b);
-    giveBall(a, 'Shot clock!');
+  function turnover(msg) {
+    const h = holder.pos;
+    const a = oppsOf(holder).reduce((b, c) => dist(c.pos, h) < dist(b.pos, h) ? c : b);
+    giveBall(a, msg);
   }
-
   // ---- shot resolution (the heart of the skill) ----
   function resolveShot(shooter, isDunk = false) {
     const hoop = shooter.attack;
@@ -171,7 +171,7 @@ export function createBasketball({ parent, court }) {
     const make = !blocked && Math.random() < pct;
 
     const from = handPoint(shooter);
-    holder = null; charging = false; $('bball-meter').classList.add('hidden'); gathered = false;
+    holder = null; charging = false; $('bball-meter').classList.add('hidden'); gathered = false; usedDribble = false;
     if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
     if (isDunk && shooter.kind === 'human') {  // big slam with a cinematic zoom
       dunkT = 1.3; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z);
@@ -393,18 +393,21 @@ export function createBasketball({ parent, court }) {
   function onJump() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }   // pure jump
   function onBlock() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }  // contest hop
   function playerPass() { if (phase === 'play' && holder === A0) { passTo(A0, A1); setMsg('Pass', 0.5); } }
-  // travel rule: dribble on the move, but once you stop (pick up your dribble)
-  // you must stay put — driving off again is a turnover.
+  // travel rule: you may start a dribble from a standstill and move freely while
+  // dribbling. Only once you've been dribbling and then STOP (pick up the ball)
+  // do you have to stay put — driving off after that is a turnover.
   function checkTravel(dt) {
-    if (phase !== 'play' || holder !== A0) { gathered = false; stopT = 0; return; }
-    if (A0.jy > 0.05) return;                       // a jump (to shoot) isn't a travel
+    if (phase !== 'play' || holder !== A0) { gathered = false; usedDribble = false; stopT = 0; return; }
+    if (A0.jy > 0.05) return;                        // a jump (to shoot) isn't a travel
     const sp = Math.hypot(A0.vx, A0.vz);
-    if (!gathered) {
-      if (sp < 1.0) { stopT += dt; if (stopT > 0.12) { gathered = true; gatherPos.copy(A0.pos); } }
-      else stopT = 0;
-    } else if (dist(A0.pos, gatherPos) > 1.7) {
-      setMsg('Travel! 🚶 Turnover', 1.3);
-      turnover();
+    if (usedDribble) {                               // dribble already used — must stay put
+      if (dist(A0.pos, gatherPos) > 1.7) turnover('Travel! 🚶');
+      return;
+    }
+    if (sp > 1.2) { gathered = true; stopT = 0; }    // dribbling on the move
+    else if (gathered) {                             // were dribbling, now stopped
+      stopT += dt;
+      if (stopT > 0.15) { usedDribble = true; gatherPos.copy(A0.pos); }
     }
   }
   function playerSteal() {
@@ -422,7 +425,7 @@ export function createBasketball({ parent, court }) {
   function update(dt, t) {
     if (phase === 'over') return;
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
-    if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover(); }
+    if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover('Shot clock! ⏲'); }
     if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
     if (charging) { const rate = airborne() ? 2.7 : 1.3; meter += meterDir * dt * rate; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
     if (dunkT > 0) dunkT -= dt;
