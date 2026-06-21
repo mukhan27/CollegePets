@@ -1081,14 +1081,16 @@ export function buildDiningHall() {
   const sign = textSprite('🍽️ Dining Hall'); sign.position.set(-7, 3.6, -D / 2 + 0.7); root.add(sign);
   interactables.push({ id: 'order_food', x: 0, z: bz + 2.6, r: 2.6, label: '🍽️ Order food' });
 
-  // ---- kitchen grill (work a shift) on the right ----
-  const kx = W / 2 - 2.2;
-  add(tb(3.2, 1.1, 3.2, 0x9aa0a6), kx, 0.55, -3);             // metal counter
-  add(tb(2.6, 0.18, 2.6, 0x3a3f44), kx, 1.16, -3);            // grill top
-  for (const gx of [-0.7, 0.7]) for (const gz of [-0.7, 0.7]) add(new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), emi(0xd95b4a, 0xff6b3a, 0.5)), kx + gx, 1.27, -3 + gz).rotation.x = -Math.PI / 2; // burners glow
-  add(cyl(0.5, 0.55, 2.2, 14, 0xb8bdc2), kx, 3.4, -3);        // exhaust hood
-  colliders.push({ x: kx, z: -3, w: 3.4, d: 3.4 }); shade(kx, -3, 4, 4);
-  interactables.push({ id: 'cook_job', x: kx - 2.2, z: -3, r: 2.4, label: '👨‍🍳 Work a shift' });
+  // ---- cup pong table (play a match) on the right ----
+  const px = W / 2 - 3;
+  add(tb(2.6, 0.18, 5.2, 0x1f8a4c), px, 0.95, -3);            // green table top
+  for (const sx of [-1, 1]) add(tb(0.2, 0.95, 4.6, 0x6e4626), px + sx, 0.47, -3); // legs
+  add(new THREE.Mesh(new THREE.PlaneGeometry(0.06, 5.0), toonMat(0xffffff)), px, 1.05, -3).rotation.x = -Math.PI / 2; // centre line
+  for (const end of [-1, 1]) for (let i = 0; i < 3; i++) for (let j = 0; j <= i; j++)
+    add(cyl(0.13, 0.1, 0.3, 12, 0xcf2a25), px + (j - i / 2) * 0.32, 1.2, -3 + end * (1.6 - i * 0.45));
+  colliders.push({ x: px, z: -3, w: 2.8, d: 5.4 }); shade(px, -3, 4, 6);
+  const psign = textSprite('🥤 Cup Pong'); psign.position.set(px, 2.8, -3); root.add(psign);
+  interactables.push({ id: 'cup_pong', x: px - 2.4, z: -3, r: 2.6, label: '🥤 Play Cup Pong' });
 
   // ---- communal tables with benches you can sit at to eat ----
   function diningTable(x, z) {

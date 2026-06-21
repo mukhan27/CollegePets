@@ -39,7 +39,7 @@ out, and play. Tap **📋** (top-right) any time for the **Campus** panel:
 - **💬 Chat & gift** — walk up to any wandering student and talk (each has a personality); 🎁 gift them snacks to grow your friendship.
 - **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). Focus mode locks the screen; completing a session pays coins (a ☕ cold-brew buff boosts the payout).
 - **🏀 Basketball** — a skill-based 2-on-2 pickup game: real make-% from your release **timing × contest × shot type/distance**, live rebounds off misses, momentum movement, and smart defense. Move, time the **Shoot** meter, **Pass**, **Jump**/dunk, **Block** & **Steal** — possession flows, nothing teleports. Coins for baskets.
-- **🍽️ Dining Hall** — order food that restores your needs, sit at the communal tables, or **work a cooking shift** (serve the right dish before the timer) for tips.
+- **🍽️ Dining Hall** — order food that restores your needs, sit at the communal tables, or play **Cup Pong** — a swipe-to-flick beer-pong game vs an AI (sink the rack to win).
 - **🎮 Student Union** — the campus arcade: **Trivia** and **Memory** mini-games, a coffee bar, hangout couches, a dance floor and a quest board.
 - **🏛️ Lecture Hall** — a big-screen hall with tiered seating + stage, and a study mezzanine of pomodoro desks upstairs.
 - **🛍️ Campus Store** — walk in, browse real item previews, buy hats/glasses/scarves & furniture, and use the **fitting-room mirror** to try outfits on your pet live.
@@ -65,7 +65,8 @@ src/
   ui.js             modals, chat, shop, decorator, pomodoro lock, gifting
   itemPreview.js    offscreen 3D thumbnails for shop/try-on
   tryon.js          fitting-room live try-on view
-  dining.js         food ordering + cooking shift mini-game
+  dining.js         food ordering menu
+  cuppong.js        swipe Cup Pong mini-game
   arcade.js         trivia + memory mini-games
   basketball.js     3D 3rd-person basketball game
   state.js          save/load, coins, item + food catalogs

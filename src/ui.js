@@ -31,6 +31,7 @@ export function isModalOpen() {
     || !$('chat-panel').classList.contains('hidden')
     || !$('focus-overlay').classList.contains('hidden')
     || !$('minigame-overlay').classList.contains('hidden')
+    || !$('cuppong-overlay').classList.contains('hidden')
     || !$('campus-panel').classList.contains('hidden');
 }
 

@@ -7,7 +7,8 @@ import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
-import { openFoodMenu, startCookJob, initDiningUI } from './dining.js';
+import { openFoodMenu, initDiningUI } from './dining.js';
+import { startCupPong, initCupPongUI } from './cuppong.js';
 import { startTrivia, startMemory, initArcadeUI } from './arcade.js';
 import { startFishing, initFishingUI } from './fishing.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
@@ -344,7 +345,7 @@ function runInteract(it) {
     case 'cafeteria': switchLocation('diningHall'); break;
     case 'exit_dining': switchLocation('campus', { x: campus.doors.cafeteria.x, z: campus.doors.cafeteria.z + 1 }); break;
     case 'order_food': openFoodMenu(); break;
-    case 'cook_job': startCookJob(); break;
+    case 'cup_pong': startCupPong(); break;
     case 'dine': beginLounge(it); openFoodMenu(); break;
     case 'lecture': switchLocation('studentUnion'); break;
     case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
@@ -585,7 +586,7 @@ function startGame() {
     `Roam the campus with the <b>joystick</b> (or WASD) and hang out. Tap <b>📋</b> (top-right) for your <b>trophies, friends & stats</b>.<br><br>
      📚 <b>Library</b> — pomodoro study sessions earn coins<br>
      🏀 <b>Court</b> — a skill-based 2-on-2 pickup game<br>
-     🍽️ <b>Dining Hall</b> — grab food, fill up, work a shift<br>
+     🍽️ <b>Dining Hall</b> — grab food & play swipe Cup Pong<br>
      🎮 <b>Student Union</b> — arcade games & coffee<br>
      🦆 <b>Birch Pond</b> — fish and relax<br>
      🛍️ <b>Campus Store</b> · 🏠 <b>Maple Dorm</b> — deck out your pet & room`);
@@ -699,6 +700,7 @@ initInput();
 initChatUI();
 initMinigameUI();
 initDiningUI();
+initCupPongUI();
 initArcadeUI();
 initFishingUI();
 setupSelectScreen();
