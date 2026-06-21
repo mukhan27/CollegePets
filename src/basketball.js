@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const G = 16;
 const SWEET = 0.81;            // centre of the green meter band
 const HUMAN_SPD = 8.6, AI_SPD = 7.8, ACCEL = 9, JUMP_V = 6.3;
-const GRAB = 1.25, SHOTCLOCK = 16, DIFF = 0.92; // DIFF = opponent shooting factor
+const GRAB = 1.25, DIFF = 0.92; // DIFF = opponent shooting factor
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 function launchVel(P, T, angleDeg) {
@@ -106,9 +106,9 @@ export function createBasketball({ parent, court }) {
   let charging = false, meter = 0, meterDir = 1;   // shot charge meter (works on the ground or in the air)
   let dunkT = 0; const dunkFocus = new THREE.Vector3(); // dunk camera zoom-in
   let dunkAnim = null;             // active dunk slam animation
-  let gathered = false, usedDribble = false, stopT = 0; const gatherPos = new THREE.Vector3(); // travel rule
+  let dribbled = false, locked = false, stopT = 0; // once you stop dribbling you're locked in place
   let enemiesPaused = true;        // TEMP: opponents frozen so mechanics can be tested
-  let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90, shotClock = SHOTCLOCK;
+  let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
 
@@ -124,14 +124,9 @@ export function createBasketball({ parent, court }) {
 
   function giveBall(a, msg) {
     holder = a; phase = 'play'; shot = null; passData = null;
-    shotClock = SHOTCLOCK; a.shootGather = 0; a.shootT = 0;
-    gathered = false; usedDribble = false; stopT = 0;
+    a.shootGather = 0; a.shootT = 0;
+    dribbled = false; locked = false; stopT = 0;
     if (msg) setMsg(msg, 0.8);
-  }
-  function turnover(msg) {
-    const h = holder.pos;
-    const a = oppsOf(holder).reduce((b, c) => dist(c.pos, h) < dist(b.pos, h) ? c : b);
-    giveBall(a, msg);
   }
   // ---- shot resolution (the heart of the skill) ----
   function resolveShot(shooter, isDunk = false) {
@@ -171,7 +166,7 @@ export function createBasketball({ parent, court }) {
     const make = !blocked && Math.random() < pct;
 
     const from = handPoint(shooter);
-    holder = null; charging = false; $('bball-meter').classList.add('hidden'); gathered = false; usedDribble = false;
+    holder = null; charging = false; $('bball-meter').classList.add('hidden'); dribbled = false; locked = false;
     if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
     if (isDunk && shooter.kind === 'human') {  // big slam with a cinematic zoom
       dunkT = 1.3; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z);
@@ -295,7 +290,8 @@ export function createBasketball({ parent, court }) {
   function moveHuman(dt) {
     const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
     let tvx = 0, tvz = 0, moving = false;
-    if (input.active && phase !== 'over') {
+    const frozen = holder === A0 && locked; // picked up the dribble → can't move
+    if (input.active && phase !== 'over' && !frozen) {
       const mx = input.x * cy + input.y * sy, mz = -input.x * sy + input.y * cy, m = Math.hypot(mx, mz);
       if (m > 0.01) { const sp = HUMAN_SPD * Math.min(1, m); tvx = mx / m * sp; tvz = mz / m * sp; }
     }
@@ -347,7 +343,7 @@ export function createBasketball({ parent, court }) {
       const d = dist(a.pos, hoop), def = nearestOpp(a), dd = dist(def.pos, a.pos);
       if (a.shootGather > 0) { a.shootGather -= dt; driveAI(a, a.pos.x, a.pos.z, 0, dt); if (a.shootGather <= 0) resolveShot(a, d < 1.8); return; }
       const open = dd > 2.5;
-      if (d < 9 && (open || shotClock < 4 || (d < 2.0 && dd > 1.2))) { a.shootGather = 0.34; return; }
+      if (d < 9 && (open || a.shootT > 7 || (d < 2.0 && dd > 1.2))) { a.shootGather = 0.34; return; }
       // pressured? kick to an open teammate
       const mate = matesOf(a)[0];
       if (mate && dd < 1.7) { const md = nearestOpp(mate); if (dist(md.pos, mate.pos) > 3) { passTo(a, mate); return; } }
@@ -393,21 +389,17 @@ export function createBasketball({ parent, court }) {
   function onJump() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }   // pure jump
   function onBlock() { if (!airborne()) { A0.vy = JUMP_V; A0.jumping = true; } }  // contest hop
   function playerPass() { if (phase === 'play' && holder === A0) { passTo(A0, A1); setMsg('Pass', 0.5); } }
-  // travel rule: you may start a dribble from a standstill and move freely while
-  // dribbling. Only once you've been dribbling and then STOP (pick up the ball)
-  // do you have to stay put — driving off after that is a turnover.
-  function checkTravel(dt) {
-    if (phase !== 'play' || holder !== A0) { gathered = false; usedDribble = false; stopT = 0; return; }
-    if (A0.jy > 0.05) return;                        // a jump (to shoot) isn't a travel
+  // dribble lock: you can start a dribble from a standstill and move while
+  // dribbling, but once you've been dribbling and then STOP, you pick up the
+  // ball and are locked in place — only shoot, jump, or pass from there.
+  function checkDribbleLock(dt) {
+    if (phase !== 'play' || holder !== A0) { dribbled = false; locked = false; stopT = 0; return; }
+    if (locked || A0.jy > 0.05) return;
     const sp = Math.hypot(A0.vx, A0.vz);
-    if (usedDribble) {                               // dribble already used — must stay put
-      if (dist(A0.pos, gatherPos) > 1.7) turnover('Travel! 🚶');
-      return;
-    }
-    if (sp > 1.2) { gathered = true; stopT = 0; }    // dribbling on the move
-    else if (gathered) {                             // were dribbling, now stopped
+    if (sp > 1.2) { dribbled = true; stopT = 0; }    // dribbling on the move
+    else if (dribbled) {                             // were dribbling, now stopped → pick it up
       stopT += dt;
-      if (stopT > 0.15) { usedDribble = true; gatherPos.copy(A0.pos); }
+      if (stopT > 0.12) { locked = true; setMsg('Ball up — shoot, jump or pass', 1.0); }
     }
   }
   function playerSteal() {
@@ -425,14 +417,13 @@ export function createBasketball({ parent, court }) {
   function update(dt, t) {
     if (phase === 'over') return;
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
-    if (phase === 'play' && holder) { shotClock -= dt; if (shotClock <= 0) turnover('Shot clock! ⏲'); }
     if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
     if (charging) { const rate = airborne() ? 2.7 : 1.3; meter += meterDir * dt * rate; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
     if (dunkT > 0) dunkT -= dt;
     if (pStealCool > 0) pStealCool -= dt;
 
     if (phase === 'dunk') { dunkUpdate(dt); }
-    else { moveHuman(dt); checkTravel(dt); }
+    else { moveHuman(dt); checkDribbleLock(dt); }
     for (const a of [A1, B0, B1]) aiAgent(a, dt, t);
     separate();
     finalize(t);
@@ -447,8 +438,7 @@ export function createBasketball({ parent, court }) {
     $('bball-steal').style.display = defending ? '' : 'none';
     $('bball-block').style.display = defending ? '' : 'none';
     $('bball-score').textContent = `You ${scoreA} · Opp ${scoreB}`;
-    const sc = phase === 'play' && holder ? ` · ⏲${Math.ceil(Math.max(0, shotClock))}` : '';
-    $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft)) + sc;
+    $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft));
     if (msgT > 0) { msgT -= dt; if (msgT <= 0) setMsg(''); }
   }
 
