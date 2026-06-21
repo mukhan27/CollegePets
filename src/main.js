@@ -208,6 +208,21 @@ function moveWithCollision(pos, dx, dz, def) {
   if (tryAxis(pos.x, nz)) pos.z = nz;
 }
 
+// Safety net: if the player ends up *inside* a collider (e.g. after standing off
+// a bench, exiting a mini-game, or a teleport), nudge them out to the nearest
+// edge so they can never get permanently stuck.
+function resolveStuck(pos, colliders, R = 0.7) {
+  for (const c of colliders) {
+    const minX = c.x - c.w / 2 - R, maxX = c.x + c.w / 2 + R, minZ = c.z - c.d / 2 - R, maxZ = c.z + c.d / 2 + R;
+    if (pos.x > minX && pos.x < maxX && pos.z > minZ && pos.z < maxZ) {
+      const dxL = pos.x - minX, dxR = maxX - pos.x, dzL = pos.z - minZ, dzR = maxZ - pos.z;
+      const m = Math.min(dxL, dxR, dzL, dzR);
+      if (m === dxL) pos.x = minX; else if (m === dxR) pos.x = maxX;
+      else if (m === dzL) pos.z = minZ; else pos.z = maxZ;
+    }
+  }
+}
+
 // Multi-level movement. Locations without `levels`/`stairs` behave exactly as
 // before (flat ground). The library adds a walkable mezzanine reached by a
 // staircase: while inside a stair zone the player is funneled along the steps
@@ -624,6 +639,8 @@ function frame(dt, t) {
     moving = true;
   }
   player.userData.animate(t, moving);
+  // never let the player get stuck inside a collider (runs even without input)
+  if (!seated && !editMode) resolveStuck(player.position, levelDef(loc).colliders);
   // smooth elevation toward the active floor / stair height (not while seated)
   if (!seated) player.position.y += (playerTargetY - player.position.y) * Math.min(1, dt * 12);
 

@@ -178,7 +178,11 @@ export function createBasketball({ parent, court }) {
     const target = make
       ? new THREE.Vector3(hoop.x, hoop.y, hoop.z)
       : new THREE.Vector3(hoop.x + (Math.random() - 0.5) * 1.2, hoop.y + 0.05, hoop.z + (Math.random() - 0.5) * 1.2);
-    const v = launchVel(from, target, type === 'rim' ? 47 : 53) || launchVel(from, target, 40) || new THREE.Vector3(target.x - from.x, 7, target.z - from.z);
+    // pick a launch angle that always reaches the rim (steep for close layups,
+    // flatter for jumpers) — the min-speed arc to the target, plus a soft touch
+    const dh = Math.hypot(target.x - from.x, target.z - from.z) || 0.001, dv = target.y - from.y;
+    const ang = clamp(Math.atan2(dv + Math.hypot(dh, dv), dh) * 180 / Math.PI + 3, 40, 84);
+    const v = launchVel(from, target, ang) || launchVel(from, target, 60) || new THREE.Vector3(target.x - from.x, 9, target.z - from.z);
     bs.pos.copy(from); bs.vel.copy(v);
     if (shooter.kind === 'human') setMsg(`${label}${make ? ' ✓' : ''}${contest < 0.6 ? ' · contested' : ''}`, 0.9);
   }
