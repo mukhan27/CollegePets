@@ -56,32 +56,25 @@ function bindInput() {
   window.addEventListener('pointermove', G.onMove);
   window.addEventListener('pointerup', G.onUp);
 }
-function swipeTarget(x0, y0, x1, y1) {
-  const ux = x1 - x0, uy = y0 - y1;        // uy > 0 means swiped up the table
-  if (uy < 26) return null;
-  const power = clamp(uy / (G.H * 0.42), 0.18, 1.25);
-  const targetTz = clamp(0.18 + power * 0.85, 0.18, 1.1);
-  const targetTx = clamp((ux / uy) * 1.7, -1, 1);
-  return { targetTx, targetTz };
-}
+// The flick becomes the ball's launch velocity directly: how far/fast you swipe
+// up controls the throw strength (distance), and the swipe angle controls
+// left/right. Physics decides where it lands — no aim assist.
 function doSwipe(x0, y0, x1, y1) {
-  const t = swipeTarget(x0, y0, x1, y1);
-  if (!t) { setMsg('Flick up the table', 0.8); return; }
-  throwBall(t.targetTx, t.targetTz, false);
+  const ux = x1 - x0, uy = y0 - y1;        // uy > 0 means swiped up the table
+  if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
+  const un = clamp(uy / (G.H * 0.4), 0.05, 1.45);  // up power → forward + arc
+  const sn = clamp(ux / (G.H * 0.4), -1.1, 1.1);    // sideways from the horizontal swipe
+  G.ball = { t: 0, tx: 0, tz: 0.04, ty: 0, vtx: sn * 1.0, vtz: un * 1.0, vty: un * 3.2 };
 }
 
-function throwBall(tx, tz, isAI) {
-  const startTz = isAI ? 0.97 : 0.04, T = isAI ? 0.8 : 0.85;
-  G.ball = { t: 0, tx: 0, tz: startTz, ty: 0, vtx: (tx - 0) / T, vtz: (tz - startTz) / T, vty: 0.5 * GRAV * T, isAI };
-}
-
-// ---- AI ----
+// ---- AI (aims at a cup with some error — it's allowed to be precise) ----
 function aiThrow() {
   const targets = G.you.filter(c => c.alive);
   if (!targets.length) return;
   const c = targets[Math.floor(Math.random() * targets.length)];
-  const err = 0.075;                          // opponent accuracy (lower = better)
-  throwBall(c.tx + (Math.random() - 0.5) * err * 2, c.tz + (Math.random() - 0.5) * err * 2, true);
+  const err = 0.07, startTz = 0.97, T = 0.78;
+  const tx = c.tx + (Math.random() - 0.5) * err * 2, tz = c.tz + (Math.random() - 0.5) * err * 2;
+  G.ball = { t: 0, tx: 0, tz: startTz, ty: 0, vtx: tx / T, vtz: (tz - startTz) / T, vty: 0.5 * GRAV * T };
   setMsg('Opponent throws…', 0.8);
 }
 
@@ -148,16 +141,12 @@ function drawBall(b) {
   ctx.fillStyle = '#f6f4ec'; ctx.beginPath(); ctx.arc(p.sx, p.sy - off, 10 * p.scale, 0, Math.PI * 2); ctx.fill();
   ctx.lineWidth = 1.5; ctx.strokeStyle = '#cdc7b6'; ctx.stroke();
 }
-function drawGuide() {
-  if (!G.drag || G.ball) return;
-  const t = swipeTarget(G.drag.x0, G.drag.y0, G.drag.x, G.drag.y);
-  if (!t) return;
-  const ctx = G.ctx, a = project(0, 0.04), c = project(t.targetTx, t.targetTz);
-  ctx.setLineDash([8, 8]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.7)';
-  ctx.beginPath(); ctx.moveTo(a.sx, a.sy);
-  ctx.quadraticCurveTo((a.sx + c.sx) / 2, Math.min(a.sy, c.sy) - 120, c.sx, c.sy); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(c.sx, c.sy, 20 * c.scale, 9 * c.scale, 0, 0, Math.PI * 2); ctx.stroke();
+function drawSwipe() {
+  if (!G.drag || G.ball) return;             // just show the gesture — no landing predictor
+  const ctx = G.ctx, d = G.drag;
+  ctx.setLineDash([7, 9]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.5)';
+  ctx.beginPath(); ctx.moveTo(d.x0, d.y0); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.beginPath(); ctx.arc(d.x0, d.y0, 8, 0, Math.PI * 2); ctx.fill();
 }
 function render() {
   drawTable();
@@ -167,7 +156,7 @@ function render() {
   cups.sort((a, b) => b.tz - a.tz); // far first (painter's order)
   for (const c of cups) { const p = project(c.tx, c.tz); drawCup(p.sx, p.sy, p.scale); }
   if (G.ball) drawBall(G.ball);
-  drawGuide();
+  drawSwipe();
   $('cuppong-you').textContent = '🐾 ' + G.you.filter(c => c.alive).length;
   $('cuppong-opp').textContent = G.opp.filter(c => c.alive).length + ' 🤖';
   $('cuppong-msg').textContent = G.msgT > 0 ? G.msg : (G.turn === 'you' && !G.ball ? 'Your throw' : '');
