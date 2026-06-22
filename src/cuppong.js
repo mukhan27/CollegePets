@@ -69,9 +69,11 @@ export function createCupPong(scene) {
 
   function throwSwipe(ux, uy) {
     if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
-    const un = clamp(uy / (window.innerHeight * 0.4), 0.06, 1.5);
-    const sn = clamp(ux / (window.innerHeight * 0.4), -1.1, 1.1);
-    ball = { x: 0, y: TTOP + 0.18, z: 4.0, vx: sn * 4.0, vy: un * 5.5, vz: -un * 10.5, t: 0, rest: 0, bounced: false };
+    // fixed arc; forward speed scales linearly with the swipe length (less sensitive,
+    // and a long swipe lands in the cups rather than sailing off the table)
+    const un = clamp(uy / (window.innerHeight * 0.7), 0.08, 1.0);
+    const sn = clamp(ux / (window.innerHeight * 0.7), -0.6, 0.6);
+    ball = { x: 0, y: TTOP + 0.18, z: 4.0, vx: sn * 3.5, vy: 4.8, vz: -un * 8.9, t: 0, rest: 0, bounced: false };
     ballMesh.visible = true; ballMesh.position.set(ball.x, ball.y, ball.z);
   }
   function aiThrow() {
