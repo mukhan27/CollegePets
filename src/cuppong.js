@@ -71,8 +71,8 @@ export function createCupPong(scene) {
     if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
     // fixed arc; forward speed scales linearly with the swipe length (less sensitive,
     // and a long swipe lands in the cups rather than sailing off the table)
-    const un = clamp(uy / (window.innerHeight * 0.7), 0.08, 1.0);
-    const sn = clamp(ux / (window.innerHeight * 0.7), -0.6, 0.6);
+    const un = clamp(uy / (window.innerHeight * 0.82), 0.08, 1.0);
+    const sn = clamp(ux / (window.innerHeight * 0.82), -0.6, 0.6);
     ball = { x: 0, y: TTOP + 0.18, z: 4.0, vx: sn * 3.5, vy: 4.8, vz: -un * 8.9, t: 0, rest: 0, bounced: false };
     ballMesh.visible = true; ballMesh.position.set(ball.x, ball.y, ball.z);
   }
@@ -103,9 +103,9 @@ export function createCupPong(scene) {
   function physics(dt) {
     const b = ball; b.t += dt; const prevY = b.y;
     b.vy -= GRAV * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-    // table bounce (lively, so bounce shots work)
+    // table bounce (lively — must clear a cup rim so bank shots can drop in)
     if (b.vy < 0 && b.y - R <= TTOP && Math.abs(b.x) < 1.6 && b.z > -4.1 && b.z < 4.1) {
-      b.y = TTOP + R; b.vy = -b.vy * 0.58; b.vx *= 0.82; b.vz *= 0.82; b.bounced = true;
+      b.y = TTOP + R; b.vy = -b.vy * 0.78; b.vx *= 0.88; b.vz *= 0.88; b.bounced = true;
     }
     // cup interactions — only the rack you're aiming at (you throw OVER your own cups)
     const targetTeam = turn === 'you' ? 'opp' : 'you';
