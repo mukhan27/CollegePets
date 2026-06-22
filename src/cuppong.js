@@ -71,7 +71,7 @@ export function createCupPong(scene) {
     if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
     const un = clamp(uy / (window.innerHeight * 0.4), 0.06, 1.5);
     const sn = clamp(ux / (window.innerHeight * 0.4), -1.1, 1.1);
-    ball = { x: 0, y: TTOP + 0.18, z: 3.7, vx: sn * 4.0, vy: un * 5.0, vz: -un * 10.5, t: 0, rest: 0, bounced: false };
+    ball = { x: 0, y: TTOP + 0.18, z: 4.0, vx: sn * 4.0, vy: un * 5.5, vz: -un * 10.5, t: 0, rest: 0, bounced: false };
     ballMesh.visible = true; ballMesh.position.set(ball.x, ball.y, ball.z);
   }
   function aiThrow() {
@@ -79,7 +79,7 @@ export function createCupPong(scene) {
     if (!targets.length) return;
     const c = targets[Math.floor(Math.random() * targets.length)];
     const T = 1.05, sx = 0, sy = TTOP + 0.4, sz = -3.9;
-    const tx = c.x + (Math.random() - 0.5) * 0.5, tz = c.z + (Math.random() - 0.5) * 0.5;
+    const tx = c.x + (Math.random() - 0.5) * 0.4, tz = c.z + (Math.random() - 0.5) * 0.4;
     ball = { x: sx, y: sy, z: sz, vx: (tx - sx) / T, vy: (MOUTH_Y - sy) / T + 0.5 * GRAV * T, vz: (tz - sz) / T, t: 0, rest: 0, bounced: false };
     ballMesh.visible = true; ballMesh.position.set(sx, sy, sz);
     setMsg('Opponent throws…', 0.8);
@@ -101,13 +101,14 @@ export function createCupPong(scene) {
   function physics(dt) {
     const b = ball; b.t += dt; const prevY = b.y;
     b.vy -= GRAV * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-    // table bounce
+    // table bounce (lively, so bounce shots work)
     if (b.vy < 0 && b.y - R <= TTOP && Math.abs(b.x) < 1.6 && b.z > -4.1 && b.z < 4.1) {
-      b.y = TTOP + R; b.vy = -b.vy * 0.5; b.vx *= 0.72; b.vz *= 0.72; b.bounced = true;
+      b.y = TTOP + R; b.vy = -b.vy * 0.58; b.vx *= 0.82; b.vz *= 0.82; b.bounced = true;
     }
-    // cup interactions
+    // cup interactions — only the rack you're aiming at (you throw OVER your own cups)
+    const targetTeam = turn === 'you' ? 'opp' : 'you';
     for (const c of cups) {
-      if (!c.alive) continue;
+      if (!c.alive || c.team !== targetTeam) continue;
       const dx = b.x - c.x, dz = b.z - c.z, h = Math.hypot(dx, dz) || 0.0001;
       if (b.vy < 0 && prevY > MOUTH_Y && b.y <= MOUTH_Y) {           // crossing the mouth plane
         if (h < CUP_R - R * 0.5) { sink(c); return; }
@@ -137,8 +138,8 @@ export function createCupPong(scene) {
     $('cuppong-opp').textContent = cups.filter(c => c.team === 'opp' && c.alive).length + ' 🤖';
   }
   function cam() {
-    const o = TABLE_ORIGIN;
-    return { px: o.x, py: o.y + 3.7, pz: o.z + 6.7, lx: o.x, ly: o.y + 1.3, lz: o.z - 2.0 };
+    const o = TABLE_ORIGIN; // steep ~40° look down the table so you see the cup mouths, not the sides
+    return { px: o.x, py: o.y + 7.0, pz: o.z + 6.2, lx: o.x, ly: o.y + 0.9, lz: o.z - 1.0 };
   }
 
   // ---- input ----
