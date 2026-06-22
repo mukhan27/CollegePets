@@ -1,187 +1,186 @@
-// Cup Pong — a GamePigeon-style swipe-to-flick beer-pong game, rendered as a
-// 2.5D canvas (perspective table, red Solo cups). You vs an AI: flick the ball
-// up the table to land it in the far rack of cups; sink them all to win. Make a
-// cup and you shoot again; miss and it's the opponent's turn.
+// Cup Pong — a 3D physics beer-pong game rendered in the main toon scene (like
+// basketball), so it matches the art. Swipe up to flick the ball: the swipe is
+// the launch velocity (strength = distance, angle = left/right). Real physics —
+// the ball arcs, bounces off the table and cup rims, and drops into cups. You vs
+// an AI; clear the far rack to win. No aim assist.
 
+import * as THREE from 'three';
+import { toonMat } from './textures.js';
 import { addCoins } from './state.js';
 import { showModal } from './ui.js';
 import { track, applyNeeds } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const GRAV = 4.6;                 // arc gravity in table-height units
-const CUP_RX = 0.06, CUP_RZ = 0.052; // hit tolerance in table space
+const TABLE_ORIGIN = new THREE.Vector3(0, 0, 150); // off in empty space; camera goes here to play
+const TTOP = 1.0;     // table-top height (local)
+const R = 0.12;       // ball radius
+const GRAV = 9;       // gravity
+const CUP_R = 0.225;  // cup mouth radius
+const CUP_H = 0.5;    // cup height
+const MOUTH_Y = TTOP + CUP_H;
 
-let G = null;
+export function createCupPong(scene) {
+  const group = new THREE.Group(); group.visible = false; group.position.copy(TABLE_ORIGIN); scene.add(group);
+  const at = (m, x, y, z) => { m.position.set(x, y, z); return m; };
 
-function makeRack(far) {
-  const cups = [], sp = 0.135, baseZ = far ? 0.93 : 0.07, dz = far ? -0.072 : 0.072;
-  for (let i = 0; i < 4; i++) {
-    const count = 4 - i, z = baseZ + dz * i;
-    for (let j = 0; j < count; j++) cups.push({ tx: (j - (count - 1) / 2) * sp, tz: z, alive: true });
+  // ---- table ----
+  const top = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.22, 8.2), toonMat(0x1c2533));
+  top.position.y = TTOP - 0.11; top.receiveShadow = true; group.add(top);
+  for (const sx of [-1.45, 1.45]) for (const sz of [-3.7, 3.7])
+    group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.18, TTOP - 0.22, 0.18), toonMat(0x3a2a1c)), sx, (TTOP - 0.22) / 2, sz));
+  const line = toonMat(0xf2f2ee), ly = TTOP + 0.005;
+  group.add(at(new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.02, 0.07), line), 0, ly, -4.0));
+  group.add(at(new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.02, 0.07), line), 0, ly, 4.0));
+  group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 8.0), line), -1.5, ly, 0));
+  group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 8.0), line), 1.5, ly, 0));
+  group.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 8.0), line), 0, ly, 0));
+
+  // ---- cups ----
+  function makeCupMesh() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R, CUP_R - 0.06, CUP_H, 18, 1, true), toonMat(0xcf2a25));
+    body.position.y = CUP_H / 2; body.castShadow = true; g.add(body);
+    g.add(at(new THREE.Mesh(new THREE.CircleGeometry(CUP_R - 0.06, 16), toonMat(0xcf2a25)).rotateX(-Math.PI / 2), 0, 0.005, 0));
+    g.add(at(new THREE.Mesh(new THREE.CircleGeometry(CUP_R - 0.03, 16), toonMat(0x5e120e)).rotateX(-Math.PI / 2), 0, CUP_H - 0.04, 0)); // dark interior
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(CUP_R, 0.028, 8, 22), toonMat(0xf4f4f0));
+    rim.rotation.x = Math.PI / 2; rim.position.y = CUP_H; g.add(rim);
+    return g;
   }
-  return cups;
-}
-
-export function startCupPong(onDone) {
-  const ov = $('cuppong-overlay'); ov.classList.remove('hidden');
-  const canvas = $('cuppong-canvas'), ctx = canvas.getContext('2d');
-  const W = window.innerWidth, H = window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = W * dpr; canvas.height = H * dpr; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  G = {
-    canvas, ctx, W, H, onDone, raf: 0, last: performance.now(), over: false,
-    you: makeRack(false), opp: makeRack(true), turn: 'you', ball: null,
-    aiT: 0, msg: '', msgT: 0, drag: null,
-    proj: { ny: H * 0.92, fy: H * 0.13, nhw: W * 0.46, fhw: W * 0.19, cx: W / 2 },
-  };
-  bindInput();
-  setMsg('Your throw — swipe up! 🏓', 2);
-  G.raf = requestAnimationFrame(loop);
-}
-
-function setMsg(t, d = 1.2) { G.msg = t; G.msgT = d; }
-function project(tx, tz) {
-  const p = G.proj, sy = p.ny + (p.fy - p.ny) * tz, hw = p.nhw + (p.fhw - p.nhw) * tz;
-  return { sx: p.cx + tx * hw, sy, scale: 1 + (0.4 - 1) * tz };
-}
-
-// ---- input: flick up to throw ----
-function bindInput() {
-  const c = G.canvas;
-  G.onDown = (e) => { if (G.turn !== 'you' || G.ball || G.over) return; e.preventDefault(); G.drag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY }; };
-  G.onMove = (e) => { if (G.drag) { G.drag.x = e.clientX; G.drag.y = e.clientY; } };
-  G.onUp = () => { if (!G.drag) return; const d = G.drag; G.drag = null; doSwipe(d.x0, d.y0, d.x, d.y); };
-  c.addEventListener('pointerdown', G.onDown);
-  window.addEventListener('pointermove', G.onMove);
-  window.addEventListener('pointerup', G.onUp);
-}
-// The flick becomes the ball's launch velocity directly: how far/fast you swipe
-// up controls the throw strength (distance), and the swipe angle controls
-// left/right. Physics decides where it lands — no aim assist.
-function doSwipe(x0, y0, x1, y1) {
-  const ux = x1 - x0, uy = y0 - y1;        // uy > 0 means swiped up the table
-  if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
-  const un = clamp(uy / (G.H * 0.4), 0.05, 1.45);  // up power → forward + arc
-  const sn = clamp(ux / (G.H * 0.4), -1.1, 1.1);    // sideways from the horizontal swipe
-  G.ball = { t: 0, tx: 0, tz: 0.04, ty: 0, vtx: sn * 1.0, vtz: un * 1.0, vty: un * 3.2 };
-}
-
-// ---- AI (aims at a cup with some error — it's allowed to be precise) ----
-function aiThrow() {
-  const targets = G.you.filter(c => c.alive);
-  if (!targets.length) return;
-  const c = targets[Math.floor(Math.random() * targets.length)];
-  const err = 0.07, startTz = 0.97, T = 0.78;
-  const tx = c.tx + (Math.random() - 0.5) * err * 2, tz = c.tz + (Math.random() - 0.5) * err * 2;
-  G.ball = { t: 0, tx: 0, tz: startTz, ty: 0, vtx: tx / T, vtz: (tz - startTz) / T, vty: 0.5 * GRAV * T };
-  setMsg('Opponent throws…', 0.8);
-}
-
-// ---- resolution ----
-function land() {
-  const b = G.ball; G.ball = null;
-  const rack = G.turn === 'you' ? G.opp : G.you;
-  let hit = null, best = 1;
-  for (const c of rack) {
-    if (!c.alive) continue;
-    const d = Math.hypot((b.tx - c.tx) / CUP_RX, (b.tz - c.tz) / CUP_RZ);
-    if (d < 1 && d < best) { best = d; hit = c; }
-  }
-  if (hit) {
-    hit.alive = false;
-    setMsg(G.turn === 'you' ? 'Splash! 🎯' : 'They sink one', 1.0);
-    if (rack.every(c => !c.alive)) return endGame(G.turn === 'you');
-    if (G.turn === 'opp') G.aiT = 0.7;        // make → shoot again
-  } else {
-    setMsg(G.turn === 'you' ? 'Missed!' : 'They miss', 0.9);
-    G.turn = G.turn === 'you' ? 'opp' : 'you';
-    if (G.turn === 'opp') G.aiT = 0.9;
-  }
-}
-
-function loop(now) {
-  if (!G) return;
-  G.raf = requestAnimationFrame(loop);
-  const dt = Math.min(0.033, (now - G.last) / 1000); G.last = now;
-  if (!G.over) {
-    const b = G.ball;
-    if (b) { b.t += dt; b.tx += b.vtx * dt; b.tz += b.vtz * dt; b.vty -= GRAV * dt; b.ty += b.vty * dt; if (b.ty <= 0 && b.t > 0.05) land(); }
-    else if (G.turn === 'opp' && G.aiT > 0) { G.aiT -= dt; if (G.aiT <= 0) { G.aiT = 0; aiThrow(); } }
-    if (G && G.msgT > 0) G.msgT -= dt; // land() may have ended the game
-  }
-  if (!G) return;                      // game ended this frame
-  render();
-}
-
-// ---- rendering ----
-function drawTable() {
-  const ctx = G.ctx, p = G.proj;
-  ctx.clearRect(0, 0, G.W, G.H);
-  ctx.fillStyle = '#caa36a'; ctx.fillRect(0, 0, G.W, G.H); // wood floor
-  ctx.beginPath();
-  ctx.moveTo(p.cx - p.nhw, p.ny); ctx.lineTo(p.cx + p.nhw, p.ny);
-  ctx.lineTo(p.cx + p.fhw, p.fy); ctx.lineTo(p.cx - p.fhw, p.fy); ctx.closePath();
-  ctx.fillStyle = '#1f8a4c'; ctx.fill();
-  ctx.lineWidth = 5; ctx.strokeStyle = '#eaf5ee'; ctx.stroke();
-  ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.cx, p.ny); ctx.lineTo(p.cx, p.fy); ctx.stroke(); // centre line
-}
-function drawCup(sx, sy, scale) {
-  const ctx = G.ctx, rx = 22 * scale, ry = 9 * scale, bh = 26 * scale;
-  ctx.fillStyle = '#cf2a25';
-  ctx.beginPath(); ctx.moveTo(sx - rx, sy); ctx.lineTo(sx + rx, sy);
-  ctx.lineTo(sx + rx * 0.66, sy + bh); ctx.lineTo(sx - rx * 0.66, sy + bh); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(sx, sy, rx * 0.72, ry * 0.72, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.lineWidth = 2.5 * scale; ctx.strokeStyle = '#a81f1b'; ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
-}
-function drawBall(b) {
-  const ctx = G.ctx, p = project(b.tx, b.tz), off = b.ty * (G.H * 0.46);
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 9 * p.scale, 4 * p.scale, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#f6f4ec'; ctx.beginPath(); ctx.arc(p.sx, p.sy - off, 10 * p.scale, 0, Math.PI * 2); ctx.fill();
-  ctx.lineWidth = 1.5; ctx.strokeStyle = '#cdc7b6'; ctx.stroke();
-}
-function drawSwipe() {
-  if (!G.drag || G.ball) return;             // just show the gesture — no landing predictor
-  const ctx = G.ctx, d = G.drag;
-  ctx.setLineDash([7, 9]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.5)';
-  ctx.beginPath(); ctx.moveTo(d.x0, d.y0); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.beginPath(); ctx.arc(d.x0, d.y0, 8, 0, Math.PI * 2); ctx.fill();
-}
-function render() {
-  drawTable();
   const cups = [];
-  for (const c of G.opp) if (c.alive) cups.push(c);
-  for (const c of G.you) if (c.alive) cups.push(c);
-  cups.sort((a, b) => b.tz - a.tz); // far first (painter's order)
-  for (const c of cups) { const p = project(c.tx, c.tz); drawCup(p.sx, p.sy, p.scale); }
-  if (G.ball) drawBall(G.ball);
-  drawSwipe();
-  $('cuppong-you').textContent = '🐾 ' + G.you.filter(c => c.alive).length;
-  $('cuppong-opp').textContent = G.opp.filter(c => c.alive).length + ' 🤖';
-  $('cuppong-msg').textContent = G.msgT > 0 ? G.msg : (G.turn === 'you' && !G.ball ? 'Your throw' : '');
-}
+  function rack(team, baseZ, dir) {
+    const sx = 0.5, sz = 0.47;
+    for (let i = 0; i < 3; i++) { const count = 3 - i, z = baseZ + dir * i * sz;
+      for (let j = 0; j < count; j++) { const x = (j - (count - 1) / 2) * sx;
+        const mesh = makeCupMesh(); mesh.position.set(x, TTOP, z); group.add(mesh);
+        cups.push({ mesh, x, z, alive: true, team }); } }
+  }
+  rack('opp', -3.3, 1);   // far end, apex toward centre
+  rack('you', 3.3, -1);   // near end
 
-// ---- end ----
-function cleanup() {
-  if (!G) return;
-  cancelAnimationFrame(G.raf);
-  G.canvas.removeEventListener('pointerdown', G.onDown);
-  window.removeEventListener('pointermove', G.onMove);
-  window.removeEventListener('pointerup', G.onUp);
-  $('cuppong-overlay').classList.add('hidden');
-}
-function endGame(youWon) {
-  if (!G || G.over) return;
-  G.over = true;
-  const left = G.opp.filter(c => c.alive).length;
-  const coins = youWon ? 30 + (10 - left) : 8;
-  addCoins(coins); applyNeeds({ fun: 18, social: 10 });
-  if (youWon) track('games', 1);
-  const cb = G.onDone; cleanup(); G = null;
-  showModal('🥤 Cup Pong', (youWon ? 'You ran the table! 🏆' : 'You lost this round — rematch?') + `<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (cb) cb(); } }]);
-}
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(R, 20, 16), toonMat(0xf6f4ec));
+  ballMesh.castShadow = true; ballMesh.visible = false; group.add(ballMesh);
 
-export function initCupPongUI() {
-  $('cuppong-quit').addEventListener('click', () => { const cb = G && G.onDone; cleanup(); G = null; if (cb) cb(); });
+  // ---- state ----
+  let ball = null, turn = 'you', aiT = 0, over = false, active = false, onExit = null, msgT = 0, msg = '';
+  let drag = null, onDown, onMove, onUp;
+
+  const setMsg = (t, d = 1.1) => { msg = t; msgT = d; $('cuppong-msg').textContent = t; };
+
+  function throwSwipe(ux, uy) {
+    if (uy < 30) { setMsg('Swipe up to throw', 0.8); return; }
+    const un = clamp(uy / (window.innerHeight * 0.4), 0.06, 1.5);
+    const sn = clamp(ux / (window.innerHeight * 0.4), -1.1, 1.1);
+    ball = { x: 0, y: TTOP + 0.18, z: 3.7, vx: sn * 4.0, vy: un * 5.0, vz: -un * 10.5, t: 0, rest: 0, bounced: false };
+    ballMesh.visible = true; ballMesh.position.set(ball.x, ball.y, ball.z);
+  }
+  function aiThrow() {
+    const targets = cups.filter(c => c.team === 'you' && c.alive);
+    if (!targets.length) return;
+    const c = targets[Math.floor(Math.random() * targets.length)];
+    const T = 1.05, sx = 0, sy = TTOP + 0.4, sz = -3.9;
+    const tx = c.x + (Math.random() - 0.5) * 0.5, tz = c.z + (Math.random() - 0.5) * 0.5;
+    ball = { x: sx, y: sy, z: sz, vx: (tx - sx) / T, vy: (MOUTH_Y - sy) / T + 0.5 * GRAV * T, vz: (tz - sz) / T, t: 0, rest: 0, bounced: false };
+    ballMesh.visible = true; ballMesh.position.set(sx, sy, sz);
+    setMsg('Opponent throws…', 0.8);
+  }
+
+  function sink(c) {
+    c.alive = false; c.mesh.visible = false; ball = null; ballMesh.visible = false;
+    setMsg(turn === 'you' ? 'Splash! 🎯' : 'They sink one', 1.0);
+    if (cups.filter(x => x.team === c.team && x.alive).length === 0) return endGame(c.team === 'opp');
+    if (turn === 'opp') aiT = 0.7; // make → shoot again (you: turn stays, swipe re-enables)
+  }
+  function miss() {
+    ball = null; ballMesh.visible = false;
+    setMsg(turn === 'you' ? 'Missed!' : 'They miss', 0.9);
+    turn = turn === 'you' ? 'opp' : 'you';
+    if (turn === 'opp') aiT = 0.9;
+  }
+
+  function physics(dt) {
+    const b = ball; b.t += dt; const prevY = b.y;
+    b.vy -= GRAV * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+    // table bounce
+    if (b.vy < 0 && b.y - R <= TTOP && Math.abs(b.x) < 1.6 && b.z > -4.1 && b.z < 4.1) {
+      b.y = TTOP + R; b.vy = -b.vy * 0.5; b.vx *= 0.72; b.vz *= 0.72; b.bounced = true;
+    }
+    // cup interactions
+    for (const c of cups) {
+      if (!c.alive) continue;
+      const dx = b.x - c.x, dz = b.z - c.z, h = Math.hypot(dx, dz) || 0.0001;
+      if (b.vy < 0 && prevY > MOUTH_Y && b.y <= MOUTH_Y) {           // crossing the mouth plane
+        if (h < CUP_R - R * 0.5) { sink(c); return; }
+        if (h < CUP_R + R) {                                          // rim-out bounce
+          const nx = dx / h, nz = dz / h, s = Math.abs(b.vy) * 0.6;
+          b.vx = nx * s + b.vx * 0.3; b.vz = nz * s + b.vz * 0.3; b.vy = Math.abs(b.vy) * 0.55; b.y = MOUTH_Y + R; b.bounced = true;
+        }
+      } else if (b.y < MOUTH_Y && h < CUP_R + R) {                   // hit the cup wall
+        const nx = dx / h, nz = dz / h, pen = (CUP_R + R) - h;
+        b.x += nx * pen; b.z += nz * pen;
+        const vn = b.vx * nx + b.vz * nz; if (vn < 0) { b.vx -= 2 * vn * nx * 0.6; b.vz -= 2 * vn * nz * 0.6; } b.bounced = true;
+      }
+    }
+    ballMesh.position.set(b.x, b.y, b.z); ballMesh.rotation.x -= dt * 6;
+    const speed = Math.hypot(b.vx, b.vy, b.vz);
+    if (b.y < TTOP - 2 || Math.abs(b.x) > 2.5 || b.z < -5.2 || b.z > 5.2) { miss(); return; }
+    if (b.bounced && b.y <= TTOP + R + 0.05 && speed < 0.8) { b.rest += dt; if (b.rest > 0.25) miss(); } else b.rest = 0;
+    if (b.t > 5) miss();
+  }
+
+  function update(dt) {
+    if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('cuppong-msg').textContent = (turn === 'you' && !ball ? 'Your throw' : ''); }
+    if (over) return;
+    if (!ball && turn === 'opp' && aiT > 0) { aiT -= dt; if (aiT <= 0) { aiT = 0; aiThrow(); } }
+    if (ball) physics(dt);
+    $('cuppong-you').textContent = '🐾 ' + cups.filter(c => c.team === 'you' && c.alive).length;
+    $('cuppong-opp').textContent = cups.filter(c => c.team === 'opp' && c.alive).length + ' 🤖';
+  }
+  function cam() {
+    const o = TABLE_ORIGIN;
+    return { px: o.x, py: o.y + 3.7, pz: o.z + 6.7, lx: o.x, ly: o.y + 1.3, lz: o.z - 2.0 };
+  }
+
+  // ---- input ----
+  function bind() {
+    const ov = $('cuppong-overlay');
+    onDown = (e) => { if (turn !== 'you' || ball || over || e.target.id === 'cuppong-quit') return; e.preventDefault(); drag = { x0: e.clientX, y0: e.clientY }; };
+    onMove = () => {};
+    onUp = (e) => { if (!drag) return; const d = drag; drag = null; throwSwipe(e.clientX - d.x0, d.y0 - e.clientY); };
+    ov.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+  function unbind() {
+    const ov = $('cuppong-overlay');
+    if (onDown) ov.removeEventListener('pointerdown', onDown);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  }
+
+  function enter(cb) {
+    onExit = cb; active = true; over = false; turn = 'you'; aiT = 0; ball = null; drag = null;
+    for (const c of cups) { c.alive = true; c.mesh.visible = true; }
+    ballMesh.visible = false; group.visible = true;
+    $('cuppong-overlay').classList.remove('hidden');
+    setMsg('Swipe up to throw! 🏓', 1.8);
+    bind();
+  }
+  function exit() { active = false; group.visible = false; $('cuppong-overlay').classList.add('hidden'); unbind(); }
+  function endGame(youWon) {
+    if (over) return; over = true;
+    $('cuppong-overlay').classList.add('hidden'); unbind();
+    const left = cups.filter(c => c.team === 'opp' && c.alive).length;
+    const coins = youWon ? 30 + (6 - left) * 2 : 8;
+    addCoins(coins); applyNeeds({ fun: 18, social: 10 });
+    if (youWon) track('games', 1);
+    showModal('🥤 Cup Pong', (youWon ? 'You ran the table! 🏆' : 'You lost — rematch?') + `<br>Reward: <b>🪙 ${coins}</b>`, [{ label: 'Done', onClick: () => { if (onExit) onExit(); } }]);
+  }
+
+  $('cuppong-quit').addEventListener('click', () => {
+    if (over) return; over = true; $('cuppong-overlay').classList.add('hidden'); unbind();
+    if (onExit) onExit();
+  });
+
+  return { enter, exit, update, cam, isActive: () => active };
 }

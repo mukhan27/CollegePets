@@ -460,9 +460,8 @@ html, body {
 .fish-btn.reel { background: #6be0a0; color: #0d3a26; box-shadow: 0 5px 0 #3aa873; animation: reelpulse .5s infinite; }
 @keyframes reelpulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 
-/* ---------- Cup Pong ---------- */
-#cuppong-overlay { position: fixed; inset: 0; z-index: 62; touch-action: none; }
-#cuppong-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+/* ---------- Cup Pong (3D in-scene; overlay is just swipe + HUD) ---------- */
+#cuppong-overlay { position: fixed; inset: 0; z-index: 62; touch-action: none; background: transparent; pointer-events: auto; }
 #cuppong-top { position: absolute; top: 12px; left: 12px; right: 12px;
   display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
 #cuppong-top .cp-side { background: rgba(12,20,30,.6); color: #fff; font-weight: 800;
