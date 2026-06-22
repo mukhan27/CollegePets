@@ -490,22 +490,14 @@ function makeDiningExterior(b) {
   doorG.add(mesh(new THREE.BoxGeometry(3.6, 0.24, 1.4), toonMat(P.sandDark), 0, 0.12, 0.7, false));
   doorG.position.set(0, 0, d / 2 + 0.05); g.add(doorG);
 
-  // patio tables with umbrellas out front, off to the sides
-  for (const s of [-1, 1]) {
-    const px = s * (w * 0.5 + 2.4), pz = d / 2 + 3.6;
-    g.add(mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.12, 16), toonMat(0xe8e0d0), px, 0.72, pz));
-    g.add(mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.72, 8), toonMat(0x8a8580), px, 0.36, pz, false));
-    g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8), toonMat(0x8a8580), px, 1.5, pz, false));
-    g.add(mesh(new THREE.ConeGeometry(2.0, 0.9, 12), new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }), px, 2.9, pz, false));
-    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) g.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12), toonMat(0xb5462f), px + Math.cos(a) * 1.5, 0.25, pz + Math.sin(a) * 1.5, false));
-  }
-
   const sign = textSprite(b.label);
   sign.position.set(0, h + (roof.userData.rise || 3) + 1.2, 0);
   g.add(sign);
 
+  // face the storefront toward the quad (rotate 180° so the door/windows look inward)
+  g.rotation.y = Math.PI;
   g.position.set(x, 0, z);
-  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const doorWorld = new THREE.Vector3(x, 0, z - (d / 2 + 1.6));
   const collider = { x, z, w: w + 0.6, d: d + 0.6 };
   return { group: g, doorWorld, collider };
 }

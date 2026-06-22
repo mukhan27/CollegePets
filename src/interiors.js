@@ -1077,8 +1077,6 @@ export function buildDiningHall() {
   add(tb(W - 6.4, 0.1, 0.1, 0xbfe0ea), 0, 2.3, bz + 0.7); // glass guard rail
   for (const sx of [-(W - 6) / 2 + 0.4, (W - 6) / 2 - 0.4]) add(cyl(0.04, 0.04, 1.0, 6, 0xcfcfd6), sx, 1.85, bz + 0.7);
   colliders.push({ x: 0, z: bz, w: W - 6, d: 2.0 }); shade(0, bz, W - 5, 3.2);
-  const menu = add(tb(7, 2.4, 0.2, 0x2c3530), 9, 3.3, -D / 2 + 0.5); // menu board
-  const sign = textSprite('🍽️ Dining Hall'); sign.position.set(-7, 3.6, -D / 2 + 0.7); root.add(sign);
   interactables.push({ id: 'order_food', x: 0, z: bz + 2.6, r: 2.6, label: '🍽️ Order food' });
 
   // ---- cup pong table (play a match) on the right ----
@@ -1089,22 +1087,33 @@ export function buildDiningHall() {
   for (const end of [-1, 1]) for (let i = 0; i < 3; i++) for (let j = 0; j <= i; j++)
     add(cyl(0.13, 0.1, 0.3, 12, 0xcf2a25), px + (j - i / 2) * 0.32, 1.2, -3 + end * (1.6 - i * 0.45));
   colliders.push({ x: px, z: -3, w: 2.8, d: 5.4 }); shade(px, -3, 4, 6);
-  const psign = textSprite('🥤 Cup Pong'); psign.position.set(px, 2.8, -3); root.add(psign);
   interactables.push({ id: 'cup_pong', x: px - 2.4, z: -3, r: 2.6, label: '🥤 Play Cup Pong' });
 
-  // ---- communal tables with benches you can sit at to eat ----
+  // ---- communal trestle tables with benches you can sit at to eat ----
+  const platePalette = [0xd95b4a, 0x6be0a0, 0xffd166, 0x7ec8e3];
   function diningTable(x, z) {
-    add(tb(2.4, 0.18, 5.0, 0x8a5a36), x, 1.0, z);             // tabletop
-    for (const sx of [-0.9, 0.9]) add(tb(0.2, 1.0, 4.4, 0x6e4626), x + sx, 0.5, z); // legs
-    // a couple of plates/cups for life
-    add(cyl(0.32, 0.32, 0.06, 14, 0xffffff), x - 0.4, 1.12, z - 1.4);
-    add(cyl(0.18, 0.16, 0.28, 10, 0xd95b4a), x + 0.5, 1.22, z + 0.6);
-    colliders.push({ x, z, w: 2.6, d: 5.2 }); shade(x, z, 4.2, 6);
-    for (const s of [-1, 1]) { // benches both sides → sit & eat
-      add(tb(2.0, 0.5, 0.6, 0xa9743f), x + s * 1.7, 0.5, z);
+    add(tb(2.5, 0.14, 5.2, 0xa9743f), x, 1.0, z);                       // tabletop
+    add(tb(2.62, 0.06, 5.32, 0x7a5230), x, 0.95, z);                    // apron edge
+    for (const sz of [-1.9, 1.9]) {                                     // trestle A-frame legs
+      for (const sx of [-0.95, 0.95]) add(tb(0.2, 0.85, 0.2, 0x6e4626), x + sx, 0.45, z + sz);
+      add(tb(2.3, 0.16, 0.2, 0x6e4626), x, 0.18, z + sz);              // foot rail
+    }
+    add(tb(0.18, 0.18, 3.6, 0x5f3d22), x, 0.55, z);                     // centre stretcher
+    add(tb(0.5, 0.05, 4.4, 0xcf6f5a), x, 1.08, z);                      // table runner
+    for (let i = 0; i < 3; i++) for (const ps of [-1, 1]) {             // place settings
+      const pz = z - 1.6 + i * 1.6;
+      add(cyl(0.26, 0.26, 0.05, 16, 0xfbf7ee), x + ps * 0.62, 1.1, pz);
+      add(cyl(0.13, 0.11, 0.22, 12, platePalette[(i + (ps > 0 ? 1 : 0)) % 4]), x + ps * 0.86, 1.19, pz + 0.32);
+    }
+    add(cyl(0.13, 0.18, 0.4, 12, 0xbfe0ea), x, 1.25, z);               // bud vase centrepiece
+    for (const [vx, vz] of [[0, 0.05], [0.1, -0.05], [-0.1, 0]]) add(sph(0.12, 0x6be0a0), x + vx, 1.5, z + vz);
+    colliders.push({ x, z, w: 2.7, d: 5.4 }); shade(x, z, 4.4, 6.2);
+    for (const s of [-1, 1]) {                                          // benches both sides
+      add(tb(2.1, 0.16, 0.7, 0xb5895a), x + s * 1.75, 0.52, z);        // seat
+      for (const lz of [-1.9, 1.9]) add(tb(0.18, 0.5, 0.18, 0x8a5a36), x + s * 1.75, 0.26, z + lz); // bench legs
       interactables.push({ id: 'dine', x: x + s * 2.5, z, r: 2.2, label: '🍴 Sit & eat',
-        seatPos: { x: x + s * 1.7, z, y: 0 }, sitY: 0.95, face: s > 0 ? -Math.PI / 2 : Math.PI / 2,
-        stepBack: { x: x + s * 2.6, z } });
+        seatPos: { x: x + s * 1.75, z, y: 0 }, sitY: 0.95, face: s > 0 ? -Math.PI / 2 : Math.PI / 2,
+        stepBack: { x: x + s * 2.7, z } });
     }
   }
   diningTable(-8, 3.5);
@@ -1124,12 +1133,20 @@ export function buildDiningHall() {
   function plant(x, z) { add(cyl(0.4, 0.32, 0.7, 12, 0xb5703f), x, 0.35, z); add(cyl(0.1, 0.13, 1.4, 8, 0x6e4a2e), x, 1.3, z); for (const [px, py, pz, r] of [[0, 2.2, 0, 0.7], [0.35, 2.0, 0.15, 0.5], [-0.35, 2.05, -0.15, 0.5]]) add(sph(r, 0x4f8a45), x + px, py, z + pz); shade(x, z, 1.6, 1.6); colliders.push({ x, z, w: 1, d: 1 }); }
   plant(-W / 2 + 2, D / 2 - 3); plant(W / 2 - 2, D / 2 - 3);
 
-  // ---- remodel touches: accent wall, posters, stools, hanging shades, soda fountain, rug ----
+  // ---- remodel touches: accent wall, framed art, menu board, stools, shades, soda fountain ----
   add(tb(W - 2, 4.4, 0.18, 0x9c3b2c), 0, 2.6, -D / 2 + 0.42);                 // warm terracotta backsplash
-  for (const [pp, txt] of [[-12, '🍕'], [-7, '🍩'], [13.5, '🥗']]) {
-    add(tb(1.6, 1.6, 0.1, 0xfff1dd), pp, 3.4, -D / 2 + 0.55);                 // poster frame
-    const s = textSprite(txt, { size: 46, bg: '' }); s.position.set(pp, 3.4, -D / 2 + 0.66); root.add(s);
+  // simple minimalist framed art (no emoji) — a coloured canvas with a sun disc + horizon band
+  for (const [pp, c1, c2] of [[-12.5, 0xe8a05a, 0xfbe0b0], [-7.5, 0x6a83a6, 0xb8cce0]]) {
+    add(tb(1.9, 1.9, 0.12, 0x5a3c28), pp, 3.4, -D / 2 + 0.52);                // frame
+    add(tb(1.55, 1.55, 0.06, c1), pp, 3.4, -D / 2 + 0.6);                     // canvas
+    add(cyl(0.36, 0.36, 0.05, 22, c2), pp, 3.62, -D / 2 + 0.65).rotation.x = Math.PI / 2; // sun
+    add(tb(1.55, 0.32, 0.05, c2), pp, 2.92, -D / 2 + 0.65);                   // horizon band
   }
+  // menu board on the right of the backsplash (coloured "lines", no icons)
+  add(tb(7, 3.0, 0.18, 0x223027), 9, 3.3, -D / 2 + 0.5);
+  add(tb(6.2, 0.5, 0.05, 0xf2c14e), 9, 4.3, -D / 2 + 0.62);                   // header bar
+  for (let i = 0; i < 4; i++) add(tb(5.4, 0.18, 0.05, 0xe7ddca), 9 - 0.3, 3.55 - i * 0.5, -D / 2 + 0.62);
+  for (let i = 0; i < 4; i++) add(tb(1.0, 0.18, 0.05, 0xcf6f5a), 12.0, 3.55 - i * 0.5, -D / 2 + 0.62); // "prices"
   for (let i = -2; i <= 2; i++) {                                            // bar stools at the counter
     add(cyl(0.32, 0.3, 0.12, 14, 0xcf6f5a), i * 3, 1.0, bz + 1.7);
     add(cyl(0.05, 0.05, 0.9, 8, 0x8a8580), i * 3, 0.5, bz + 1.7);
@@ -1143,8 +1160,6 @@ export function buildDiningHall() {
   for (const dx of [-0.5, 0, 0.5]) add(cyl(0.07, 0.07, 0.35, 8, 0x33353b), 12.6 + dx, 1.2, -7.36);
   colliders.push({ x: 12.6, z: -8, w: 2.4, d: 1.4 }); shade(12.6, -8, 3, 2);
   plant(-W / 2 + 2, -D / 2 + 4);
-  const rug2 = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 4.5), toonMat(0xb5462f, { map: rugTexture('#cf6f5a', '#8d3325') }));
-  rug2.rotation.x = -Math.PI / 2; rug2.position.set(0, 0.03, D / 2 - 5.5); root.add(rug2);
 
   addExitPad(root, 0, D / 2 - 1.4);
   interactables.push({ id: 'exit_dining', x: 0, z: D / 2 - 1.6, r: 2.2, label: '🚪 Leave Dining Hall' });

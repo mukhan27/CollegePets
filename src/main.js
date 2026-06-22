@@ -345,7 +345,7 @@ function runInteract(it) {
       showModal('🥤 Vending machine', 'You grab a fizzy soda. Refreshing! (+ vibes, no charge — RA covered it)');
       break;
     case 'cafeteria': switchLocation('diningHall'); break;
-    case 'exit_dining': switchLocation('campus', { x: campus.doors.cafeteria.x, z: campus.doors.cafeteria.z + 1 }); break;
+    case 'exit_dining': switchLocation('campus', { x: campus.doors.cafeteria.x, z: campus.doors.cafeteria.z - 1 }); break;
     case 'order_food': openFoodMenu(); break;
     case 'cup_pong': cuppongActive = true; cuppong.enter(() => { cuppongActive = false; cuppong.exit(); }); break;
     case 'dine': beginLounge(it); openFoodMenu(); break;
