@@ -443,6 +443,73 @@ function makeShopExterior(b) {
   return { group: g, doorWorld, collider };
 }
 
+// A warm food-court dining-hall exterior: peach plaster walls, terracotta roof &
+// trim, a red/cream striped awning, big glowing storefront windows, a roof vent,
+// and a couple of patio tables with umbrellas out front.
+function makeDiningExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshToonMaterial({ color: 0xf0c79a, map: plaster() });
+  const trimMat = toonMat(0xb5462f);   // terracotta
+  const cream = toonMat(0xfff1dd);
+  const glassMat = new THREE.MeshToonMaterial({ color: 0xffe6b0, emissive: 0xffb84a, emissiveIntensity: 0.5 }); // warm interior glow
+
+  const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, h / 2, 0); body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.6, d + 0.3), trimMat, 0, 0.3, 0, false));   // base
+  g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.55, d + 0.4), cream, 0, h - 0.27, 0, false)); // cornice
+  const roof = gableRoof(w, d, 0xb5462f); roof.position.y = h; g.add(roof);
+  g.add(mesh(new THREE.BoxGeometry(1.1, 2.2, 1.1), new THREE.MeshToonMaterial({ color: 0xc88a70, map: brickTexture() }), w * 0.3, h + 1.5, -d * 0.2)); // vent stack
+  g.add(mesh(new THREE.BoxGeometry(1.4, 0.3, 1.4), toonMat(0x9a6a55), w * 0.3, h + 2.7, -d * 0.2, false));
+
+  // big glowing storefront windows flanking the door
+  const fz = d / 2 + 0.06;
+  function bigWindow(cx, ww = 4.4, wh = 3.6) {
+    const grp = new THREE.Group();
+    grp.add(mesh(new THREE.BoxGeometry(ww + 0.5, wh + 0.6, 0.3), cream, 0, 0, 0, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww, wh, 0.16), glassMat, 0, 0, 0.1, false));
+    grp.add(mesh(new THREE.BoxGeometry(0.14, wh, 0.22), cream, 0, 0, 0.15, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww, 0.14, 0.22), cream, 0, 0, 0.15, false));
+    grp.add(mesh(new THREE.BoxGeometry(ww + 0.7, 0.3, 0.7), toonMat(0xb98a5e), 0, -wh / 2 - 0.35, 0.22, false)); // sill
+    grp.position.set(cx, h * 0.52, fz); g.add(grp);
+  }
+  bigWindow(-w * 0.28); bigWindow(w * 0.28);
+
+  // striped awning across the storefront + scalloped valance
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.16, 2.2), new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }));
+  awn.rotation.x = 0.44; awn.position.set(0, h * 0.82, d / 2 + 1.05); awn.castShadow = true; g.add(awn);
+  for (let i = 0; i < 11; i++) {
+    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.55, 3), toonMat(i % 2 ? 0xb5462f : 0xfff1dd, { noCache: true }));
+    tri.rotation.x = Math.PI; tri.position.set(-w / 2 + (i + 0.5) * (w / 11), h * 0.82 - 0.5, d / 2 + 1.9); g.add(tri);
+  }
+
+  // central glass double door
+  const doorG = new THREE.Group();
+  doorG.add(mesh(new THREE.BoxGeometry(3.2, 4.0, 0.16), cream, 0, 2.0, 0, false));
+  doorG.add(mesh(new THREE.BoxGeometry(2.6, 3.5, 0.2), trimMat, 0, 1.85, 0.04, false));
+  for (const s of [-0.55, 0.55]) doorG.add(mesh(new THREE.BoxGeometry(1.0, 2.6, 0.22), glassMat, s, 2.0, 0.06, false));
+  doorG.add(mesh(new THREE.BoxGeometry(3.6, 0.24, 1.4), toonMat(P.sandDark), 0, 0.12, 0.7, false));
+  doorG.position.set(0, 0, d / 2 + 0.05); g.add(doorG);
+
+  // patio tables with umbrellas out front, off to the sides
+  for (const s of [-1, 1]) {
+    const px = s * (w * 0.5 + 2.4), pz = d / 2 + 3.6;
+    g.add(mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.12, 16), toonMat(0xe8e0d0), px, 0.72, pz));
+    g.add(mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.72, 8), toonMat(0x8a8580), px, 0.36, pz, false));
+    g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8), toonMat(0x8a8580), px, 1.5, pz, false));
+    g.add(mesh(new THREE.ConeGeometry(2.0, 0.9, 12), new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }), px, 2.9, pz, false));
+    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) g.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12), toonMat(0xb5462f), px + Math.cos(a) * 1.5, 0.25, pz + Math.sin(a) * 1.5, false));
+  }
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, h + (roof.userData.rise || 3) + 1.2, 0);
+  g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const collider = { x, z, w: w + 0.6, d: d + 0.6 };
+  return { group: g, doorWorld, collider };
+}
+
 // ----------------------------------------------------------- campus
 export function buildCampus() {
   const root = new THREE.Group();
@@ -516,6 +583,7 @@ export function buildCampus() {
   for (const b of buildings) {
     const built = b.id === 'library' ? makeLibraryExterior(b)
       : b.id === 'shop' ? makeShopExterior(b)
+      : b.id === 'cafeteria' ? makeDiningExterior(b)
       : makeBuilding(b);
     root.add(built.group);
     colliders.push(built.collider);

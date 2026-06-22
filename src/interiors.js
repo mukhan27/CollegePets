@@ -1124,6 +1124,28 @@ export function buildDiningHall() {
   function plant(x, z) { add(cyl(0.4, 0.32, 0.7, 12, 0xb5703f), x, 0.35, z); add(cyl(0.1, 0.13, 1.4, 8, 0x6e4a2e), x, 1.3, z); for (const [px, py, pz, r] of [[0, 2.2, 0, 0.7], [0.35, 2.0, 0.15, 0.5], [-0.35, 2.05, -0.15, 0.5]]) add(sph(r, 0x4f8a45), x + px, py, z + pz); shade(x, z, 1.6, 1.6); colliders.push({ x, z, w: 1, d: 1 }); }
   plant(-W / 2 + 2, D / 2 - 3); plant(W / 2 - 2, D / 2 - 3);
 
+  // ---- remodel touches: accent wall, posters, stools, hanging shades, soda fountain, rug ----
+  add(tb(W - 2, 4.4, 0.18, 0x9c3b2c), 0, 2.6, -D / 2 + 0.42);                 // warm terracotta backsplash
+  for (const [pp, txt] of [[-12, '🍕'], [-7, '🍩'], [13.5, '🥗']]) {
+    add(tb(1.6, 1.6, 0.1, 0xfff1dd), pp, 3.4, -D / 2 + 0.55);                 // poster frame
+    const s = textSprite(txt, { size: 46, bg: '' }); s.position.set(pp, 3.4, -D / 2 + 0.66); root.add(s);
+  }
+  for (let i = -2; i <= 2; i++) {                                            // bar stools at the counter
+    add(cyl(0.32, 0.3, 0.12, 14, 0xcf6f5a), i * 3, 1.0, bz + 1.7);
+    add(cyl(0.05, 0.05, 0.9, 8, 0x8a8580), i * 3, 0.5, bz + 1.7);
+  }
+  for (const lx of [-8, -2]) {                                               // hanging shades over the tables
+    add(cyl(0.03, 0.03, 1.0, 6, 0x44464c), lx, 4.4, 3.5);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.55, 16), toonMat(0xd95b4a)), lx, 3.7, 3.5);
+  }
+  add(tb(2.2, 2.0, 1.2, 0xd6d8db), 12.6, 1.0, -8);                            // soda fountain
+  add(tb(2.0, 0.9, 0.08, 0x2c3530), 12.6, 1.6, -7.42);
+  for (const dx of [-0.5, 0, 0.5]) add(cyl(0.07, 0.07, 0.35, 8, 0x33353b), 12.6 + dx, 1.2, -7.36);
+  colliders.push({ x: 12.6, z: -8, w: 2.4, d: 1.4 }); shade(12.6, -8, 3, 2);
+  plant(-W / 2 + 2, -D / 2 + 4);
+  const rug2 = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 4.5), toonMat(0xb5462f, { map: rugTexture('#cf6f5a', '#8d3325') }));
+  rug2.rotation.x = -Math.PI / 2; rug2.position.set(0, 0.03, D / 2 - 5.5); root.add(rug2);
+
   addExitPad(root, 0, D / 2 - 1.4);
   interactables.push({ id: 'exit_dining', x: 0, z: D / 2 - 1.6, r: 2.2, label: '🚪 Leave Dining Hall' });
   const spawn = { x: 0, z: D / 2 - 4 };
