@@ -27,12 +27,14 @@ export function toonMat(color, opts = {}) {
 }
 
 // ---------------------------------------------------------- canvas helpers
-function canvasTexture(w, h, draw, { repeat, anisotropy = 4 } = {}) {
+function canvasTexture(w, h, draw, { repeat, anisotropy = 8 } = {}) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   draw(c.getContext('2d'), w, h);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  // three.js clamps this to the hardware max, so requesting 16 just means
+  // "as sharp as the GPU allows" for grazing-angle ground/paths/floors.
   tex.anisotropy = anisotropy;
   if (repeat) {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -129,7 +131,7 @@ export function campusGroundTexture(GW = 220, GH = 160) {
       ctx.arc(px, py, sz, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, { anisotropy: 8 });
+  }, { anisotropy: 16 });
 }
 
 // ---------------------------------------------------------- material textures

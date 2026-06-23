@@ -21,7 +21,7 @@ const GradeShader = {
     tDiffuse:        { value: null },
     resolution:      { value: new THREE.Vector2(1, 1) },
     focusCenter:     { value: 0.52 }, // vertical centre of the sharp band (UV)
-    focusWidth:      { value: 0.18 }, // half-height of the fully-sharp band
+    focusWidth:      { value: 0.24 }, // half-height of the fully-sharp band (wider = less softening)
     blurStrength:    { value: 3.0 },  // max blur radius in pixels (0 disables)
     vignetteStrength:{ value: 0.42 },
     warmth:          { value: 0.022 },
@@ -92,10 +92,11 @@ const GradeShader = {
 
 // Per-tier tuning. `low` keeps the same look but cheaper kernels / half-res bloom.
 const TIERS = {
-  high: { pixelRatio: 2,   bloomStrength: 0.42, bloomRadius: 0.6, blur: 3.0 },
-  // `low` used to render at pixelRatio 1, which looked very soft/blurry on
-  // high-DPR phones. 1.5 keeps it sharp while staying cheaper than full 2x.
-  low:  { pixelRatio: 1.5, bloomStrength: 0.34, bloomRadius: 0.5, blur: 2.0 },
+  high: { pixelRatio: 2, bloomStrength: 0.42, bloomRadius: 0.6, blur: 3.0 },
+  // `low` now renders at full 2x (capped) too — with MSAA on, a half-res phone
+  // render was the main source of the "blurry / bad graphics" look. The tier
+  // still saves work via cheaper bloom + a smaller tilt-shift kernel.
+  low:  { pixelRatio: 2, bloomStrength: 0.34, bloomRadius: 0.5, blur: 2.0 },
 };
 
 // Build the composer. Returns helpers the host (main.js) drives each frame / on resize.
@@ -103,6 +104,13 @@ export function createComposer(renderer, scene, camera, { tier = 'high' } = {}) 
   const size = renderer.getSize(new THREE.Vector2());
 
   const composer = new EffectComposer(renderer);
+  // The post-FX chain renders the scene into an offscreen target, which bypasses
+  // the WebGLRenderer's own `antialias` — so geometry edges alias badly (jagged
+  // trees/posts/buildings). Re-enable hardware MSAA on the composer's targets so
+  // edges are crisp before FXAA cleans up the shader passes. Set once; survives
+  // resize / setPixelRatio (they only resize the same targets).
+  composer.renderTarget1.samples = 4;
+  composer.renderTarget2.samples = 4;
   composer.addPass(new RenderPass(scene, camera));
 
   // threshold raised to 1.0 so only genuinely emissive things (lamp bulbs/glow
