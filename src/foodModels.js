@@ -108,19 +108,20 @@ export const FOOD_MODELS = {
   } },
   taco: { build() {
     const g = new THREE.Group();
+    const t = new THREE.Group();                                      // assemble opening-up, then tilt it toward the viewer
     const R = 0.27;
     // hard-shell taco: a half-pipe (open along the top), length running along x
-    const shellGeo = new THREE.CylinderGeometry(R, R, 0.52, 28, 1, true, 0, Math.PI);
-    const shell = new THREE.Mesh(shellGeo, toonMat(0xe7b15a)); shell.castShadow = true;
-    shell.rotation.z = -Math.PI / 2;                                   // axis Y→X, opening faces up
-    put(g, shell, 0, R, 0);                                            // bottom of the U rests at y≈0
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.52, 28, 1, true, 0, Math.PI), toonMat(0xe7b15a));
+    shell.castShadow = true; shell.rotation.z = -Math.PI / 2; shell.position.set(0, R, 0); t.add(shell);
     const inner = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 0.5, 28, 1, true, 0, Math.PI), toonMat(0xf2c88a));
-    inner.rotation.z = -Math.PI / 2; put(g, inner, 0, R, 0);          // lighter inside the shell
-    put(g, tb(0.46, 0.13, 0.2, 0x7a3f23), 0, 0.11, 0);                // seasoned meat in the trough
+    inner.rotation.z = -Math.PI / 2; inner.position.set(0, R, 0); t.add(inner); // lighter tortilla inside
+    put(t, tb(0.46, 0.14, 0.26, 0x7a3f23), 0, 0.12, 0);              // seasoned meat heaped in the trough
     const r = rng(11);
-    for (let i = 0; i < 7; i++) put(g, tb(0.06, 0.03, 0.1, 0x6fc63f), -0.2 + i * 0.065, 0.3, (r() - 0.5) * 0.18, 0, r() * Math.PI, 0.2); // lettuce poking up
-    for (let i = 0; i < 6; i++) put(g, tb(0.07, 0.02, 0.022, 0xffd23d), -0.18 + i * 0.07, 0.27, (r() - 0.5) * 0.14); // shredded cheese
-    put(g, sph(0.05, 0xe03828), 0.07, 0.31, 0.04); put(g, sph(0.045, 0xe03828), -0.1, 0.31, -0.05); // tomato/salsa
+    for (let i = 0; i < 8; i++) put(t, tb(0.07, 0.03, 0.11, 0x6fc63f), -0.2 + i * 0.057, 0.31, (r() - 0.5) * 0.2, 0, r() * Math.PI, 0.2); // lettuce poking up
+    for (let i = 0; i < 7; i++) put(t, tb(0.08, 0.02, 0.024, 0xffd23d), -0.2 + i * 0.065, 0.28, (r() - 0.5) * 0.16); // shredded cheese
+    put(t, sph(0.05, 0xe03828), 0.08, 0.33, 0.05); put(t, sph(0.045, 0xe03828), -0.11, 0.33, -0.06); // tomato/salsa
+    t.rotation.x = Math.PI / 4; t.position.y = 0.19;                  // tilt the loaded opening up toward the camera
+    g.add(t);
     return g;
   } },
   icecream: { build() {
