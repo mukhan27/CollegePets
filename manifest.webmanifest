@@ -1,0 +1,16 @@
+{
+  "name": "College Pets",
+  "short_name": "College Pets",
+  "description": "A cozy 3D campus-life hangout game — adopt a pet and live the college experience.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1a2a3a",
+  "theme_color": "#1a2a3a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

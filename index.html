@@ -6,10 +6,25 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="College Pets">
+<meta name="theme-color" content="#1a2a3a">
+<meta name="description" content="A cozy 3D campus-life hangout game — adopt a pet and live the college experience.">
 <title>College Pets</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="./icons/icon-192.png">
 <script type="importmap">
   { "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script>
+  // Register the PWA service worker (HTTPS or localhost only). Registered from
+  // the document root so its scope covers the whole app on any host/subpath.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch((e) => console.warn('SW registration failed', e));
+    });
+  }
 </script>
 </head>
 <body>

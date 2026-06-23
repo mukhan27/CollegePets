@@ -1,0 +1,9 @@
+# Cloudflare Pages headers.
+# Keep the entry point and the service worker un-cached by the CDN/browser so a
+# new deploy is picked up on the next reload; the SW itself handles app caching.
+/index.html
+  Cache-Control: no-cache
+/service-worker.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Content-Type: application/manifest+json
