@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { createPet } from './petFactory.js';
 import { FURNITURE } from './furniture.js';
+import { FOOD_MODELS } from './foodModels.js';
 import { clothesSlot } from './state.js';
 
 const SIZE = 140;
@@ -59,6 +60,16 @@ export function furniturePreview(id) {
   const k = 'f:' + id;
   if (cache.has(k)) return cache.get(k);
   const def = FURNITURE[id];
+  if (!def) return '';
+  const url = snapshot(def.build());
+  cache.set(k, url);
+  return url;
+}
+
+export function foodPreview(id) {
+  const k = 'd:' + id;
+  if (cache.has(k)) return cache.get(k);
+  const def = FOOD_MODELS[id];
   if (!def) return '';
   const url = snapshot(def.build());
   cache.set(k, url);
