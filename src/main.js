@@ -385,8 +385,8 @@ function eatFromInventory(id) {
   player.userData.eatUntil = clock.elapsedTime + 1.6;
   const def = FOOD_MODELS[id];
   if (def) {
-    const m = def.build(); m.scale.setScalar(0.55);
-    const head = player.userData.head; m.position.set(0, -0.05, 0.5); head.add(m);
+    const m = def.build(); m.scale.setScalar(0.5);
+    const head = player.userData.head; m.position.set(0, -0.34, 0.66); head.add(m); // held in front of the snout, not in the nose
     setTimeout(() => { if (m.parent) m.parent.remove(m); }, 1600);
   }
   eat(id, { fromPantry: false }); // needs/stats/toast (already removed from bag)

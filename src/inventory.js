@@ -20,7 +20,7 @@ export function closeInventory() { open = false; $('inventory-panel').classList.
 export function renderInventory() {
   const body = $('inventory-body');
   const ids = Object.keys(state.pantry || {}).filter(id => state.pantry[id] > 0 && findFood(id));
-  if (!ids.length) { body.innerHTML = '<p class="cp-empty">Your bag is empty — order food at the 🍽️ Dining Hall!</p>'; return; }
+  if (!ids.length) { body.innerHTML = '<p class="cp-empty">Your bag is empty.</p>'; return; }
   let html = '<div class="item-grid">';
   for (const id of ids) {
     const f = findFood(id);
