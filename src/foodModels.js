@@ -106,27 +106,6 @@ export const FOOD_MODELS = {
     }
     return g;
   } },
-  taco: { build() {
-    const g = new THREE.Group();
-    const R = 0.28;
-    // Shell length runs along Z so the thumbnail camera (~+Z) sees the arch side-on, not the open end.
-    // double-sided: camera can see the concave interior of the arch from above.
-    const outerMat = toonMat(0xe8b85a, { side: THREE.DoubleSide, noCache: true });
-    const innerMat = toonMat(0xf6d49a, { side: THREE.DoubleSide, noCache: true });
-    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.54, 28, 1, true, 0, Math.PI), outerMat);
-    shell.castShadow = true;
-    shell.rotation.x = Math.PI / 2;   // Y-axis → Z-axis; arch now visible from the front
-    shell.position.set(0, R, 0); g.add(shell);
-    const inner = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 0.5, 28, 1, true, 0, Math.PI), innerMat);
-    inner.rotation.x = Math.PI / 2; inner.position.set(0, R, 0); g.add(inner);
-    // fillings spread along Z (front-to-back inside the shell)
-    put(g, tb(0.18, 0.11, 0.44, 0x7a3f23), 0, 0.13, 0);              // seasoned meat
-    const r = rng(11);
-    for (let i = 0; i < 8; i++) put(g, tb(0.07, 0.03, 0.06, 0x6fc63f), (r() - 0.5) * 0.16, 0.31, -0.18 + i * 0.05, r() * Math.PI, 0, 0.2); // lettuce
-    for (let i = 0; i < 6; i++) put(g, tb(0.025, 0.02, 0.08, 0xffd23d), (r() - 0.5) * 0.12, 0.28, -0.15 + i * 0.06); // shredded cheese
-    put(g, sph(0.05, 0xe03828), 0.04, 0.32, 0.06); put(g, sph(0.045, 0xe03828), -0.05, 0.32, -0.08); // tomato
-    return g;
-  } },
   icecream: { build() {
     const g = new THREE.Group();
     put(g, cone(0.14, 0.42, 0xd8a860), 0, 0.0, 0, Math.PI, 0, 0);     // waffle cone, tip down
