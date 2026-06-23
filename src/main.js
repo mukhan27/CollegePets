@@ -369,7 +369,6 @@ function runInteract(it) {
     case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
     case 'arcade_airhockey': startAirHockey(); break;
     case 'arcade_pool': startPool(); break;
-    case 'arcade_hoops_info': showModal('🏀 Hoops', 'Real hoops are on the court outside — head east past the dorms for a full 3-on-3 game!'); break;
     case 'quest_board': openCampus('awards'); break;
     case 'sleep': doSleep(); break;
   }

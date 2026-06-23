@@ -502,6 +502,73 @@ function makeDiningExterior(b) {
   return { group: g, doorWorld, collider };
 }
 
+// A modern glass Student Center (à la Wayne State): a multi-storey steel-frame
+// box wrapped in horizontal bands of green-tinted curtain-wall glass, a warm
+// glowing ground floor, a flat parapet roof with a rooftop mechanical box, and
+// a cantilevered entrance canopy over glass doors.
+function makeStudentUnionExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const frame = toonMat(0x2c333b);                 // dark steel structure
+  const mullion = toonMat(0x434d57);               // window framing
+  const cap = toonMat(0x9aa3ad);                   // light parapet / spandrel
+  const glass = (i) => new THREE.MeshToonMaterial({ color: 0x9fd6c4, emissive: 0x2e6f5e, emissiveIntensity: i });
+  const warm = new THREE.MeshToonMaterial({ color: 0xffe6b0, emissive: 0xffb74d, emissiveIntensity: 0.6 });
+
+  // core box + plinth + flat roof slab + parapet cap
+  const body = mesh(new THREE.BoxGeometry(w, h, d), frame, 0, h / 2, 0); body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.6, d + 0.4), toonMat(0x6f7780), 0, 0.3, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(w + 0.5, 0.5, d + 0.5), frame, 0, h + 0.05, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(w + 0.7, 0.2, d + 0.7), cap, 0, h + 0.34, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(w * 0.3, 1.3, d * 0.4), toonMat(0x596169), -w * 0.18, h + 0.95, -d * 0.08)); // rooftop unit
+
+  // curtain wall on a face: 'front' (+z), 'left' (-x) or 'right' (+x)
+  const bands = 3, base = 0.8, bandH = (h - base) / bands;
+  function curtainWall(face) {
+    const front = face === 'front';
+    const sx = face === 'left' ? -1 : 1;
+    const span = front ? w : d;
+    // glass bands (ground floor glows warm)
+    for (let r = 0; r < bands; r++) {
+      const yy = base + bandH * (r + 0.5);
+      const m = r === 0 ? warm : glass(0.4 + 0.08 * r);
+      if (front) g.add(mesh(new THREE.BoxGeometry(w - 0.4, bandH - 0.28, 0.18), m, 0, yy, d / 2 + 0.06, false));
+      else g.add(mesh(new THREE.BoxGeometry(0.18, bandH - 0.28, d - 0.4), m, sx * (w / 2 + 0.06), yy, 0, false));
+    }
+    // horizontal spandrel lines between storeys
+    for (let r = 0; r <= bands; r++) {
+      const yy = base + bandH * r;
+      if (front) g.add(mesh(new THREE.BoxGeometry(w - 0.1, 0.22, 0.24), cap, 0, yy, d / 2 + 0.1, false));
+      else g.add(mesh(new THREE.BoxGeometry(0.24, 0.22, d - 0.1), cap, sx * (w / 2 + 0.1), yy, 0, false));
+    }
+    // slim vertical mullions
+    const cols = Math.max(3, Math.round(span / 3));
+    for (let c = 0; c <= cols; c++) {
+      const t = c / cols;
+      if (front) { const mx = -w / 2 + w * t; if (Math.abs(mx) < 3) continue; g.add(mesh(new THREE.BoxGeometry(0.14, h - base, 0.26), mullion, mx, base + (h - base) / 2, d / 2 + 0.1, false)); }
+      else { const mz = -d / 2 + d * t; g.add(mesh(new THREE.BoxGeometry(0.26, h - base, 0.14), mullion, sx * (w / 2 + 0.1), base + (h - base) / 2, mz, false)); }
+    }
+  }
+  curtainWall('front'); curtainWall('left'); curtainWall('right');
+
+  // entrance: cantilevered canopy + glowing glass doors
+  const fz = d / 2 + 0.12;
+  g.add(mesh(new THREE.BoxGeometry(7.4, 0.26, 2.6), cap, 0, 4.3, fz + 1.0, false));
+  for (const sx of [-3.4, 3.4]) g.add(mesh(new THREE.CylinderGeometry(0.1, 0.1, 4.3, 8), mullion, sx, 2.15, fz + 2.0));
+  g.add(mesh(new THREE.BoxGeometry(5.4, 3.9, 0.2), warm, 0, 1.95, fz + 0.14, false));
+  g.add(mesh(new THREE.BoxGeometry(0.16, 3.9, 0.3), mullion, 0, 1.95, fz + 0.2, false));
+  g.add(mesh(new THREE.BoxGeometry(5.4, 0.16, 0.3), mullion, 0, 3.5, fz + 0.2, false));
+  g.add(mesh(new THREE.BoxGeometry(6.0, 0.24, 1.6), toonMat(P.sandDark), 0, 0.12, fz + 0.7, false)); // entry step
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, h + 1.7, 0); g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const collider = { x, z, w: w + 0.6, d: d + 0.6 };
+  return { group: g, doorWorld, enter: { x, z: z + d / 2 + 2.6 }, enterR: 4, collider };
+}
+
 // ----------------------------------------------------------- campus
 export function buildCampus() {
   const root = new THREE.Group();
@@ -565,8 +632,8 @@ export function buildCampus() {
       label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
     { id: 'lecturehall', x: 0, z: -55, w: 36, h: 15, d: 22, color: P.wallSage, roofColor: P.roofNavy,
       wallStyle: 'brick', columns: true, label: '🏛️ Lecture Hall', prompt: '🏛️ Enter Lecture Hall' },
-    { id: 'lecture', x: -20, z: 56, w: 26, h: 12, d: 13, color: P.wallSage, roofColor: P.roofGreen,
-      wallStyle: 'brick', label: '🎮 Student Union', prompt: '🎮 Student Union' },
+    { id: 'lecture', x: -20, z: 56, w: 26, h: 14, d: 14, color: P.wallSage, roofColor: P.roofGreen,
+      label: '🎮 Student Union', prompt: '🎮 Student Union' },
     { id: 'cafeteria', x: 24, z: 56, w: 20, h: 8, d: 12, color: P.wallPeach, roofColor: P.roofRed,
       chimney: true, label: '🍽️ Dining Hall', prompt: '🍽️ Enter Dining Hall' },
   ];
@@ -576,6 +643,7 @@ export function buildCampus() {
     const built = b.id === 'library' ? makeLibraryExterior(b)
       : b.id === 'shop' ? makeShopExterior(b)
       : b.id === 'cafeteria' ? makeDiningExterior(b)
+      : b.id === 'lecture' ? makeStudentUnionExterior(b)
       : makeBuilding(b);
     root.add(built.group);
     colliders.push(built.collider);
