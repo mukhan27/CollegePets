@@ -211,23 +211,30 @@ export function startPool(onDone) {
   }));
 
   // ---- state ----
-  let phase = 'aim';            // 'aim' | 'sim' | 'aithink' | 'over'
+  let phase = 'aim';            // 'aim' | 'ballinhand' | 'sim' | 'aithink' | 'over'
   let turn = 'you';
   const grp = { you: null, ai: null };
-  let aimAng = Math.PI, aimPow = 0, aiming = false, thinkAt = 0;
-  let msg = 'Drag back from the cue ball to aim & shoot', msgUntil = performance.now() + 2600;
+  let aimAng = Math.PI, aimPow = 0, aiming = false, placing = false, thinkAt = 0;
+  let foulBallInHand = false;   // next player gets to place the cue ball
+  let msg = 'Drag back from the cue ball to aim, pull back to power up & release', msgUntil = performance.now() + 2800;
   let raf = null, done = false, won = false;
 
   const live = () => balls.filter((b) => !b.pocketed);
   const moving = () => live().some((b) => Math.hypot(b.vx, b.vy) > STOP);
 
-  // ---- aiming (player slingshot: drag away from the cue, shoot the opposite way) ----
+  // ---- input: aim (slingshot: drag away from the cue, shoot the opposite way),
+  //      or, after a scratch, ball-in-hand drag-to-place the cue ball ----
   const onDown = (e) => {
-    if (phase !== 'aim' || turn !== 'you') return;
-    aiming = true; updateAim(e); e.preventDefault();
+    if (turn !== 'you') return;
+    if (phase === 'ballinhand') { placing = true; moveCueTo(ptr(e)); e.preventDefault(); return; }
+    if (phase === 'aim') { aiming = true; updateAim(e); e.preventDefault(); }
   };
-  const onMove = (e) => { if (aiming) { updateAim(e); e.preventDefault(); } };
+  const onMove = (e) => {
+    if (placing) { moveCueTo(ptr(e)); e.preventDefault(); return; }
+    if (aiming) { updateAim(e); e.preventDefault(); }
+  };
   const onUp = () => {
+    if (placing) { placing = false; phase = 'aim'; aimPow = 0; aiming = false; return; }
     if (!aiming) return; aiming = false;
     if (aimPow > 0.05) strike(aimAng, aimPow);
   };
@@ -236,6 +243,24 @@ export function startPool(onDone) {
     const dxp = cue.x - p.x, dyp = cue.y - p.y, d = Math.hypot(dxp, dyp);
     if (d > 4) aimAng = Math.atan2(dyp, dxp);
     aimPow = clamp(d / (tw * 0.32), 0, 1);
+  }
+  // place the cue ball at p, kept on the felt and pushed clear of other balls
+  function moveCueTo(p) {
+    let x = clamp(p.x, pl + R, pr - R), y = clamp(p.y, pt + R, pb - R);
+    for (let iter = 0; iter < 10; iter++) {
+      let moved = false;
+      for (const b of balls) {
+        if (b === cue || b.pocketed) continue;
+        const dx = x - b.x, dy = y - b.y, d = Math.hypot(dx, dy);
+        if (d < 2 * R) {
+          const nx = d > 1e-4 ? dx / d : 1, ny = d > 1e-4 ? dy / d : 0;
+          x = b.x + nx * 2 * R; y = b.y + ny * 2 * R; moved = true;
+        }
+      }
+      x = clamp(x, pl + R, pr - R); y = clamp(y, pt + R, pb - R);
+      if (!moved) break;
+    }
+    cue.x = x; cue.y = y;
   }
   canvas().addEventListener('pointerdown', onDown);
   window.addEventListener('pointermove', onMove);
@@ -315,9 +340,12 @@ export function startPool(onDone) {
       return;
     }
 
-    if (scratchedThisShot) { // foul → respot cue, pass turn
-      respotCue();
-      msg = (turn === 'you' ? 'Scratch! ' : 'Opponent scratched. ') + 'Turn passes.'; msgUntil = performance.now() + 1800;
+    if (scratchedThisShot) { // foul → cue ball in hand for the other player
+      cue.pocketed = false; cue.vx = cue.vy = 0;
+      cue.x = pl + (pr - pl) * 0.26; cue.y = cy;
+      foulBallInHand = true;
+      msg = (turn === 'you' ? 'Scratch! Opponent has ball in hand.' : 'Opponent scratched — ball in hand!');
+      msgUntil = performance.now() + 2200;
       switchTurn(other); return;
     }
 
@@ -326,23 +354,39 @@ export function startPool(onDone) {
     else switchTurn(other);
   }
 
-  function respotCue() {
-    cue.pocketed = false; cue.vx = cue.vy = 0;
-    cue.x = pl + (pr - pl) * 0.26; cue.y = cy;
-    // nudge off any overlap
-    for (const b of live()) if (b !== cue && Math.hypot(b.x - cue.x, b.y - cue.y) < 2 * R) cue.x -= 2 * R;
-  }
   function switchTurn(who) { turn = who; setPhaseFor(who); }
   function setPhaseFor(who) {
-    if (who === 'ai') { phase = 'aithink'; thinkAt = performance.now() + 650; }
-    else { phase = 'aim'; aimPow = 0; }
+    if (who === 'ai') {
+      if (foulBallInHand) { aiPlaceCue(); foulBallInHand = false; }
+      phase = 'aithink'; thinkAt = performance.now() + 650;
+    } else if (foulBallInHand) {
+      foulBallInHand = false; phase = 'ballinhand'; aimPow = 0; placing = false;
+      msg = 'Ball in hand — drag the cue ball to place it'; msgUntil = performance.now() + 3000;
+    } else { phase = 'aim'; aimPow = 0; }
   }
 
   // ---- AI: pick the easiest of its balls toward a pocket, aim the cue at the ghost ball ----
-  function aiShoot() {
-    const targets = grp.ai
+  function aiTargets() {
+    return grp.ai
       ? (balls.filter((b) => !b.pocketed && groupOf(b.n) === grp.ai).length ? balls.filter((b) => !b.pocketed && groupOf(b.n) === grp.ai) : balls.filter((b) => !b.pocketed && b.n === 8))
       : balls.filter((b) => !b.pocketed && b.n !== 0 && b.n !== 8);
+  }
+  // ball-in-hand for the AI: drop the cue ball where it lines up its easiest pot
+  function aiPlaceCue() {
+    let best = null;
+    for (const tb of aiTargets()) for (const [px, py] of pockets) {
+      const tp = Math.hypot(px - tb.x, py - tb.y);
+      const gx = tb.x - (px - tb.x) / tp * 2 * R, gy = tb.y - (py - tb.y) / tp * 2 * R; // ghost ball
+      let cxp = gx - (px - tb.x) / tp * tw * 0.16, cyp = gy - (py - tb.y) / tp * tw * 0.16;
+      cxp = clamp(cxp, pl + R, pr - R); cyp = clamp(cyp, pt + R, pb - R);
+      const score = 1 / (tp + 1);
+      if (!best || score > best.score) best = { score, x: cxp, y: cyp };
+    }
+    if (best) moveCueTo({ x: best.x, y: best.y });
+    cue.pocketed = false; cue.vx = cue.vy = 0;
+  }
+  function aiShoot() {
+    const targets = aiTargets();
     let best = null;
     for (const tb of targets) {
       for (const [px, py] of pockets) {
@@ -374,29 +418,65 @@ export function startPool(onDone) {
   }
 
   function draw(now) {
-    ctx.fillStyle = '#0c1410'; ctx.fillRect(0, 0, W, H);
-    // rails + felt
-    roundRect(ctx, left, top, tw, th, rail * 0.8); ctx.fillStyle = '#5a3a22'; ctx.fill();
-    roundRect(ctx, pl, pt, pr - pl, pb - pt, rail * 0.3); ctx.fillStyle = '#1f8a52'; ctx.fill();
-    // pockets
-    ctx.fillStyle = '#0a0d0b';
-    for (const [px, py] of pockets) { ctx.beginPath(); ctx.arc(px, py, pocketR * 0.82, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#0a120d'; ctx.fillRect(0, 0, W, H);
+    // ---- table body (wood frame) with a soft drop shadow ----
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 34; ctx.shadowOffsetY = 14;
+    roundRect(ctx, left, top, tw, th, rail * 0.9);
+    const wood = ctx.createLinearGradient(left, top, left, bot);
+    wood.addColorStop(0, '#7a4f2c'); wood.addColorStop(0.5, '#5a3a20'); wood.addColorStop(1, '#3d2613');
+    ctx.fillStyle = wood; ctx.fill();
+    ctx.restore();
+    roundRect(ctx, left, top, tw, th, rail * 0.9);
+    ctx.strokeStyle = 'rgba(255,214,150,.20)'; ctx.lineWidth = 2; ctx.stroke();
+    // ---- felt ----
+    roundRect(ctx, pl, pt, pr - pl, pb - pt, rail * 0.25);
+    const felt = ctx.createRadialGradient(cx, cy, th * 0.08, cx, cy, tw * 0.72);
+    felt.addColorStop(0, '#2bab66'); felt.addColorStop(1, '#136b3c');
+    ctx.fillStyle = felt; ctx.fill();
+    // felt inner shadow near the cushions (vignette)
+    ctx.save();
+    roundRect(ctx, pl, pt, pr - pl, pb - pt, rail * 0.25); ctx.clip();
+    ctx.lineWidth = rail * 0.7; ctx.strokeStyle = 'rgba(0,0,0,.20)';
+    roundRect(ctx, pl, pt, pr - pl, pb - pt, rail * 0.25); ctx.stroke();
+    ctx.restore();
+    // head string + spot (classic table markings)
+    ctx.strokeStyle = 'rgba(255,255,255,.10)'; ctx.lineWidth = 1;
+    const headX = pl + (pr - pl) * 0.26;
+    ctx.beginPath(); ctx.moveTo(headX, pt); ctx.lineTo(headX, pb); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.18)';
+    ctx.beginPath(); ctx.arc(pl + (pr - pl) * 0.66, cy, R * 0.18, 0, Math.PI * 2); ctx.fill();
+    // sight diamonds on the rail
+    ctx.fillStyle = 'rgba(245,236,212,.8)';
+    const diamond = (x, y) => { ctx.beginPath(); ctx.arc(x, y, Math.max(2, R * 0.16), 0, Math.PI * 2); ctx.fill(); };
+    for (const f of [0.25, 0.5, 0.75]) { diamond(pl + (pr - pl) * f, top + rail * 0.5); diamond(pl + (pr - pl) * f, bot - rail * 0.5); }
+    diamond(left + rail * 0.5, cy); diamond(right - rail * 0.5, cy);
+    // ---- pockets (leather rim + dark mouth) ----
+    for (const [px, py] of pockets) {
+      ctx.fillStyle = '#241a12'; ctx.beginPath(); ctx.arc(px, py, pocketR * 1.06, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#050706'; ctx.beginPath(); ctx.arc(px, py, pocketR * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
     // balls
     for (const b of balls) {
       if (b.pocketed) continue;
       if (b.n === 0) { drawBall(b, '#f4f4f0', false, ''); continue; }
       drawBall(b, POOL_COLORS[b.n], b.n > 8, String(b.n));
     }
-    // aim guide
+    // ball-in-hand: highlight the cue ball waiting to be placed
+    if (phase === 'ballinhand' && turn === 'you') {
+      const pulse = 0.5 + 0.5 * Math.sin(now / 220);
+      ctx.strokeStyle = `rgba(255,230,120,${0.45 + 0.4 * pulse})`;
+      ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.arc(cue.x, cue.y, R + 5 + pulse * 3, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // aim guide + cue stick
     if (phase === 'aim' && turn === 'you') {
       const len = tw * 0.4 * (0.25 + aimPow);
       ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(cue.x, cue.y); ctx.lineTo(cue.x + Math.cos(aimAng) * len, cue.y + Math.sin(aimAng) * len); ctx.stroke();
       ctx.setLineDash([]);
-      if (aiming) { // power pip
-        ctx.fillStyle = aimPow > 0.85 ? '#e74c3c' : '#ffd166';
-        ctx.beginPath(); ctx.arc(cue.x - Math.cos(aimAng) * tw * 0.32 * aimPow, cue.y - Math.sin(aimAng) * tw * 0.32 * aimPow, R * 0.7, 0, Math.PI * 2); ctx.fill();
-      }
+      drawCue();
     }
     // HUD
     const yg = grp.you ? (grp.you === 'solid' ? 'Solids' : 'Stripes') : '—';
@@ -405,10 +485,61 @@ export function startPool(onDone) {
     if (now < msgUntil) { ctx.fillStyle = '#ffd166'; ctx.textAlign = 'center'; ctx.font = 'bold 24px Trebuchet MS, sans-serif'; ctx.fillText(msg, cx, top - 14); }
   }
   function drawBall(b, col, stripe, label) {
+    // contact shadow on the felt
+    ctx.fillStyle = 'rgba(0,0,0,.30)';
+    ctx.beginPath(); ctx.ellipse(b.x + R * 0.16, b.y + R * 0.30, R * 0.98, R * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    // base colour
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
     if (stripe) { ctx.fillStyle = '#f4f4f0'; ctx.fillRect(b.x - R, b.y - R * 0.42, 2 * R, R * 0.84); ctx.save(); ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = col; ctx.fillRect(b.x - R, b.y - R, 2 * R, R * 0.58); ctx.fillRect(b.x - R, b.y + R * 0.42, 2 * R, R * 0.58); ctx.restore(); }
-    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.stroke();
+    // number badge
     if (label) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x, b.y, R * 0.46, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#222'; ctx.textAlign = 'center'; ctx.font = `bold ${Math.round(R * 0.7)}px sans-serif`; ctx.fillText(label, b.x, b.y + R * 0.25); }
+    // spherical shading: bright top-left, dark bottom-right
+    const g = ctx.createRadialGradient(b.x - R * 0.35, b.y - R * 0.4, R * 0.1, b.x, b.y, R * 1.08);
+    g.addColorStop(0, 'rgba(255,255,255,.42)'); g.addColorStop(0.45, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.40)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
+    // specular highlight
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(b.x - R * 0.34, b.y - R * 0.4, R * 0.17, 0, Math.PI * 2); ctx.fill();
+    // rim
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.stroke();
+  }
+  // the cue stick: sits behind the cue ball along the aim line, pulled back with power
+  function drawCue() {
+    const back = aimAng + Math.PI;          // stick points opposite the shot
+    const gap = R * (0.7 + aimPow * 6.5);   // pull-back grows with power
+    const stickLen = tw * 0.42;
+    const cosB = Math.cos(back), sinB = Math.sin(back);
+    const tipx = cue.x + cosB * (R + gap), tipy = cue.y + sinB * (R + gap);
+    const butx = tipx + cosB * stickLen, buty = tipy + sinB * stickLen;
+    const px = -sinB, py = cosB;            // perpendicular
+    const wTip = Math.max(1.4, R * 0.16), wBut = Math.max(2.4, R * 0.42);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 4;
+    // tapered wooden shaft
+    const grad = ctx.createLinearGradient(tipx, tipy, butx, buty);
+    grad.addColorStop(0, '#e3c79a'); grad.addColorStop(0.12, '#cda469'); grad.addColorStop(0.55, '#9c6a35'); grad.addColorStop(1, '#5a3618');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(tipx + px * wTip, tipy + py * wTip);
+    ctx.lineTo(tipx - px * wTip, tipy - py * wTip);
+    ctx.lineTo(butx - px * wBut, buty - py * wBut);
+    ctx.lineTo(butx + px * wBut, buty + py * wBut);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // lengthwise sheen
+    ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(tipx + px * wTip * 0.35, tipy + py * wTip * 0.35); ctx.lineTo(butx + px * wBut * 0.35, buty + py * wBut * 0.35); ctx.stroke();
+    // white ferrule then leather tip
+    const fx = tipx + cosB * R * 0.55, fy = tipy + sinB * R * 0.55;
+    ctx.fillStyle = '#efe9da';
+    ctx.beginPath();
+    ctx.moveTo(tipx + px * wTip, tipy + py * wTip);
+    ctx.lineTo(tipx - px * wTip, tipy - py * wTip);
+    ctx.lineTo(fx - px * wTip * 1.05, fy - py * wTip * 1.05);
+    ctx.lineTo(fx + px * wTip * 1.05, fy + py * wTip * 1.05);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = aimPow > 0.85 ? '#cf4a3a' : '#3b6fb0';
+    ctx.beginPath(); ctx.arc(tipx, tipy, wTip * 1.1, 0, Math.PI * 2); ctx.fill();
   }
 
   function endGame(winner, text) {
