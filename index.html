@@ -44,6 +44,7 @@
     <div class="hud-pill" id="hud-level">⭐ <span id="level-num">1</span><span class="xp-mini"><span id="xp-fill"></span></span></div>
     <div class="hud-pill" id="hud-location">🏫 Campus</div>
     <div class="hud-pill" id="hud-coins">🪙 <span id="coin-count">0</span></div>
+    <button class="hud-pill" id="inv-btn">🎒</button>
     <button class="hud-pill" id="menu-btn">📋</button>
   </div>
   <div id="needs-hud">
@@ -72,6 +73,14 @@
     <button id="re-delete" class="re-btn re-danger">🗑 Remove</button>
   </div>
   <div id="re-palette"></div>
+</div>
+
+<!-- Inventory (🎒 bag) -->
+<div id="inventory-panel" class="overlay hidden">
+  <div class="panel">
+    <div class="cp-head"><h2>🎒 Inventory</h2><button class="close-x" id="inv-close">✕</button></div>
+    <div id="inventory-body"></div>
+  </div>
 </div>
 
 <!-- Campus Life panel (quests / friends / me) -->
@@ -105,7 +114,6 @@
     <div id="chat-messages"></div>
     <div class="chat-input-row">
       <input id="chat-input" type="text" maxlength="120" placeholder="Say something…" autocomplete="off">
-      <button id="chat-gift" class="btn" title="Give a gift">🎁</button>
       <button id="chat-send" class="btn btn-primary">Send</button>
     </div>
   </div>

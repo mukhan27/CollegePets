@@ -455,6 +455,8 @@ export function createPet(type, { equipped = {} } = {}) {
       parts.head.position.y = baseHeadY + Math.sin(t * 2.2) * 0.012;
       parts.legs.forEach((leg) => { leg.rotation.x = 0; });
     }
+    // eating: a quick chewing head-nod that overrides the idle/walk head tilt
+    parts.head.rotation.x = (g.userData.eatUntil && t < g.userData.eatUntil) ? (-0.16 + Math.abs(Math.sin(t * 14)) * 0.22) : 0;
     if (parts.tail) parts.tail.rotation.y = Math.sin(t * 5) * 0.35;
     for (const e of parts.ears) e.rotation.x = Math.sin(t * 3 + 1) * 0.08;
   };

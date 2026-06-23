@@ -1,9 +1,9 @@
 // DOM UI: modal dialogs, chat panel, shop, room decorator, pomodoro lock.
 
-import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, findFood, takeFromPantry, clothesSlot } from './state.js';
+import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, clothesSlot } from './state.js';
 import { npcReply } from './npcs.js';
 import { wearablePreview, furniturePreview } from './itemPreview.js';
-import { track, applyNeeds, hasBuff, addFriendship, toast } from './systems.js';
+import { track, applyNeeds, hasBuff, addFriendship } from './systems.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,6 +32,7 @@ export function isModalOpen() {
     || !$('focus-overlay').classList.contains('hidden')
     || !$('minigame-overlay').classList.contains('hidden')
     || !$('cuppong-overlay').classList.contains('hidden')
+    || !$('inventory-panel').classList.contains('hidden')
     || !$('campus-panel').classList.contains('hidden');
 }
 
@@ -75,30 +76,8 @@ function sendChat() {
   }, 500 + Math.random() * 600);
 }
 
-const GIFT_THANKS = ['Aww, for me?! You\'re the best!', 'No way, my favorite! Thank you!', 'You remembered! 🥹', 'Okay we\'re officially friends now.', 'This made my whole day!'];
-
-function openGift() {
-  if (!activeNpc) return;
-  const ids = Object.keys(state.pantry || {}).filter(id => state.pantry[id] > 0);
-  if (!ids.length) { toast('Buy snacks at the Dining Hall (🎁) to gift!', '🎁'); return; }
-  let html = '<div class="item-grid">';
-  for (const id of ids) { const f = findFood(id); if (!f) continue; html += `<div class="item-card food-card" data-gift="${id}"><div class="item-icon">${f.icon}</div><div class="item-name">${f.name}</div><div class="item-status">x${state.pantry[id]}</div></div>`; }
-  html += '</div>';
-  const npc = activeNpc;
-  showModal(`🎁 Gift to ${npc.def.name}`, html, [{ label: 'Cancel', primary: false }]);
-  $('modal-body').querySelectorAll('[data-gift]').forEach(c => c.addEventListener('click', () => {
-    const id = c.dataset.gift;
-    if (!takeFromPantry(id)) return;
-    hideModal();
-    addFriendship(npc.def.name, 28);
-    applyNeeds({ social: 10 });
-    if (activeNpc === npc) addChatMsg('them', GIFT_THANKS[Math.floor(Math.random() * GIFT_THANKS.length)] + ' 💛');
-  }));
-}
-
 export function initChatUI() {
   $('chat-send').addEventListener('click', sendChat);
-  $('chat-gift').addEventListener('click', openGift);
   $('chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendChat();
   });

@@ -2,7 +2,7 @@
 // location switching, and the contextual interaction system.
 
 import * as THREE from 'three';
-import { state, save, PET_TYPES, furnitureCount } from './state.js';
+import { state, save, PET_TYPES, furnitureCount, takeFromPantry } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { buildCampus } from './world.js';
@@ -20,7 +20,9 @@ import { initMinigameUI } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
-import { initSystems, tickSystems, track, openCampus, applyNeeds, newDayCheck, toast } from './systems.js';
+import { initSystems, tickSystems, track, openCampus, applyNeeds, newDayCheck, toast, eat } from './systems.js';
+import { initInventory, closeInventory, renderInventory } from './inventory.js';
+import { FOOD_MODELS } from './foodModels.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -151,6 +153,7 @@ let bballActive = false;
 const BBALL_CAM_OFFSET = new THREE.Vector3(0, 7, 11); // closer than the campus follow
 const cuppong = createCupPong(scene);
 let cuppongActive = false;
+let dineView = null, diningActive = false; // first-person table view (Step D)
 
 let currentLoc = null;
 let player = null;
@@ -357,6 +360,24 @@ function runInteract(it) {
     case 'quest_board': openCampus('awards'); break;
     case 'sleep': doSleep(); break;
   }
+}
+
+// Eat a food from the inventory. While seated at a table (dining view) the food
+// goes on the plate; otherwise the pet does a quick chewing animation in place.
+function eatFromInventory(id) {
+  if (!player) return;
+  if (diningActive) { dineView.placeFood(id); return; }
+  if (!takeFromPantry(id)) return;
+  closeInventory();
+  player.userData.eatUntil = clock.elapsedTime + 1.6;
+  const def = FOOD_MODELS[id];
+  if (def) {
+    const m = def.build(); m.scale.setScalar(0.55);
+    const head = player.userData.head; m.position.set(0, -0.05, 0.5); head.add(m);
+    setTimeout(() => { if (m.parent) m.parent.remove(m); }, 1600);
+  }
+  eat(id, { fromPantry: false }); // needs/stats/toast (already removed from bag)
+  renderInventory();
 }
 
 function doSleep() {
@@ -710,6 +731,7 @@ initInput();
 initChatUI();
 initMinigameUI();
 initDiningUI();
+initInventory(eatFromInventory);
 initArcadeUI();
 initFishingUI();
 setupSelectScreen();
