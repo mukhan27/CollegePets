@@ -59,6 +59,8 @@ export function startAirHockey(onDone) {
   let sYou = 0, sOpp = 0, serveAt = performance.now() + 600;
   let msg = '', msgUntil = 0, raf = null, done = false;
   let dragging = false;
+  const trail = [];                 // recent puck positions for a motion streak
+  let flashAt = 0, flashWho = '';   // brief goal-mouth glow
 
   function resetPuck(dir) {
     puck = { x: cx, y: midY + dir * th * 0.12, vx: 0, vy: 0 };
@@ -67,6 +69,7 @@ export function startAirHockey(onDone) {
   function goal(who) {
     if (who === 'you') { sYou++; msg = 'GOAL! 🎉'; } else { sOpp++; msg = 'Opponent scores'; }
     msgUntil = performance.now() + 1000;
+    flashAt = performance.now() + 600; flashWho = who; trail.length = 0;
     if (sYou >= TARGET || sOpp >= TARGET) { finish(); return; }
     resetPuck(who === 'you' ? 1 : -1);
   }
@@ -125,6 +128,7 @@ export function startAirHockey(onDone) {
         if (puck.x > goalL && puck.x < goalR) { goal('opp'); } else { puck.y = bot - puckR; puck.vy = -Math.abs(puck.vy) * 0.94; }
       }
       if (!done) { malletHit(you); malletHit(ai); }
+      trail.push({ x: puck.x, y: puck.y }); if (trail.length > 12) trail.shift();
     }
     draw(now);
     setScore(`You ${sYou} — ${sOpp} Opp`);
@@ -132,29 +136,107 @@ export function startAirHockey(onDone) {
   }
 
   function draw(now) {
-    ctx.fillStyle = '#0e1622'; ctx.fillRect(0, 0, W, H);
-    // table
-    roundRect(ctx, left, top, tw, th, tw * 0.06); ctx.fillStyle = '#16314a'; ctx.fill();
-    ctx.lineWidth = 4; ctx.strokeStyle = '#5fd0ff'; ctx.stroke();
-    // centre line + circle
-    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 3;
+    // backdrop
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0a101c'); bg.addColorStop(1, '#060a12');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    // ---- table bed (glossy rink) with neon rim ----
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+    roundRect(ctx, left, top, tw, th, tw * 0.06);
+    const bed = ctx.createLinearGradient(left, top, right, bot);
+    bed.addColorStop(0, '#13314c'); bed.addColorStop(0.5, '#0f2740'); bed.addColorStop(1, '#0b1d31');
+    ctx.fillStyle = bed; ctx.fill();
+    ctx.restore();
+    // air-hole texture
+    ctx.save();
+    roundRect(ctx, left, top, tw, th, tw * 0.06); ctx.clip();
+    ctx.fillStyle = 'rgba(120,180,230,.06)';
+    const gap = tw * 0.085;
+    for (let gx = left + gap; gx < right; gx += gap) for (let gy = top + gap; gy < bot; gy += gap) {
+      ctx.beginPath(); ctx.arc(gx, gy, Math.max(1, tw * 0.006), 0, Math.PI * 2); ctx.fill();
+    }
+    // top sheen
+    const sheen = ctx.createLinearGradient(0, top, 0, midY);
+    sheen.addColorStop(0, 'rgba(255,255,255,.07)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen; ctx.fillRect(left, top, tw, th * 0.5);
+    ctx.restore();
+    // neon border
+    ctx.save();
+    ctx.shadowColor = '#5fd0ff'; ctx.shadowBlur = 16;
+    roundRect(ctx, left, top, tw, th, tw * 0.06); ctx.lineWidth = 4; ctx.strokeStyle = '#5fd0ff'; ctx.stroke();
+    ctx.restore();
+    // centre line + circle + face-off spots
+    ctx.strokeStyle = 'rgba(150,220,255,.40)'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(left, midY); ctx.lineTo(right, midY); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, midY, tw * 0.16, 0, Math.PI * 2); ctx.stroke();
-    // goals
-    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(goalL, top); ctx.lineTo(goalR, top); ctx.stroke();
-    ctx.strokeStyle = '#ff5fa2';
-    ctx.beginPath(); ctx.moveTo(goalL, bot); ctx.lineTo(goalR, bot); ctx.stroke();
-    // mallets
+    ctx.fillStyle = 'rgba(150,220,255,.5)';
+    ctx.beginPath(); ctx.arc(cx, midY, tw * 0.02, 0, Math.PI * 2); ctx.fill();
+    for (const sy of [top + th * 0.2, bot - th * 0.2]) { ctx.beginPath(); ctx.arc(cx, sy, tw * 0.018, 0, Math.PI * 2); ctx.fill(); }
+    // ---- goals (glowing mouths + posts) ----
+    drawGoal(top, goalL, goalR, '#ffd166', flashWho === 'you' ? now < flashAt : false, now);
+    drawGoal(bot, goalL, goalR, '#ff5fa2', flashWho === 'opp' ? now < flashAt : false, now);
+    // ---- puck motion streak ----
+    for (let i = 0; i < trail.length; i++) {
+      const t = trail[i], a = (i / trail.length) * 0.32;
+      ctx.fillStyle = `rgba(120,200,255,${a})`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, puckR * (0.5 + 0.5 * i / trail.length), 0, Math.PI * 2); ctx.fill();
+    }
+    // mallets + puck
     drawMallet(ai.x, ai.y, '#ffd166'); drawMallet(you.x, you.y, '#ff5fa2');
-    // puck
-    ctx.fillStyle = '#0c0f14'; ctx.beginPath(); ctx.arc(puck.x, puck.y, puckR, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.stroke();
-    if (now < msgUntil) { ctx.fillStyle = '#ffd166'; ctx.textAlign = 'center'; ctx.font = 'bold 30px Trebuchet MS, sans-serif'; ctx.fillText(msg, cx, top + th * 0.3); }
+    drawPuck();
+    if (now < msgUntil) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ffe08a'; ctx.textAlign = 'center'; ctx.font = 'bold 32px Trebuchet MS, sans-serif';
+      ctx.fillText(msg, cx, midY); ctx.restore();
+    }
+  }
+  function drawGoal(y, gL, gR, col, flashing, now) {
+    const dir = y === top ? 1 : -1;
+    ctx.save();
+    ctx.shadowColor = col; ctx.shadowBlur = flashing ? 26 + 10 * Math.sin(now / 60) : 12;
+    ctx.strokeStyle = col; ctx.lineWidth = flashing ? 9 : 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(gL, y); ctx.lineTo(gR, y); ctx.stroke();
+    // posts curling into the bed
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(gL, y); ctx.lineTo(gL, y + dir * th * 0.04); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gR, y); ctx.lineTo(gR, y + dir * th * 0.04); ctx.stroke();
+    ctx.restore();
+  }
+  function drawPuck() {
+    // contact shadow
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath(); ctx.ellipse(puck.x + puckR * 0.18, puck.y + puckR * 0.32, puckR * 1.02, puckR * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    // disc body
+    const g = ctx.createRadialGradient(puck.x - puckR * 0.35, puck.y - puckR * 0.4, puckR * 0.15, puck.x, puck.y, puckR * 1.1);
+    g.addColorStop(0, '#3a4250'); g.addColorStop(0.5, '#1a1f27'); g.addColorStop(1, '#05070a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(puck.x, puck.y, puckR, 0, Math.PI * 2); ctx.fill();
+    // inset top face
+    ctx.strokeStyle = 'rgba(150,180,210,.4)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(puck.x, puck.y, puckR * 0.62, 0, Math.PI * 2); ctx.stroke();
+    // highlight
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.beginPath(); ctx.arc(puck.x - puckR * 0.32, puck.y - puckR * 0.36, puckR * 0.16, 0, Math.PI * 2); ctx.fill();
   }
   function drawMallet(x, y, col) {
+    // contact shadow
+    ctx.fillStyle = 'rgba(0,0,0,.38)';
+    ctx.beginPath(); ctx.ellipse(x + malletR * 0.16, y + malletR * 0.26, malletR * 1.02, malletR * 0.86, 0, 0, Math.PI * 2); ctx.fill();
+    // glowing rim
+    ctx.save();
+    ctx.shadowColor = col; ctx.shadowBlur = 12;
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, malletR, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x, y, malletR * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // body shading
+    const g = ctx.createRadialGradient(x - malletR * 0.35, y - malletR * 0.4, malletR * 0.1, x, y, malletR * 1.1);
+    g.addColorStop(0, 'rgba(255,255,255,.45)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, malletR, 0, Math.PI * 2); ctx.fill();
+    // central knob
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x, y, malletR * 0.5, 0, Math.PI * 2); ctx.fill();
+    const kg = ctx.createRadialGradient(x - malletR * 0.18, y - malletR * 0.2, malletR * 0.05, x, y, malletR * 0.5);
+    kg.addColorStop(0, 'rgba(255,255,255,.35)'); kg.addColorStop(1, 'rgba(0,0,0,.1)');
+    ctx.fillStyle = kg; ctx.beginPath(); ctx.arc(x, y, malletR * 0.5, 0, Math.PI * 2); ctx.fill();
   }
 
   function finish() {
