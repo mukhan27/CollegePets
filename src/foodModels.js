@@ -110,16 +110,19 @@ export const FOOD_MODELS = {
     const g = new THREE.Group();
     const t = new THREE.Group();                                      // assemble opening-up, then tilt it toward the viewer
     const R = 0.27;
+    // double-sided so the inside (concave) face of the tortilla renders when we look into the shell
+    const outerMat = toonMat(0xe7b15a, { side: THREE.DoubleSide, noCache: true });
+    const innerMat = toonMat(0xf6d49a, { side: THREE.DoubleSide, noCache: true });
     // hard-shell taco: a half-pipe (open along the top), length running along x
-    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.52, 28, 1, true, 0, Math.PI), toonMat(0xe7b15a));
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.5, 28, 1, true, 0, Math.PI), outerMat);
     shell.castShadow = true; shell.rotation.z = -Math.PI / 2; shell.position.set(0, R, 0); t.add(shell);
-    const inner = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 0.5, 28, 1, true, 0, Math.PI), toonMat(0xf2c88a));
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.018, R - 0.018, 0.46, 28, 1, true, 0, Math.PI), innerMat);
     inner.rotation.z = -Math.PI / 2; inner.position.set(0, R, 0); t.add(inner); // lighter tortilla inside
-    put(t, tb(0.46, 0.14, 0.26, 0x7a3f23), 0, 0.12, 0);              // seasoned meat heaped in the trough
+    put(t, tb(0.4, 0.12, 0.16, 0x7a3f23), 0, 0.13, 0);               // seasoned meat heaped in the trough
     const r = rng(11);
-    for (let i = 0; i < 8; i++) put(t, tb(0.07, 0.03, 0.11, 0x6fc63f), -0.2 + i * 0.057, 0.31, (r() - 0.5) * 0.2, 0, r() * Math.PI, 0.2); // lettuce poking up
-    for (let i = 0; i < 7; i++) put(t, tb(0.08, 0.02, 0.024, 0xffd23d), -0.2 + i * 0.065, 0.28, (r() - 0.5) * 0.16); // shredded cheese
-    put(t, sph(0.05, 0xe03828), 0.08, 0.33, 0.05); put(t, sph(0.045, 0xe03828), -0.11, 0.33, -0.06); // tomato/salsa
+    for (let i = 0; i < 8; i++) put(t, tb(0.07, 0.03, 0.1, 0x6fc63f), -0.18 + i * 0.052, 0.3, (r() - 0.5) * 0.14, 0, r() * Math.PI, 0.2); // lettuce poking up
+    for (let i = 0; i < 7; i++) put(t, tb(0.08, 0.02, 0.024, 0xffd23d), -0.18 + i * 0.06, 0.27, (r() - 0.5) * 0.11); // shredded cheese
+    put(t, sph(0.05, 0xe03828), 0.07, 0.32, 0.03); put(t, sph(0.045, 0xe03828), -0.1, 0.32, -0.04); // tomato/salsa
     t.rotation.x = Math.PI / 4; t.position.y = 0.19;                  // tilt the loaded opening up toward the camera
     g.add(t);
     return g;
