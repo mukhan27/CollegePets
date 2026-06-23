@@ -21,7 +21,7 @@ const GradeShader = {
     tDiffuse:        { value: null },
     resolution:      { value: new THREE.Vector2(1, 1) },
     focusCenter:     { value: 0.52 }, // vertical centre of the sharp band (UV)
-    focusWidth:      { value: 0.24 }, // half-height of the fully-sharp band (wider = less softening)
+    focusWidth:      { value: 0.30 }, // half-height of the fully-sharp band (wider = less softening)
     blurStrength:    { value: 3.0 },  // max blur radius in pixels (0 disables)
     vignetteStrength:{ value: 0.42 },
     warmth:          { value: 0.022 },
@@ -92,11 +92,11 @@ const GradeShader = {
 
 // Per-tier tuning. `low` keeps the same look but cheaper kernels / half-res bloom.
 const TIERS = {
-  high: { pixelRatio: 2, bloomStrength: 0.42, bloomRadius: 0.6, blur: 3.0 },
-  // `low` now renders at full 2x (capped) too — with MSAA on, a half-res phone
-  // render was the main source of the "blurry / bad graphics" look. The tier
-  // still saves work via cheaper bloom + a smaller tilt-shift kernel.
-  low:  { pixelRatio: 2, bloomStrength: 0.34, bloomRadius: 0.5, blur: 2.0 },
+  // Render up to 2.5x device pixels (then downsampled to the screen = extra AA).
+  high: { pixelRatio: 2.5, bloomStrength: 0.42, bloomRadius: 0.6, blur: 2.2 },
+  // `low` matches the resolution but uses cheaper bloom + a smaller tilt-shift
+  // kernel. With MSAA on, a half-res phone render was the main "blurry" culprit.
+  low:  { pixelRatio: 2.5, bloomStrength: 0.34, bloomRadius: 0.5, blur: 1.4 },
 };
 
 // Build the composer. Returns helpers the host (main.js) drives each frame / on resize.
@@ -129,7 +129,7 @@ export function createComposer(renderer, scene, camera, { tier = 'high' } = {}) 
   // EffectComposer (r184) has no getPixelRatio, and it propagates setSize to
   // passes but ShaderPass ignores it — so we track the ratio and feed the
   // effective pixel resolution to the FXAA / grade shaders ourselves.
-  let pixelRatio = Math.min(window.devicePixelRatio, 2);
+  let pixelRatio = Math.min(window.devicePixelRatio, 2.5);
 
   function setSize(w, h) {
     size.set(w, h);

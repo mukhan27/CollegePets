@@ -32,7 +32,7 @@ const renderer = new THREE.WebGLRenderer({
   canvas: $('game-canvas'),
   antialias: true,
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -107,7 +107,7 @@ const bedroom = buildBedroom(state.room.layout);
 state.room.layout = bedroom.editor.layout; // keep state in sync with the live layout
 
 campus.spawn = { x: 0, z: 10 };
-campus.camOffset = new THREE.Vector3(0, 12, 19); // closer 3/4 angle, matched to the interior view
+campus.camOffset = new THREE.Vector3(0, 9, 14); // pulled in to match the interior framing
 // Ground elevation field: the player rises up the library steps onto its raised
 // stone porch (building sits at -58,-36; porch top = 1.4) instead of clipping
 // through them. 0 everywhere else.
@@ -118,15 +118,16 @@ campus.groundHeight = (x, z) => {
   return 1.4 * (z + 13.6) / (-17 + 13.6);      // ramp up the steps
 };
 // interiors: lower, cozier 3/4 angle (sits below the column/light tops so their
-// caps aren't visible — they rise out of frame — and gives the warm AC feel)
-library.camOffset = new THREE.Vector3(0, 11, 18);
-lectureLobby.camOffset = new THREE.Vector3(0, 11, 17);
-lectureRoom.camOffset = new THREE.Vector3(0, 13, 21);
-dormCommon.camOffset = new THREE.Vector3(0, 9, 14);
-shopInterior.camOffset = new THREE.Vector3(0, 10, 16);
-diningHall.camOffset = new THREE.Vector3(0, 11, 17);
-studentUnion.camOffset = new THREE.Vector3(0, 12, 18);
-bedroom.camOffset = new THREE.Vector3(0, 8, 12);
+// caps aren't visible — they rise out of frame — and gives the warm AC feel).
+// Kept close to the campus distance so the pet reads the same size everywhere.
+library.camOffset = new THREE.Vector3(0, 8.5, 13.5);
+lectureLobby.camOffset = new THREE.Vector3(0, 8.5, 13);
+lectureRoom.camOffset = new THREE.Vector3(0, 9.5, 15);   // bigger hall — a touch more room
+dormCommon.camOffset = new THREE.Vector3(0, 8, 12.5);
+shopInterior.camOffset = new THREE.Vector3(0, 8.5, 13);
+diningHall.camOffset = new THREE.Vector3(0, 8.5, 13.5);
+studentUnion.camOffset = new THREE.Vector3(0, 9, 14);
+bedroom.camOffset = new THREE.Vector3(0, 7, 11);          // small room — keep it tight
 
 // Per-location colour mood (exposure + tilt-shift grade). The library is graded
 // darker, warmer and more vignetted for a cosy, candle-lit feel; everywhere
