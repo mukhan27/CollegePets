@@ -274,6 +274,24 @@ html, body {
 #bball-top .bb-btn { padding: 6px 14px; min-width: 0; font-size: 13px; color: #20303f; background: rgba(255,255,255,.85); border-color: transparent; }
 #hud.playing-bball #interact-btn, #hud.playing-bball #edit-room-btn { display: none; }
 
+/* ---------- First-person table dining ---------- */
+#table-hud { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+#table-hud > * { pointer-events: auto; }
+#table-msg {
+  position: absolute; top: 16%; left: 0; right: 0; text-align: center;
+  font-size: clamp(16px, 3.4vw, 24px); font-weight: 700; color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; padding: 0 16px;
+}
+#table-actions {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  display: flex; gap: 14px; align-items: center;
+}
+#table-bite { background: rgba(224,122,51,.6); border-color: rgba(255,235,210,.6); }
+#table-bite:active { background: rgba(224,122,51,.78); }
+/* while seated, hide the roaming controls but keep the 🎒 inventory reachable */
+#hud.dining #joystick-zone, #hud.dining #interact-btn, #hud.dining #camera-zone,
+#hud.dining #edit-room-btn, #hud.dining #needs-hud { display: none; }
+
 /* ---------- Mini-game ---------- */
 #minigame-overlay { position: fixed; inset: 0; z-index: 40; background: #102030; }
 #minigame-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }

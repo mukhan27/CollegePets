@@ -9,6 +9,7 @@ import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, initDiningUI } from './dining.js';
 import { createCupPong } from './cuppong.js';
+import { createDineView } from './dinetable.js';
 import { startTrivia, startMemory, initArcadeUI } from './arcade.js';
 import { startFishing, initFishingUI } from './fishing.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
@@ -153,7 +154,8 @@ let bballActive = false;
 const BBALL_CAM_OFFSET = new THREE.Vector3(0, 7, 11); // closer than the campus follow
 const cuppong = createCupPong(scene);
 let cuppongActive = false;
-let dineView = null, diningActive = false; // first-person table view (Step D)
+const dineView = createDineView(scene);
+let diningActive = false; // first-person table view (Step D)
 
 let currentLoc = null;
 let player = null;
@@ -351,7 +353,18 @@ function runInteract(it) {
     case 'exit_dining': switchLocation('campus', { x: campus.doors.cafeteria.x, z: campus.doors.cafeteria.z - 1 }); break;
     case 'order_food': openFoodMenu(); break;
     case 'cup_pong': cuppongActive = true; cuppong.enter(() => { cuppongActive = false; cuppong.exit(); }); break;
-    case 'dine': beginLounge(it); openFoodMenu(); break;
+    case 'dine':
+      diningActive = true;
+      player.visible = false;
+      dineView.enter(it, () => {
+        diningActive = false;
+        dineView.exit();
+        player.visible = true;
+        const back = it.stepBack || { x: it.seatPos.x, z: it.seatPos.z + 1.5 };
+        player.position.set(back.x, 0, back.z);
+        playerTargetY = 0;
+      });
+      break;
     case 'lecture': switchLocation('studentUnion'); break;
     case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
     case 'arcade_trivia': startTrivia(); break;
@@ -641,6 +654,14 @@ function frame(dt, t) {
     cuppong.update(dt, t);
     const c = cuppong.cam();
     camera.position.set(c.px, c.py, c.pz);
+    camera.lookAt(c.lx, c.ly, c.lz);
+    fx.composer.render(dt);
+    return;
+  }
+  if (diningActive) {
+    dineView.update(dt, t);
+    const c = dineView.cam();
+    camera.position.lerp(new THREE.Vector3(c.px, c.py, c.pz), Math.min(1, dt * 5));
     camera.lookAt(c.lx, c.ly, c.lz);
     fx.composer.render(dt);
     return;
