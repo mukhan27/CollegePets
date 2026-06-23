@@ -1128,6 +1128,9 @@ export function buildDiningHall() {
   diningTable(-9, 4);
   diningTable(-1, 4);
   diningTable(7, 4);
+  diningTable(-9, -1);   // second row, aligned with the first, nearer the counter
+  diningTable(-1, -1);
+  diningTable(7, -1);
 
   // ---- windows, plants, pendant lights (no glowing bulb meshes) ----
   const winGlass = emi(0xeaf6ff, 0xcfe6f4, 0.5);
@@ -1161,9 +1164,9 @@ export function buildDiningHall() {
     add(cyl(0.32, 0.3, 0.12, 14, 0xcf6f5a), i * 3, 1.0, bz + 1.7);
     add(cyl(0.05, 0.05, 0.9, 8, 0x8a8580), i * 3, 0.5, bz + 1.7);
   }
-  for (const lx of [-9, -1, 7]) {                                            // hanging shades over the tables
-    add(cyl(0.03, 0.03, 1.0, 6, 0x44464c), lx, 4.4, 4);
-    add(new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.55, 16), toonMat(0xd95b4a)), lx, 3.7, 4);
+  for (const lz of [4, -1]) for (const lx of [-9, -1, 7]) {                  // hanging shades over the tables
+    add(cyl(0.03, 0.03, 1.0, 6, 0x44464c), lx, 4.4, lz);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.55, 16), toonMat(0xd95b4a)), lx, 3.7, lz);
   }
   add(tb(2.2, 2.0, 1.2, 0xd6d8db), 12.6, 1.0, -8);                            // soda fountain
   add(tb(2.0, 0.9, 0.08, 0x2c3530), 12.6, 1.6, -7.42);

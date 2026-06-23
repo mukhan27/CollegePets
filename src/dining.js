@@ -11,7 +11,6 @@ const $ = (id) => document.getElementById(id);
 export function openFoodMenu() {
   function render() {
     let html = `<p class="dh-bal">🪙 ${state.coins}</p>
-      <p class="dh-hint">Order food to stock your 🎒 bag — eat it from the inventory or by sitting at a table.</p>
       <div class="item-grid">`;
     for (const f of FOOD_CATALOG) {
       const fx = [f.hunger ? `🍔 +${f.hunger}` : '', f.fun ? `🎉 +${f.fun}` : '', f.buff === 'focus' ? '📚 focus' : ''].filter(Boolean).join(' ');
