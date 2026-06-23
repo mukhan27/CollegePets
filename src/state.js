@@ -78,7 +78,7 @@ export const FOOD_CATALOG = [
   { id: 'coffee',   icon: '☕', name: 'Cold Brew',     price: 8,  hunger: 6,  fun: 6, buff: 'focus' },
   { id: 'boba',     icon: '🧋', name: 'Boba Tea',      price: 10, hunger: 10, fun: 18 },
   { id: 'donut',    icon: '🍩', name: 'Sprinkle Donut',price: 6,  hunger: 16, fun: 14 },
-  { id: 'taco',     icon: '🌮', name: 'Taco Trio',     price: 13, hunger: 34, fun: 8 },
+  { id: 'taco',     icon: '🌮', name: 'Taco',           price: 13, hunger: 34, fun: 8 },
   { id: 'icecream', icon: '🍦', name: 'Ice Cream',     price: 7,  hunger: 12, fun: 22 },
 ];
 
