@@ -1221,8 +1221,8 @@ export function buildStudentUnion() {
     const sign = textSprite(label); sign.position.set(x, 4.6, -D / 2 + 0.9); root.add(sign);
     interactables.push({ id, x, z: -D / 2 + 2.6, r: 2.2, label });
   }
-  cabinet(-7, '🧠 Trivia', 'arcade_trivia', 0x5fd0ff);
-  cabinet(-2.5, '🃏 Memory', 'arcade_memory', 0xff5fa2);
+  cabinet(-7, '🏒 Air Hockey', 'arcade_airhockey', 0x5fd0ff);
+  cabinet(-2.5, '🎱 Pool', 'arcade_pool', 0xff5fa2);
   cabinet(2, '🏀 Hoops', 'arcade_hoops_info', 0xffd166); // flavour cabinet → hint to the court
 
   // ---- coffee bar on the right ----

@@ -65,7 +65,7 @@ out, and play. Tap **📋** (top-right) any time for the **Campus** panel:
 - **📚 Library** — sit at a desk and start a pomodoro (1 / 25 / 50 min). Focus mode locks the screen; completing a session pays coins (a ☕ cold-brew buff boosts the payout).
 - **🏀 Basketball** — a skill-based 2-on-2 pickup game: real make-% from your release **timing × contest × shot type/distance**, live rebounds off misses, momentum movement, and smart defense. Move, time the **Shoot** meter, **Pass**, **Jump**/dunk, **Block** & **Steal** — possession flows, nothing teleports. Coins for baskets.
 - **🍽️ Dining Hall** — order food that restores your needs, sit at the communal tables, or play **Cup Pong** — a swipe-to-flick beer-pong game vs an AI (sink the rack to win).
-- **🎮 Student Union** — the campus arcade: **Trivia** and **Memory** mini-games, a coffee bar, hangout couches, a dance floor and a quest board.
+- **🎮 Student Union** — the campus arcade: **Air Hockey** (first to 7 vs AI) and **8-Ball Pool** (clear your group, then sink the 8), a coffee bar, hangout couches, a dance floor and a quest board.
 - **🏛️ Lecture Hall** — a big-screen hall with tiered seating + stage, and a study mezzanine of pomodoro desks upstairs.
 - **🛍️ Campus Store** — walk in, browse real item previews, buy hats/glasses/scarves & furniture, and use the **fitting-room mirror** to try outfits on your pet live.
 - **🏠 Maple Dorm** — a furnished common room with sit-able couches, plus **your own bedroom** with a grid-based furniture editor — and a bed to **sleep** and restore energy.
@@ -92,7 +92,7 @@ src/
   tryon.js          fitting-room live try-on view
   dining.js         food ordering menu
   cuppong.js        swipe Cup Pong mini-game
-  arcade.js         trivia + memory mini-games
+  minigames.js      Student-union arcade: air hockey + 8-ball pool
   basketball.js     3D 3rd-person basketball game
   state.js          save/load, coins, item + food catalogs
   input.js          virtual joystick + keyboard

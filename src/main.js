@@ -10,14 +10,13 @@ import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLec
 import { openFoodMenu, initDiningUI } from './dining.js';
 import { createCupPong } from './cuppong.js';
 import { createDineView } from './dinetable.js';
-import { startTrivia, startMemory, initArcadeUI } from './arcade.js';
 import { startFishing, initFishingUI } from './fishing.js';
 import { createNpcs, updateNpcs, updateNpcBubbles, clearNpcBubbles } from './npcs.js';
 import {
   showModal, isModalOpen, initChatUI, openChat, openShop, openDecorator,
   openPomodoroSetup, startPomodoro,
 } from './ui.js';
-import { initMinigameUI } from './minigames.js';
+import { initMinigameUI, startAirHockey, startPool } from './minigames.js';
 import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
@@ -368,8 +367,8 @@ function runInteract(it) {
       break;
     case 'lecture': switchLocation('studentUnion'); break;
     case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
-    case 'arcade_trivia': startTrivia(); break;
-    case 'arcade_memory': startMemory(); break;
+    case 'arcade_airhockey': startAirHockey(); break;
+    case 'arcade_pool': startPool(); break;
     case 'arcade_hoops_info': showModal('🏀 Hoops', 'Real hoops are on the court outside — head east past the dorms for a full 3-on-3 game!'); break;
     case 'quest_board': openCampus('awards'); break;
     case 'sleep': doSleep(); break;
@@ -754,7 +753,6 @@ initChatUI();
 initMinigameUI();
 initDiningUI();
 initInventory(eatFromInventory);
-initArcadeUI();
 initFishingUI();
 setupSelectScreen();
 renderer.setAnimationLoop(tick);
