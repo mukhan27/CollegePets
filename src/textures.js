@@ -45,6 +45,15 @@ function canvasTexture(w, h, draw, { repeat, anisotropy = 8 } = {}) {
 
 function hex(n) { return '#' + n.toString(16).padStart(6, '0'); }
 
+// multiply an "#rrggbb" colour by a factor (clamped) → "rgb(r,g,b)"
+function shadeColor(hexStr, f) {
+  const n = parseInt(hexStr.slice(1), 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * f));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * f));
+  const b = Math.min(255, Math.round((n & 255) * f));
+  return `rgb(${r},${g},${b})`;
+}
+
 // Deterministic pseudo-random so textures look the same every load.
 function rng(seed) {
   let s = seed >>> 0;
@@ -248,6 +257,44 @@ export function skyTexture(top = '#6ec1e8', horizon = '#d8f0f4') {
     g.addColorStop(1, horizon);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+  });
+}
+
+// A reflective glass curtain-wall: a grid of tinted panels (sky-reflection
+// gradient + diagonal highlight streaks, with a few warm-lit interior panels)
+// separated by dark structural mullions. Baked lighting makes it read as glass
+// under flat toon shading. `cols`/`rows` set the panel grid.
+export function glassCurtain(cols = 7, rows = 4, { tint = '#86b9c8', frame = '#23262c', lit = 0.14, seed = 7 } = {}) {
+  const cell = 110, m = 8; // panel size + mullion thickness (px)
+  return canvasTexture(cols * cell, rows * cell, (ctx) => {
+    const r = rng(seed * 131 + cols * 17 + rows);
+    ctx.fillStyle = frame; ctx.fillRect(0, 0, cols * cell, rows * cell);
+    for (let cx = 0; cx < cols; cx++) for (let cy = 0; cy < rows; cy++) {
+      const x = cx * cell + m, y = cy * cell + m, w = cell - 2 * m, h = cell - 2 * m;
+      const warm = r() < lit;
+      const g = ctx.createLinearGradient(x, y, x, y + h);
+      if (warm) { g.addColorStop(0, '#ffe7b6'); g.addColorStop(1, '#eaae5e'); }
+      else {
+        g.addColorStop(0, shadeColor(tint, 1.32 + (r() - 0.5) * 0.22));   // sky at top
+        g.addColorStop(0.55, shadeColor(tint, 1.0 + (r() - 0.5) * 0.12));
+        g.addColorStop(1, shadeColor(tint, 0.66 + (r() - 0.5) * 0.12));   // ground at bottom
+      }
+      ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+      // diagonal reflection streaks
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+      ctx.globalAlpha = warm ? 0.10 : 0.22; ctx.fillStyle = '#ffffff';
+      const sw = w * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.05, y + h); ctx.lineTo(x + w * 0.05 + sw, y);
+      ctx.lineTo(x + w * 0.22 + sw, y); ctx.lineTo(x + w * 0.22, y + h); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = warm ? 0.06 : 0.12;
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.55, y + h); ctx.lineTo(x + w * 0.55 + sw * 0.5, y);
+      ctx.lineTo(x + w * 0.63 + sw * 0.5, y); ctx.lineTo(x + w * 0.63, y + h); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      // crisp top + left highlight on the glass within its frame
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(x, y, w, 3);
+    }
   });
 }
 

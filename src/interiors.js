@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { textSprite } from './world.js';
 import { PALETTE } from './palette.js';
-import { toonMat, woodPlanks, plaster, bookcaseTexture, glowTexture, softShadow, hardwoodFloor, fabricTexture, rugTexture } from './textures.js';
+import { toonMat, woodPlanks, plaster, bookcaseTexture, glowTexture, softShadow, hardwoodFloor, fabricTexture, rugTexture, glassCurtain } from './textures.js';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
 import { createPet, setWearables } from './petFactory.js';
 import { FURNITURE } from './furniture.js';
@@ -1191,30 +1191,29 @@ export function buildStudentUnion() {
   const interactables = [];
   const W = 30, D = 24;
   const bounds = { minX: -W / 2 + 1, maxX: W / 2 - 1, minZ: -D / 2 + 1, maxZ: D / 2 - 1 };
-  root.add(makeRoom(W, D, { wall: 0xe9e0cf })); // bright, warm modern walls
+  root.add(makeRoom(W, D, { wall: 0xccbfa6 })); // warm greige walls (not blown-out white)
 
   const tb = (w, h, d, c) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.castShadow = true; m.receiveShadow = true; return m; };
   const cyl = (rt, rb, h, n, c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, n), toonMat(c)); m.castShadow = true; return m; };
   const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), toonMat(c)); m.castShadow = true; return m; };
   const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
   const emi = (c, e, i = 0.8) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
+  const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x32444c, emissiveIntensity: 0.32 });
   const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
   const shade = (x, z, sx, sz = sx) => { const dd = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); dd.rotation.x = -Math.PI / 2; dd.position.set(x, 0.02, z); root.add(dd); };
 
-  // ---- bright modern shell: light maple floor + a lounge rug ----
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#dcc79c', '#c0a06a') }));
+  // ---- modern shell: warm wood floor, dark wainscot, charcoal trim ----
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), toonMat(0xffffff, { map: woodPlanks('#c6a268', '#9c7740') }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; floor.receiveShadow = true; root.add(floor);
-  add(new THREE.Mesh(new THREE.PlaneGeometry(7.4, 5.2), toonMat(0x3f7fae)), 9.4, 0.024, 4).rotation.x = -Math.PI / 2;
+  // dark wood wainscot along the side walls + crown trim, for depth
+  for (const sx of [-1, 1]) { add(tb(0.4, 1.7, D, 0x5e4630), sx * (W / 2 - 0.2), 0.85, 0); add(tb(0.3, 0.25, D, 0x2b2f36), sx * (W / 2 - 0.2), 4.85, 0); }
 
-  // ---- glass curtain wall along the back (daylight floods in) ----
-  for (let i = -2; i <= 2; i++) {
-    const wx = i * 5.6;
-    add(new THREE.Mesh(new THREE.PlaneGeometry(4.8, 3.9), emi(0xeaf4ff, 0xcfe7ff, 0.55)), wx, 3.0, -D / 2 + 0.22);
-    add(tb(0.16, 4.2, 0.22, 0xf3f5f7), wx - 2.55, 3.0, -D / 2 + 0.2);  // vertical mullion
-    add(tb(4.95, 0.16, 0.22, 0xf3f5f7), wx, 4.95, -D / 2 + 0.2);       // head transom
-    add(tb(4.95, 0.14, 0.22, 0xf3f5f7), wx, 3.0, -D / 2 + 0.2);        // mid rail
-  }
-  add(tb(0.16, 4.2, 0.22, 0xf3f5f7), 2 * 5.6 + 2.55, 3.0, -D / 2 + 0.2);
+  // ---- back glass curtain wall (sky view) — matches the exterior ----
+  add(tb(W - 1.0, 0.5, 0.5, 0x2b2f36), 0, 0.45, -D / 2 + 0.42);                 // sill
+  const bw = new THREE.Mesh(new THREE.BoxGeometry(W - 1.6, 4.0, 0.16), glassMat(8, 3, { tint: '#c1e3ed', lit: 0.04 }));
+  bw.position.set(0, 2.75, -D / 2 + 0.34); root.add(bw);
+  add(tb(W - 1.0, 0.32, 0.5, 0x2b2f36), 0, 4.9, -D / 2 + 0.42);                 // head beam
+  for (let i = -4; i <= 4; i++) add(tb(0.18, 4.1, 0.32, 0x2b2f36), i * ((W - 1.6) / 8), 2.75, -D / 2 + 0.4); // mullions
 
   // ============================================================ pool table
   function poolTable(px, pz) {
@@ -1245,51 +1244,54 @@ export function buildStudentUnion() {
   }
 
   // ======================================================= air hockey table
+  // built length-wise along x (to sit as a tidy pair beside the pool table)
   function airHockeyTable(px, pz) {
     const g = new THREE.Group();
     const at = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
-    const Wd = 2.6, L = 4.8, topY = 1.16, legH = 0.98;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) at(tb(0.45, legH, 0.45, 0x20242c), sx * (Wd / 2 - 0.5), legH / 2, sz * (L / 2 - 0.5));
-    at(tb(Wd - 0.2, 0.55, L - 0.2, 0x2a2f38), 0, legH + 0.28, 0);       // cabinet
-    const surf = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.2, 0.14, L - 0.2), emi(0xeaf6ff, 0x7fc1e8, 0.4));
+    const L = 4.8, Wd = 2.6, topY = 1.16, legH = 0.98;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) at(tb(0.45, legH, 0.45, 0x20242c), sx * (L / 2 - 0.5), legH / 2, sz * (Wd / 2 - 0.5));
+    at(tb(L - 0.2, 0.55, Wd - 0.2, 0x2a2f38), 0, legH + 0.28, 0);       // cabinet
+    const surf = new THREE.Mesh(new THREE.BoxGeometry(L - 0.2, 0.14, Wd - 0.2), emi(0xeaf6ff, 0x7fc1e8, 0.4));
     surf.position.y = topY; surf.receiveShadow = true; g.add(surf);     // glossy playfield
-    at(new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.4, 0.02, 0.06), emi(0xffffff, 0x9cd0ee, 0.5)), 0, topY + 0.08, 0); // centre line
+    at(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, Wd - 0.4), emi(0xffffff, 0x9cd0ee, 0.5)), 0, topY + 0.08, 0); // centre line
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 24), emi(0xffffff, 0x9cd0ee, 0.5)); ring.rotation.x = Math.PI / 2; at(ring, 0, topY + 0.08, 0);
-    for (const sx of [-1, 1]) at(tb(0.18, 0.3, L, 0xeef2f6), sx * (Wd / 2 - 0.09), topY + 0.2, 0); // side rails
+    for (const sz of [-1, 1]) at(tb(L, 0.3, 0.18, 0xeef2f6), 0, topY + 0.2, sz * (Wd / 2 - 0.09)); // side rails
     const goalW = Wd * 0.5, segW = (Wd - goalW) / 2;
-    for (const sz of [-1, 1]) {                                         // end rails + glowing goal mouths
-      for (const sx of [-1, 1]) at(tb(segW, 0.3, 0.18, 0xeef2f6), sx * (Wd / 2 - segW / 2), topY + 0.2, sz * (L / 2 - 0.09));
-      at(tb(goalW, 0.3, 0.14, 0x0a0d12), 0, topY + 0.18, sz * (L / 2 - 0.05));
-      at(new THREE.Mesh(new THREE.BoxGeometry(goalW + 0.1, 0.34, 0.05), emi(sz > 0 ? 0xff5fa2 : 0xffd166, sz > 0 ? 0xff5fa2 : 0xffd166, 0.8)), 0, topY + 0.2, sz * (L / 2));
+    for (const sx of [-1, 1]) {                                         // end rails + glowing goal mouths
+      for (const sz of [-1, 1]) at(tb(0.18, 0.3, segW, 0xeef2f6), sx * (L / 2 - 0.09), topY + 0.2, sz * (Wd / 2 - segW / 2));
+      at(tb(0.14, 0.3, goalW, 0x0a0d12), sx * (L / 2 - 0.05), topY + 0.18, 0);
+      at(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, goalW + 0.1), emi(sx > 0 ? 0xff5fa2 : 0xffd166, sx > 0 ? 0xff5fa2 : 0xffd166, 0.8)), sx * (L / 2), topY + 0.2, 0);
     }
-    const mallet = (c, z) => { const k = cyl(0.24, 0.26, 0.1, 16, c); k.position.set(0, topY + 0.16, z); g.add(k); const h2 = cyl(0.1, 0.12, 0.18, 12, c); h2.position.set(0, topY + 0.28, z); g.add(h2); };
+    const mallet = (c, x) => { const k = cyl(0.24, 0.26, 0.1, 16, c); k.position.set(x, topY + 0.16, 0); g.add(k); const h2 = cyl(0.1, 0.12, 0.18, 12, c); h2.position.set(x, topY + 0.28, 0); g.add(h2); };
     mallet(0xff5fa2, L * 0.28); mallet(0xffd166, -L * 0.28);
-    at(cyl(0.13, 0.13, 0.06, 16, 0x101418), 0.45, topY + 0.13, 0.6);    // puck
+    at(cyl(0.13, 0.13, 0.06, 16, 0x101418), 0.6, topY + 0.13, 0.45);    // puck
     g.position.set(px, 0, pz); root.add(g);
-    colliders.push({ x: px, z: pz, w: Wd + 0.4, d: L + 0.4 }); shade(px, pz, Wd + 1.2, L + 1.4);
+    colliders.push({ x: px, z: pz, w: L + 0.4, d: Wd + 0.4 }); shade(px, pz, L + 1.4, Wd + 1.2);
     const sign = textSprite('🏒 Air Hockey'); sign.position.set(px, topY + 2.3, pz); root.add(sign);
-    interactables.push({ id: 'arcade_airhockey', x: px, z: pz + L / 2 + 1.2, r: 2.4, label: '🏒 Play Air Hockey' });
+    interactables.push({ id: 'arcade_airhockey', x: px, z: pz + Wd / 2 + 1.3, r: 2.4, label: '🏒 Play Air Hockey' });
   }
 
-  poolTable(-6, -2);
-  airHockeyTable(4.5, -2);
+  poolTable(-5.5, -3.5);
+  airHockeyTable(5.5, -3.5);
 
-  // ---- coffee bar on the right ----
-  const bx = W / 2 - 2;
-  add(tb(3.4, 1.2, 1.6, 0x6a4630), bx, 0.6, -4);
-  add(tb(3.6, 0.16, 1.9, 0x8a5a3a), bx, 1.3, -4);
-  add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx - 0.8, 1.55, -4); // espresso machine
-  add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx - 0.2, 1.55, -4);
-  add(new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.0), emi(0xffd9a0, 0xffb74d, 0.7)), bx, 3.4, -D / 2 + 0.5); // warm "CAFE" sign
-  colliders.push({ x: bx, z: -4, w: 3.6, d: 1.8 }); shade(bx, -4, 4.4, 2.6);
-  interactables.push({ id: 'order_food', x: bx - 2.4, z: -4, r: 2.4, label: '☕ Order drinks' });
+  // ---- café counter against the right wall (with stools + menu board) ----
+  const bx = W / 2 - 1.3;
+  add(tb(2.0, 1.2, 6.0, 0x4a3326), bx, 0.6, -5);                        // counter body
+  add(tb(2.3, 0.16, 6.3, 0x6e4a30), bx, 1.3, -5);                       // counter top
+  add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx, 1.55, -6.4); add(cyl(0.18, 0.2, 0.5, 10, 0xcfcfd6), bx, 1.55, -5.6); // espresso machines
+  for (const sz of [-3.4, -2.0]) { add(cyl(0.22, 0.26, 0.7, 12, 0x2b2f36), bx - 1.7, 0.35, sz); add(cyl(0.28, 0.28, 0.12, 14, 0x8a5a3a), bx - 1.7, 0.72, sz); } // stools
+  add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.3), emi(0xffd9a0, 0xffb74d, 0.7)), W / 2 - 0.18, 3.3, -5).rotation.y = -Math.PI / 2; // glowing menu board on the wall
+  colliders.push({ x: bx, z: -5, w: 2.3, d: 6.3 }); shade(bx, -5, 3.0, 6.6);
+  interactables.push({ id: 'order_food', x: bx - 2.0, z: -3.0, r: 2.4, label: '☕ Order drinks' });
 
-  // ---- couches to hang out (loungeable) ----
+  // ---- lounge zone (front-right): rug, couches, coffee table ----
+  add(new THREE.Mesh(new THREE.PlaneGeometry(7.2, 5.4), toonMat(0xffffff, { map: rugTexture('#8b6a4a', '#5f4632') })), 9.5, 0.024, 5).rotation.x = -Math.PI / 2;
   function couch(x, z, ry, c) {
     const g = new THREE.Group();
     g.add((() => { const m = tb(3.4, 0.5, 1.5, c); m.position.y = 0.5; return m; })());
     g.add((() => { const m = tb(3.4, 0.9, 0.4, c); m.position.set(0, 1.0, -0.55); return m; })());
     for (const s of [-1, 1]) g.add((() => { const m = tb(0.4, 0.8, 1.5, c); m.position.set(s * 1.7, 0.9, 0); return m; })());
+    for (const s of [-0.85, 0.85]) g.add((() => { const m = tb(1.4, 0.28, 1.3, c); m.position.set(s, 0.78, 0.05); return m; })()); // seat cushions
     g.position.set(x, 0, z); g.rotation.y = ry; root.add(g);
     const a = Math.abs(Math.sin(ry));
     colliders.push({ x, z, w: 3.8 * (1 - a) + 1.8 * a, d: 1.8 * (1 - a) + 3.8 * a }); shade(x, z, 4.4, 2.4);
@@ -1297,40 +1299,45 @@ export function buildStudentUnion() {
     interactables.push({ id: 'lounge', x: x + fx * 2.4, z: z + fz * 2.4, r: 2.4, label: '🛋️ Hang out',
       seatPos: { x, z, y: 0 }, sitY: 1.0, face: ry, stepBack: { x: x + fx * 2.2, z: z + fz * 2.2 } });
   }
-  couch(8, 6, Math.PI, 0x4a6ea8);
-  couch(11, 2, -Math.PI / 2, 0xc0567a);
+  couch(9.5, 7.4, Math.PI, 0x4a6ea8);     // back couch (faces into room)
+  couch(12.9, 5.0, -Math.PI / 2, 0xc0567a); // side couch
+  add(tb(2.0, 0.45, 1.2, 0x3a2a1c), 9.5, 0.4, 4.6); // coffee table
+  add(tb(1.7, 0.12, 0.95, 0x6e4a30), 9.5, 0.66, 4.6);
 
-  // ---- a coffee table between the couches ----
-  add(tb(1.8, 0.5, 1.1, 0x6e4a2e), 9.4, 0.45, 4);
+  // ---- trophy case mounted flush on the left wall ----
+  const tw = -W / 2 + 0.25;
+  add(tb(0.3, 3.3, 4.2, 0x4a3526), tw, 1.95, -1);                       // case carcass
+  add(tb(0.14, 2.7, 3.5, 0xf3ecd8), tw + 0.22, 1.95, -1);              // lit back panel
+  for (const sy of [1.0, 1.95, 2.9]) add(tb(0.36, 0.08, 3.5, 0x32241a), tw + 0.28, sy, -1); // glass shelves
+  add(cyl(0.12, 0.16, 0.42, 10, 0xf2c14e), tw + 0.45, 1.35, -1.9);     // trophy cups
+  add(cyl(0.12, 0.16, 0.42, 10, 0xf2c14e), tw + 0.45, 2.3, -0.2);
+  add(sph(0.18, 0xe85b6a), tw + 0.45, 1.3, 0.0); add(sph(0.18, 0x5f9bd0), tw + 0.45, 2.25, -1.6);
+  const qsign = textSprite('🏆 Trophies'); qsign.position.set(tw + 1.0, 3.95, -1); root.add(qsign);
+  interactables.push({ id: 'quest_board', x: tw + 1.9, z: -1, r: 2.2, label: '🏆 Trophies & stats' });
 
-  // ---- quest board near the entrance ----
-  add(tb(2.6, 3.0, 0.2, 0x6e4a2e), -W / 2 + 1.0, 2.2, 6);
-  add(tb(2.2, 2.5, 0.06, 0xf3ecd8), -W / 2 + 1.1, 2.3, 6);
-  const qsign = textSprite('🏆 Trophies'); qsign.position.set(-W / 2 + 1.1, 4.0, 6); root.add(qsign);
-  interactables.push({ id: 'quest_board', x: -W / 2 + 2.6, z: 6, r: 2.2, label: '🏆 Trophies & stats' });
-
-  // ---- potted plants for a fresh, airy feel ----
+  // ---- potted plants in the empty corners ----
   function plant(x, z) {
-    add(cyl(0.32, 0.42, 0.7, 12, 0xb9742f), x, 0.35, z);
-    add(sph(0.72, 0x3f9d5a), x, 1.25, z);
-    add(sph(0.5, 0x4fb069), x + 0.3, 1.7, z - 0.1);
+    add(cyl(0.34, 0.46, 0.8, 12, 0x9c5a28), x, 0.4, z);
+    add(sph(0.78, 0x3f9d5a), x, 1.45, z);
+    add(sph(0.55, 0x4fb069), x + 0.32, 1.9, z - 0.12);
+    add(sph(0.5, 0x49a862), x - 0.3, 1.85, z + 0.1);
   }
-  plant(-13.4, -10.4); plant(13.4, 9.4); plant(-13.4, 9.4);
+  plant(-13.2, 9.4); plant(7.2, -8.6);
 
-  // ---- pendant lamps over the tables / lounge ----
-  function pendant(x, z, col) {
-    add(cyl(0.04, 0.04, 1.3, 6, 0x23262c), x, 4.35, z);                // cord
-    const sh = cyl(0.55, 0.18, 0.55, 18, 0x2c2f36); sh.position.set(x, 3.7, z); root.add(sh);
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), emi(0xfff3d2, 0xffe2a6, 1.0)), x, 3.5, z);
-    const pl = new THREE.PointLight(col, 1.1, 18, 2); pl.position.set(x, 3.5, z); root.add(pl);
+  // ---- pendant lamps over the tables + lounge ----
+  function pendant(x, z) {
+    add(cyl(0.04, 0.04, 1.2, 6, 0x23262c), x, 4.4, z);                 // cord
+    const sh = cyl(0.52, 0.16, 0.5, 18, 0x2c2f36); sh.position.set(x, 3.75, z); root.add(sh);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), emi(0xfff3d2, 0xffe2a6, 1.0)), x, 3.55, z);
+    const pl = new THREE.PointLight(0xffe1b0, 0.8, 17, 2); pl.position.set(x, 3.5, z); root.add(pl);
   }
-  pendant(-6, -2, 0xffe6c2); pendant(4.5, -2, 0xdfefff); pendant(9.5, 4, 0xffe6c2);
+  pendant(-5.5, -3.5); pendant(5.5, -3.5); pendant(10.5, 5.0);
 
-  // ---- bright, even lighting (no more gloom) ----
-  root.add(new THREE.AmbientLight(0xfff2e0, 0.9));
-  root.add(new THREE.HemisphereLight(0xffffff, 0x9b8f78, 0.55));
-  const sun = new THREE.DirectionalLight(0xfff4e2, 0.5); sun.position.set(-6, 12, 10); root.add(sun);
-  for (const [lx, lz] of [[-5, 5], [6, 0], [-8, -6], [8, 6]]) { const pl = new THREE.PointLight(0xffe9cc, 0.6, 18, 2); pl.position.set(lx, 4.7, lz); root.add(pl); }
+  // ---- warm, moderate lighting (cozy modern, not blown out) ----
+  root.add(new THREE.AmbientLight(0xffe8cf, 0.5));
+  root.add(new THREE.HemisphereLight(0xdfeaf2, 0x6b5d49, 0.28));
+  const winLight = new THREE.DirectionalLight(0xeaf2ff, 0.35); winLight.position.set(0, 8, -10); root.add(winLight); // daylight from the glass wall
+  for (const [lx, lz] of [[0, 3], [-10, -3], [11, 2]]) { const pl = new THREE.PointLight(0xffe6c8, 0.4, 18, 2); pl.position.set(lx, 4.6, lz); root.add(pl); }
 
   addExitPad(root, 0, D / 2 - 1.4);
   interactables.push({ id: 'exit_union', x: 0, z: D / 2 - 1.6, r: 2.2, label: '🚪 Leave Student Union' });
