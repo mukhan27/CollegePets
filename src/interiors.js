@@ -1198,7 +1198,7 @@ export function buildStudentUnion() {
   const sph = (r, c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), toonMat(c)); m.castShadow = true; return m; };
   const add = (m, x, y, z) => { m.position.set(x, y, z); root.add(m); return m; };
   const emi = (c, e, i = 0.8) => new THREE.MeshToonMaterial({ color: c, emissive: e, emissiveIntensity: i });
-  const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x32444c, emissiveIntensity: 0.32 });
+  const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x2a3a40, emissiveIntensity: 0.2 });
   const shadowMat = new THREE.MeshBasicMaterial({ map: softShadow(), transparent: true, depthWrite: false });
   const shade = (x, z, sx, sz = sx) => { const dd = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), shadowMat); dd.rotation.x = -Math.PI / 2; dd.position.set(x, 0.02, z); root.add(dd); };
 
@@ -1210,7 +1210,7 @@ export function buildStudentUnion() {
 
   // ---- back glass curtain wall (sky view) — matches the exterior ----
   add(tb(W - 1.0, 0.5, 0.5, 0x2b2f36), 0, 0.45, -D / 2 + 0.42);                 // sill
-  const bw = new THREE.Mesh(new THREE.BoxGeometry(W - 1.6, 4.0, 0.16), glassMat(8, 3, { tint: '#c1e3ed', lit: 0.04 }));
+  const bw = new THREE.Mesh(new THREE.BoxGeometry(W - 1.6, 4.0, 0.16), glassMat(8, 3, { tint: '#bcd8de', lit: 0 }));
   bw.position.set(0, 2.75, -D / 2 + 0.34); root.add(bw);
   add(tb(W - 1.0, 0.32, 0.5, 0x2b2f36), 0, 4.9, -D / 2 + 0.42);                 // head beam
   for (let i = -4; i <= 4; i++) add(tb(0.18, 4.1, 0.32, 0x2b2f36), i * ((W - 1.6) / 8), 2.75, -D / 2 + 0.4); // mullions
@@ -1219,27 +1219,29 @@ export function buildStudentUnion() {
   function poolTable(px, pz) {
     const g = new THREE.Group();
     const at = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
-    const L = 5.0, Wd = 2.6, topY = 1.18, legH = 0.98, rw = 0.34;
-    const wood = 0x5a3219, woodHi = 0x6f4022, rail = 0x4a2914, felt = 0x12914f;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) at(tb(0.5, legH, 0.5, wood), sx * (L / 2 - 0.55), legH / 2, sz * (Wd / 2 - 0.55));
-    at(tb(L - 0.3, 0.5, Wd - 0.3, woodHi), 0, legH + 0.25, 0);          // apron
-    at(tb(L, 0.42, Wd, rail), 0, topY, 0);                              // rail frame
-    at(tb(L - 2 * rw, 0.16, Wd - 2 * rw, felt), 0, topY + 0.22, 0);     // felt bed
-    at(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, Wd - 2 * rw), emi(0xeafff4, 0x3fae78, 0.3)), -L * 0.18, topY + 0.31, 0); // head string
+    const L = 5.0, Wd = 2.6, legH = 0.92, surfY = 1.52;
+    const wood = 0x5a3219, woodHi = 0x6f4022, rail = 0x4a2914, felt = 0x117a44;
+    // legs + cabinet body (clean vertical stack — no intersecting coloured boxes)
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) at(tb(0.5, legH, 0.5, wood), sx * (L / 2 - 0.5), legH / 2, sz * (Wd / 2 - 0.5));
+    at(tb(L - 0.3, 0.5, Wd - 0.3, woodHi), 0, legH + 0.25, 0);          // 0.92..1.42
+    // felt bed sits just above the cabinet top (slight embed avoids coplanar z-fighting)
+    at(tb(L - 0.4, 0.16, Wd - 0.4, felt), 0, surfY - 0.08, 0);          // top at surfY
+    // cushion rails around the perimeter, on top of the bed
+    const railW = 0.32, railY = surfY + 0.04;
+    for (const sz of [-1, 1]) at(tb(L - 0.1, 0.16, railW, rail), 0, railY, sz * (Wd / 2 - railW / 2 - 0.05));
+    for (const sx of [-1, 1]) at(tb(railW, 0.16, Wd - 0.1, rail), sx * (L / 2 - railW / 2 - 0.05), railY, 0);
+    // pockets (dark cups sunk into the corners + side middles)
     for (const sx of [-1, 0, 1]) for (const sz of [-1, 1])
-      at(cyl(0.26, 0.22, 0.18, 14, 0x0b0b0b), sx * (L / 2 - rw - 0.02), topY + 0.24, sz * (Wd / 2 - rw - 0.02)); // pockets
-    const by = topY + 0.43, br = 0.13;
-    at(sph(br, 0xf4f4f0), -L * 0.2, by, 0);                             // cue ball
+      at(cyl(0.24, 0.2, 0.18, 14, 0x0b0b0b), sx * (L / 2 - 0.2), surfY + 0.06, sz * (Wd / 2 - 0.2));
+    // balls (racked) + cue ball, resting on the felt
+    const br = 0.13;
+    at(sph(br, 0xf4f4f0), -L * 0.2, surfY + 0.13, 0);
     const cols = [0xe8b923, 0x2b5fd0, 0xd83a2f, 0x161616, 0x7d3cc0, 0x1f9d55, 0xe8772e, 0x8c2f2f, 0xe8b923, 0x2b5fd0];
     let bi = 0;
-    for (let r = 0; r < 4; r++) for (let k = 0; k <= r; k++) { at(sph(br, cols[bi % cols.length]), L * 0.16 + r * br * 1.75, by, (k - r / 2) * br * 2.0); bi++; }
-    for (const s of [-1, 1]) {                                          // two cues leaning on the table
-      const c = cyl(0.028, 0.05, 3.4, 8, 0x9c6a35);
-      c.position.set(L * 0.2 * s, topY + 0.9, Wd * 0.62 * s); c.rotation.x = 0.55 * s; c.rotation.z = 0.4; g.add(c);
-    }
+    for (let r = 0; r < 4; r++) for (let k = 0; k <= r; k++) { at(sph(br, cols[bi % cols.length]), L * 0.16 + r * br * 1.75, surfY + 0.13, (k - r / 2) * br * 2.0); bi++; }
     g.position.set(px, 0, pz); root.add(g);
     colliders.push({ x: px, z: pz, w: L + 0.4, d: Wd + 0.4 }); shade(px, pz, L + 1.4, Wd + 1.2);
-    const sign = textSprite('🎱 Pool'); sign.position.set(px, topY + 2.3, pz); root.add(sign);
+    const sign = textSprite('🎱 Pool'); sign.position.set(px, surfY + 2.0, pz); root.add(sign);
     interactables.push({ id: 'arcade_pool', x: px, z: pz + Wd / 2 + 1.3, r: 2.4, label: '🎱 Play Pool' });
   }
 
@@ -1248,31 +1250,36 @@ export function buildStudentUnion() {
   function airHockeyTable(px, pz) {
     const g = new THREE.Group();
     const at = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
-    const L = 4.8, Wd = 2.6, topY = 1.16, legH = 0.98;
+    const L = 4.8, Wd = 2.6, legH = 0.92, surfY = 1.52;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) at(tb(0.45, legH, 0.45, 0x20242c), sx * (L / 2 - 0.5), legH / 2, sz * (Wd / 2 - 0.5));
-    at(tb(L - 0.2, 0.55, Wd - 0.2, 0x2a2f38), 0, legH + 0.28, 0);       // cabinet
-    const surf = new THREE.Mesh(new THREE.BoxGeometry(L - 0.2, 0.14, Wd - 0.2), emi(0xeaf6ff, 0x7fc1e8, 0.4));
-    surf.position.y = topY; surf.receiveShadow = true; g.add(surf);     // glossy playfield
-    at(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, Wd - 0.4), emi(0xffffff, 0x9cd0ee, 0.5)), 0, topY + 0.08, 0); // centre line
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 24), emi(0xffffff, 0x9cd0ee, 0.5)); ring.rotation.x = Math.PI / 2; at(ring, 0, topY + 0.08, 0);
-    for (const sz of [-1, 1]) at(tb(L, 0.3, 0.18, 0xeef2f6), 0, topY + 0.2, sz * (Wd / 2 - 0.09)); // side rails
+    at(tb(L - 0.2, 0.5, Wd - 0.2, 0x2a2f38), 0, legH + 0.25, 0);        // cabinet (below the surface)
+    const surf = new THREE.Mesh(new THREE.BoxGeometry(L - 0.3, 0.16, Wd - 0.3), emi(0xeaf6ff, 0x7fc1e8, 0.45));
+    surf.position.y = surfY - 0.08; surf.receiveShadow = true; g.add(surf);   // glossy playfield, top at surfY
+    at(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, Wd - 0.6), emi(0xffffff, 0x9cd0ee, 0.5)), 0, surfY + 0.02, 0); // centre line
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 24), emi(0xffffff, 0x9cd0ee, 0.5)); ring.rotation.x = Math.PI / 2; at(ring, 0, surfY + 0.02, 0);
+    for (const sz of [-1, 1]) at(tb(L, 0.22, 0.2, 0xeef2f6), 0, surfY + 0.07, sz * (Wd / 2 - 0.1)); // side rails
     const goalW = Wd * 0.5, segW = (Wd - goalW) / 2;
     for (const sx of [-1, 1]) {                                         // end rails + glowing goal mouths
-      for (const sz of [-1, 1]) at(tb(0.18, 0.3, segW, 0xeef2f6), sx * (L / 2 - 0.09), topY + 0.2, sz * (Wd / 2 - segW / 2));
-      at(tb(0.14, 0.3, goalW, 0x0a0d12), sx * (L / 2 - 0.05), topY + 0.18, 0);
-      at(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, goalW + 0.1), emi(sx > 0 ? 0xff5fa2 : 0xffd166, sx > 0 ? 0xff5fa2 : 0xffd166, 0.8)), sx * (L / 2), topY + 0.2, 0);
+      for (const sz of [-1, 1]) at(tb(0.2, 0.22, segW, 0xeef2f6), sx * (L / 2 - 0.1), surfY + 0.07, sz * (Wd / 2 - segW / 2));
+      at(tb(0.16, 0.2, goalW, 0x0a0d12), sx * (L / 2 - 0.06), surfY + 0.05, 0);
+      at(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, goalW + 0.1), emi(sx > 0 ? 0xff5fa2 : 0xffd166, sx > 0 ? 0xff5fa2 : 0xffd166, 0.8)), sx * (L / 2 + 0.02), surfY + 0.08, 0);
     }
-    const mallet = (c, x) => { const k = cyl(0.24, 0.26, 0.1, 16, c); k.position.set(x, topY + 0.16, 0); g.add(k); const h2 = cyl(0.1, 0.12, 0.18, 12, c); h2.position.set(x, topY + 0.28, 0); g.add(h2); };
+    const mallet = (c, x) => { const k = cyl(0.24, 0.26, 0.1, 16, c); k.position.set(x, surfY + 0.1, 0); g.add(k); const h2 = cyl(0.1, 0.12, 0.18, 12, c); h2.position.set(x, surfY + 0.22, 0); g.add(h2); };
     mallet(0xff5fa2, L * 0.28); mallet(0xffd166, -L * 0.28);
-    at(cyl(0.13, 0.13, 0.06, 16, 0x101418), 0.6, topY + 0.13, 0.45);    // puck
+    at(cyl(0.13, 0.13, 0.06, 16, 0x101418), 0.6, surfY + 0.06, 0.45);   // puck
     g.position.set(px, 0, pz); root.add(g);
     colliders.push({ x: px, z: pz, w: L + 0.4, d: Wd + 0.4 }); shade(px, pz, L + 1.4, Wd + 1.2);
-    const sign = textSprite('🏒 Air Hockey'); sign.position.set(px, topY + 2.3, pz); root.add(sign);
+    const sign = textSprite('🏒 Air Hockey'); sign.position.set(px, surfY + 2.0, pz); root.add(sign);
     interactables.push({ id: 'arcade_airhockey', x: px, z: pz + Wd / 2 + 1.3, r: 2.4, label: '🏒 Play Air Hockey' });
   }
 
   poolTable(-5.5, -3.5);
   airHockeyTable(5.5, -3.5);
+
+  // ---- cue rack mounted flat on the left wall (cues stand neatly, not askew) ----
+  add(tb(0.2, 0.5, 1.8, 0x3a291c), -W / 2 + 0.2, 2.9, -6.5);          // top holder
+  add(tb(0.2, 0.3, 1.8, 0x3a291c), -W / 2 + 0.2, 1.0, -6.5);          // bottom holder
+  for (const dz of [-0.55, -0.18, 0.18, 0.55]) add(cyl(0.04, 0.05, 2.3, 8, 0x9c6a35), -W / 2 + 0.42, 1.95, -6.5 + dz);
 
   // ---- café counter against the right wall (with stools + menu board) ----
   const bx = W / 2 - 1.3;

@@ -437,8 +437,10 @@ function makeShopExterior(b) {
   sign.position.set(0, h + (roof.userData.rise || 3) + 1.2, 0);
   g.add(sign);
 
+  // spin 180° so the storefront faces the inner yard (−z)
+  g.rotation.y = Math.PI;
   g.position.set(x, 0, z);
-  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const doorWorld = new THREE.Vector3(x, 0, z - (d / 2 + 1.6));
   const collider = { x, z, w: w + 0.6, d: d + 0.6 };
   return { group: g, doorWorld, collider };
 }
@@ -513,7 +515,8 @@ function makeStudentUnionExterior(b) {
   const bronze = toonMat(0x3a3f47);   // mullions / columns
   const cap = toonMat(0xb9c0c7);      // light parapet + spandrel bands
   const stone = toonMat(0x6b7178);    // base plinth
-  const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x1d2a30, emissiveIntensity: 0.22 });
+  const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x16221f, emissiveIntensity: 0.1 });
+  const GT = '#a6c9bd'; // soft green curtain-wall tint (muted to fit the toon map)
 
   const gB = 0.7, gH = h - gB;        // glazed band sits on a low plinth
   const colsW = Math.max(6, Math.round(w / 3.0));
@@ -525,10 +528,10 @@ function makeStudentUnionExterior(b) {
   g.add(mesh(new THREE.BoxGeometry(w - 0.2, gH, d - 0.2), struct, 0, gB + gH / 2, 0, false));
 
   // glass curtain wall on all four faces
-  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 3 }), 0, gB + gH / 2, d / 2 + 0.12, false));
-  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 8 }), 0, gB + gH / 2, -d / 2 - 0.12, false));
-  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 5 }), w / 2 + 0.12, gB + gH / 2, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 9 }), -w / 2 - 0.12, gB + gH / 2, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 3, tint: GT }), 0, gB + gH / 2, d / 2 + 0.12, false));
+  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 8, tint: GT }), 0, gB + gH / 2, -d / 2 - 0.12, false));
+  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 5, tint: GT }), w / 2 + 0.12, gB + gH / 2, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 9, tint: GT }), -w / 2 - 0.12, gB + gH / 2, 0, false));
 
   // corner columns frame the curtain wall
   for (const sx of [-1, 1]) for (const sz of [-1, 1])
@@ -556,10 +559,12 @@ function makeStudentUnionExterior(b) {
   const sign = textSprite(b.label);
   sign.position.set(0, h + 1.6, 0); g.add(sign);
 
+  // face the inner yard: spin 180° so the entrance opens toward campus centre (−z)
+  g.rotation.y = Math.PI;
   g.position.set(x, 0, z);
-  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const doorWorld = new THREE.Vector3(x, 0, z - (d / 2 + 1.6));
   const collider = { x, z, w: w + 0.6, d: d + 0.6 };
-  return { group: g, doorWorld, enter: { x, z: z + d / 2 + 2.9 }, enterR: 4.2, collider };
+  return { group: g, doorWorld, enter: { x, z: z - (d / 2 + 2.9) }, enterR: 4.2, collider };
 }
 
 // ----------------------------------------------------------- campus
@@ -621,7 +626,7 @@ export function buildCampus() {
       label: '📚 Library', prompt: '📚 Enter Library' },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
-    { id: 'shop', x: -55, z: 28, w: 18, h: 8, d: 12, color: 0xf6e7cc, roofColor: 0x2f9c93,
+    { id: 'shop', x: -80, z: 20, w: 18, h: 8, d: 12, color: 0xf6e7cc, roofColor: 0x2f9c93,
       label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
     { id: 'lecturehall', x: 0, z: -55, w: 36, h: 15, d: 22, color: P.wallSage, roofColor: P.roofNavy,
       wallStyle: 'brick', columns: true, label: '🏛️ Lecture Hall', prompt: '🏛️ Enter Lecture Hall' },
@@ -708,7 +713,7 @@ export function buildCampus() {
 
   const bushSpots = [[-24, -10], [24, 10], [-16, 26], [16, -28], [-44, 14], [44, -14], [-36, -36], [36, 36], [-64, 36], [70, -22]];
   bushSpots.forEach(([bx, bz], i) => root.add(makeBush(bx, bz, 0.8 + (i % 3) * 0.25)));
-  const rockSpots = [[-38, 22], [40, -30], [-18, -34], [20, 36], [-74, 24], [96, -34]];
+  const rockSpots = [[-38, 22], [40, -30], [-18, -34], [20, 36], [-64, 6], [96, -34]];
   rockSpots.forEach(([rx, rz], i) => {
     root.add(makeRock(rx, rz, 0.7 + (i % 3) * 0.3));
     colliders.push({ x: rx, z: rz, w: 1, d: 1 });

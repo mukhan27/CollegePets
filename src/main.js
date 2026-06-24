@@ -333,7 +333,7 @@ function runInteract(it) {
     case 'enter_bedroom': switchLocation('bedroom'); break;
     case 'exit_bedroom': switchLocation('dormCommon', { x: 8, z: -6.5 }); break;
     case 'shop': switchLocation('shopInterior'); break;
-    case 'exit_shop': switchLocation('campus', { x: campus.doors.shop.x, z: campus.doors.shop.z + 1 }); break;
+    case 'exit_shop': switchLocation('campus', { x: campus.doors.shop.x, z: campus.doors.shop.z - 1 }); break;
     case 'shop_buy': openShop(() => setWearables(player, state.equipped)); break;
     case 'try_on': openTryOn(player, () => setWearables(player, state.equipped)); break;
     case 'decorate': enterEdit(); break;
@@ -366,7 +366,7 @@ function runInteract(it) {
       });
       break;
     case 'lecture': switchLocation('studentUnion'); break;
-    case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z + 1 }); break;
+    case 'exit_union': switchLocation('campus', { x: campus.doors.lecture.x, z: campus.doors.lecture.z - 1 }); break;
     case 'arcade_airhockey': startAirHockey(); break;
     case 'arcade_pool': startPool(); break;
     case 'quest_board': openCampus('awards'); break;
