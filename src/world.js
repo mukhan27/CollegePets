@@ -626,7 +626,7 @@ export function buildCampus() {
       label: '📚 Library', prompt: '📚 Enter Library' },
     { id: 'dorm', x: 55, z: -32, w: 24, h: 13, d: 15, color: P.wallRose, roofColor: P.roofRed,
       wallStyle: 'brick', chimney: true, label: '🏠 Maple Dorm', prompt: '🏠 Enter Dorm' },
-    { id: 'shop', x: -80, z: 20, w: 18, h: 8, d: 12, color: 0xf6e7cc, roofColor: 0x2f9c93,
+    { id: 'shop', x: -80, z: 54, w: 18, h: 8, d: 12, color: 0xf6e7cc, roofColor: 0x2f9c93,
       label: '🛍️ Campus Store', prompt: '🛍️ Shop' },
     { id: 'lecturehall', x: 0, z: -55, w: 36, h: 15, d: 22, color: P.wallSage, roofColor: P.roofNavy,
       wallStyle: 'brick', columns: true, label: '🏛️ Lecture Hall', prompt: '🏛️ Enter Lecture Hall' },
@@ -695,7 +695,7 @@ export function buildCampus() {
 
   // ---- nature & props (tree/lamp/bench coords unchanged from v1) ----
   const treeSpots = [
-    [-80, -55], [-30, -18], [30, -18], [80, -55], [-80, 55], [80, 55],
+    [-80, -55], [-30, -18], [30, -18], [80, -55], [-66, 50], [80, 55],
     [-30, 18], [30, 18], [-85, 0], [85, 0], [-12, -25], [12, -25],
     [-70, -10], [70, -10], [-40, 60], [50, 12], [10, 30], [-15, 33],
   ];
