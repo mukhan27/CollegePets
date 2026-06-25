@@ -22,33 +22,48 @@ html, body {
 .rotate-icon { font-size: 64px; margin-bottom: 16px; }
 .rotate-inner p { opacity: .7; margin-top: 8px; }
 
-/* ---------- Pet selection ---------- */
-#select-screen {
+/* ---------- Character creator ---------- */
+#creator-screen {
   position: fixed; inset: 0; z-index: 50;
   background: linear-gradient(160deg, #7ec8e3 0%, #b8e0c9 60%, #f5e6b8 100%);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; padding: 12px;
+  display: flex; flex-direction: row;
 }
-.game-title { font-size: clamp(26px, 5vw, 44px); color: #2c3e50; text-shadow: 0 2px 0 rgba(255,255,255,.6); }
-.subtitle { color: #44607a; font-size: clamp(13px, 2vw, 17px); }
+.game-title { font-size: clamp(22px, 3.4vw, 34px); color: #2c3e50; text-shadow: 0 2px 0 rgba(255,255,255,.6); margin: 0; }
+.subtitle { color: #44607a; font-size: clamp(12px, 1.7vw, 15px); margin: 2px 0 6px; }
 
-#pet-cards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.pet-card {
-  width: clamp(90px, 14vw, 130px); padding: 12px 6px;
-  background: rgba(255,255,255,.85); border: 3px solid transparent; border-radius: 16px;
-  text-align: center; cursor: pointer; transition: transform .12s, border-color .12s;
-}
-.pet-card:active { transform: scale(.95); }
-.pet-card.selected { border-color: #ff9f43; background: #fff; transform: translateY(-4px); }
-.pet-card .pet-emoji { font-size: clamp(34px, 6vw, 52px); }
-.pet-card .pet-label { font-weight: bold; color: #2c3e50; margin-top: 4px; }
-.pet-card .pet-desc { font-size: 11px; color: #7a8aa0; margin-top: 2px; }
+#creator-stage { position: relative; flex: 1 1 46%; min-width: 0; }
+#creator-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+#creator-rotate { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 60px; pointer-events: none; }
+.cc-arrow { pointer-events: auto; width: 48px; height: 48px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,.7); color: #2c3e50; font-size: 26px; font-weight: bold; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.18); }
+.cc-arrow:active { transform: translateY(2px); box-shadow: none; }
 
-.name-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
-#pet-name-input {
-  padding: 10px 14px; border-radius: 12px; border: 2px solid #b0c4d4;
-  font-size: 16px; width: 200px; outline: none; user-select: text; -webkit-user-select: text;
-}
+#creator-panel { flex: 1 1 54%; max-width: 560px; display: flex; flex-direction: column;
+  padding: 14px 16px; gap: 8px; background: rgba(255,255,255,.4); }
+#creator-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-tab { border: none; border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 700;
+  cursor: pointer; color: #44607a; background: rgba(255,255,255,.7); }
+.cc-tab.active { background: #ff9f43; color: #fff; }
+
+#creator-options { flex: 1 1 auto; overflow-y: auto; display: flex; flex-wrap: wrap;
+  align-content: flex-start; gap: 8px; padding: 6px 2px; }
+.cc-section { flex: 1 0 100%; font-weight: 700; color: #44607a; font-size: 12px; margin: 6px 2px 0; }
+.cc-opt { width: clamp(74px, 13vw, 104px); padding: 9px 6px; background: rgba(255,255,255,.85);
+  border: 3px solid transparent; border-radius: 14px; text-align: center; cursor: pointer;
+  transition: transform .1s, border-color .1s; }
+.cc-opt:active { transform: scale(.95); }
+.cc-opt.selected { border-color: #ff9f43; background: #fff; }
+.cc-opt .cc-emoji { font-size: clamp(26px, 4.5vw, 40px); line-height: 1; }
+.cc-opt .cc-label { font-weight: bold; color: #2c3e50; margin-top: 4px; font-size: 12px; }
+.cc-opt .cc-desc { font-size: 10px; color: #7a8aa0; margin-top: 1px; }
+.cc-swatch { width: clamp(46px, 8vw, 62px); height: clamp(46px, 8vw, 62px); border-radius: 50%;
+  border: 4px solid rgba(255,255,255,.9); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.18); transition: transform .1s; }
+.cc-swatch:active { transform: scale(.92); }
+.cc-swatch.selected { border-color: #ff9f43; transform: scale(1.08); }
+
+.cc-footer { display: flex; gap: 8px; align-items: center; padding-top: 6px; }
+#creator-name { flex: 1 1 auto; padding: 10px 14px; border-radius: 12px; border: 2px solid #b0c4d4;
+  font-size: 16px; outline: none; user-select: text; -webkit-user-select: text; }
 
 /* ---------- Buttons ---------- */
 .btn {

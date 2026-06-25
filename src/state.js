@@ -1,5 +1,7 @@
 // Persistent game state (localStorage) + item catalog.
 
+import { defaultCreature } from './petFactory.js';
+
 const SAVE_KEY = 'collegepets-save-v1';
 
 export const PET_TYPES = [
@@ -87,6 +89,7 @@ function defaults() {
   return {
     petType: null,
     petName: '',
+    creature: defaultCreature(), // custom "Birchling" appearance (used when petType === 'creature')
     coins: 100,
     owned: [],                 // item ids
     equipped: { hat: null, face: null, neck: null },

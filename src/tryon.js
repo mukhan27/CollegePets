@@ -39,7 +39,7 @@ function resize() {
 
 function buildPet() {
   if (pet) scene.remove(pet);
-  pet = createPet(state.petType || 'cat', { equipped: state.equipped });
+  pet = createPet(state.petType || 'creature', { equipped: state.equipped, appearance: state.creature });
   scene.add(pet);
 }
 

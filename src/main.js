@@ -2,9 +2,10 @@
 // location switching, and the contextual interaction system.
 
 import * as THREE from 'three';
-import { state, save, PET_TYPES, furnitureCount, takeFromPantry } from './state.js';
+import { state, save, furnitureCount, takeFromPantry } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
+import { openCreator } from './creator.js';
 import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, initDiningUI } from './dining.js';
@@ -567,46 +568,22 @@ $('re-delete').addEventListener('click', () => {
 $('edit-room-btn').addEventListener('click', () => { if (currentLoc === 'bedroom' && !editMode) enterEdit(); });
 
 // ----------------------------------------------------------- pet selection
-function setupSelectScreen() {
-  const cards = $('pet-cards');
-  let selected = state.petType || null;
-  for (const p of PET_TYPES) {
-    const card = document.createElement('div');
-    card.className = 'pet-card' + (selected === p.id ? ' selected' : '');
-    card.innerHTML = `<div class="pet-emoji">${p.emoji}</div>
-      <div class="pet-label">${p.label}</div>
-      <div class="pet-desc">${p.desc}</div>`;
-    card.addEventListener('click', () => {
-      selected = p.id;
-      cards.querySelectorAll('.pet-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      updateStartBtn();
-    });
-    cards.appendChild(card);
-  }
-  const nameInput = $('pet-name-input');
-  nameInput.value = state.petName || '';
-  const startBtn = $('start-btn');
-  function updateStartBtn() {
-    startBtn.disabled = !(selected && nameInput.value.trim().length > 0);
-  }
-  nameInput.addEventListener('input', updateStartBtn);
-  updateStartBtn();
-
-  startBtn.addEventListener('click', () => {
-    state.petType = selected;
-    state.petName = nameInput.value.trim();
-    save();
-    $('select-screen').classList.add('hidden');
+// Returning players (a pet already chosen) boot straight into the game; brand-new
+// players go through the character creator first.
+function bootOrCreate() {
+  if (state.petType) {
+    $('creator-screen').style.display = 'none';
     startGame();
-  });
+  } else {
+    openCreator(startGame);
+  }
 }
 
 // ----------------------------------------------------------- game start + loop
 const clock = new THREE.Clock();
 
 function startGame() {
-  player = createPet(state.petType, { equipped: state.equipped });
+  player = createPet(state.petType, { equipped: state.equipped, appearance: state.creature });
   scene.add(player);
 
   npcs = createNpcs(campus.root);
@@ -753,7 +730,7 @@ initMinigameUI();
 initDiningUI();
 initInventory(eatFromInventory);
 initFishingUI();
-setupSelectScreen();
+bootOrCreate();
 renderer.setAnimationLoop(tick);
 
 // debug/playtest hook (console): __cp.goto('library'), __cp.player.position, …

@@ -41,14 +41,25 @@
   </div>
 </div>
 
-<!-- Pet selection screen -->
-<div id="select-screen">
-  <h1 class="game-title">🎓 College Pets</h1>
-  <p class="subtitle">Choose your pet and start campus life!</p>
-  <div id="pet-cards"></div>
-  <div class="name-row">
-    <input id="pet-name-input" type="text" maxlength="14" placeholder="Your pet's name" autocomplete="off">
-    <button id="start-btn" class="btn btn-primary" disabled>Start College! 🎒</button>
+<!-- Character creator -->
+<div id="creator-screen">
+  <div id="creator-stage">
+    <canvas id="creator-canvas"></canvas>
+    <div id="creator-rotate">
+      <button id="creator-left" class="cc-arrow">‹</button>
+      <button id="creator-right" class="cc-arrow">›</button>
+    </div>
+  </div>
+  <div id="creator-panel">
+    <h1 class="game-title">🎓 Create your character</h1>
+    <p class="subtitle">Build a one-of-a-kind creature — or pick a classic pet.</p>
+    <div id="creator-tabs"></div>
+    <div id="creator-options"></div>
+    <div class="cc-footer">
+      <input id="creator-name" type="text" maxlength="14" placeholder="Name your character" autocomplete="off">
+      <button id="creator-random" class="btn" title="Randomize">🎲</button>
+      <button id="creator-start" class="btn btn-primary" disabled>Start College! 🎒</button>
+    </div>
   </div>
 </div>
 
