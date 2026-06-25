@@ -279,18 +279,18 @@ const BUILDERS = {
 
 // ===================================================================== creature
 // "Aura" (working name) — the player's original, customizable species, modelled
-// on the concept sheet: a soft, mossy-furred, BIPEDAL critter with two arms and
+// on the concept sheet: a soft, green-furred, BIPEDAL critter with two arms and
 // two legs (four limbs total — NOT four-legged, and NO antlers/horns). Built from
 // the same primitives as the animals and returns the same {head, legs, tail, ears}
 // shape so createPet's animation loop is reused. Head radius stays 0.52 so all
 // existing wearables fit.
 
-// curated toon swatch palettes for the creator. Mossy greens lead (the canon
+// curated toon swatch palettes for the creator. Green fur tones lead (the canon
 // look) with a few earthy alternates so every Aura still feels one-of-a-kind.
 export const COAT_SWATCHES = [0x5a8a3f, 0x3f6e3a, 0x7aa05a, 0x2f5a4a, 0x8a9a4a, 0x6a8a7a, 0xb0763a, 0x8a5a8a, 0x4a6a9a, 0x9a9a8a];
 export const BELLY_SWATCHES = [0xc8d6a0, 0xb8c87a, 0xe6e0c0, 0xd8c89a, 0xa8c89a, 0xcfe0c0, 0xe0d0b0, 0xc0d0c0];
 export const ACCENT_SWATCHES = [0xa8895a, 0xc89a6a, 0x8a6a4a, 0xb8a87a, 0xd0b080, 0x7a5a3a, 0x6b8f5a, 0xcf9f7f]; // inner ear / fur warmth
-export const SPOT_SWATCHES = [0x375a2a, 0x2a4a28, 0x1f3a2a, 0x5a4a2a, 0x6a5a3a, 0x3a3a4a]; // dappled moss markings
+export const SPOT_SWATCHES = [0x375a2a, 0x2a4a28, 0x1f3a2a, 0x5a4a2a, 0x6a5a3a, 0x3a3a4a]; // darker fur shading / markings
 export const EYE_SWATCHES = [0x7a5aa0, 0x2a8a8a, 0x8a5a2a, 0x3f7d52, 0x4a6e8a, 0x9a4a6a];
 
 export const CREATURE_OPTIONS = {
@@ -304,8 +304,8 @@ export const CREATURE_OPTIONS = {
 };
 
 export function defaultCreature() {
-  // matches the concept-art hero pose: mossy green, shaggy fur, dappled spots,
-  // short rounded ears, long fluffy tail, big violet eyes.
+  // matches the concept-art hero pose: green fur, shaggy coat, darker fur
+  // markings, short rounded ears, long fluffy tail, big violet eyes.
   return {
     build: 'round', size: 'medium',
     bodyColor: 0x5a8a3f, bellyColor: 0xb8c87a, accentColor: 0xa8895a,
@@ -395,7 +395,7 @@ function creatureFur(inner, head, a, bw) {
 
 function creaturePattern(inner, head, a, bw) {
   const c = a.patternColor;
-  if (a.pattern === 'spots') {            // dappled moss spots
+  if (a.pattern === 'spots') {            // darker fur markings
     for (const [x, y, z] of [[0.22, 0.64, 0.32], [-0.26, 0.6, 0.2], [0.0, 0.72, 0.32], [0.28, 0.52, -0.1], [-0.2, 0.5, -0.16], [0.12, 0.68, -0.26]]) {
       const sp = ball(0.09, c, 1, 1, 0.4);
       sp.position.set(x * bw, y, z * bw); inner.add(sp);
