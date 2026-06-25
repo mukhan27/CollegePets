@@ -1,20 +1,20 @@
 // Start-of-game character creator: a live, rotatable 3D preview plus category
-// tabs to build the custom "Birchling" creature — or pick one of the 5 classic
-// pets. Mirrors the fitting-room preview pattern in tryon.js.
+// tabs to build your "Aura" — the game's one original, customizable species.
+// Mirrors the fitting-room preview pattern in tryon.js.
 
 import * as THREE from 'three';
 import {
   createPet, defaultCreature, randomCreature, CREATURE_OPTIONS,
-  COAT_SWATCHES, BELLY_SWATCHES, ACCENT_SWATCHES, EYE_SWATCHES,
+  COAT_SWATCHES, BELLY_SWATCHES, ACCENT_SWATCHES, SPOT_SWATCHES, EYE_SWATCHES,
 } from './petFactory.js';
-import { state, save, PET_TYPES } from './state.js';
+import { state, save } from './state.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ---- preview stage (own renderer; same setup as tryon.js) ----
 let renderer, scene, camera, pet, raf = null, spin = 0.5, dragging = false, lastX = 0;
 // ---- working selection ----
-let selectedType = 'creature', appearance = defaultCreature(), activeTab = 'kind';
+let appearance = defaultCreature(), activeTab = 'body';
 let onDone = null, bound = false;
 
 function initStage() {
@@ -43,7 +43,7 @@ function resize() {
 
 function rebuildPet() {
   if (pet) scene.remove(pet);
-  pet = createPet(selectedType, { equipped: {}, appearance });
+  pet = createPet('creature', { equipped: {}, appearance });
   scene.add(pet);
 }
 
@@ -60,22 +60,19 @@ function loop() {
 const LABELS = {
   build: { slim: ['🥒', 'Slim'], round: ['🔵', 'Round'], chonky: ['🟠', 'Chonky'] },
   size: { small: ['🐁', 'Small'], medium: ['🐈', 'Medium'], tall: ['🦒', 'Tall'] },
-  pattern: { none: ['⬜', 'Plain'], spots: ['🐆', 'Spots'], stripes: ['🦓', 'Stripes'], belly_patch: ['🥚', 'Belly'], freckles: ['✨', 'Freckles'] },
-  ears: { cat: ['🐱', 'Cat'], bunny: ['🐰', 'Bunny'], bear: ['🐻', 'Bear'], fin: ['🐟', 'Fins'], floppy: ['🐶', 'Floppy'], none: ['🚫', 'None'] },
-  tail: { puff: ['☁️', 'Puff'], long: ['🐈', 'Long'], bunny: ['🐰', 'Bob'], leaf: ['🍃', 'Leaf'], none: ['🚫', 'None'] },
-  horns: { none: ['🚫', 'None'], nubs: ['🐐', 'Nubs'], antennae: ['🐜', 'Antennae'], unicorn: ['🦄', 'Unicorn'] },
+  fur: { velvety: ['🟢', 'Velvety'], silky: ['🪶', 'Silky'], shaggy: ['🧶', 'Shaggy'] },
+  pattern: { none: ['⬜', 'Plain'], spots: ['🐆', 'Spots'], stripes: ['🦓', 'Stripes'], patch: ['🥚', 'Patch'], freckles: ['✨', 'Freckles'] },
+  ears: { rounded: ['🐻', 'Rounded'], upright: ['🐰', 'Upright'], floppy: ['🐶', 'Floppy'] },
+  tail: { fluffy: ['🐿️', 'Fluffy'], pom: ['☁️', 'Pom-Pom'] },
   eyeStyle: { round: ['😊', 'Round'], sparkly: ['🤩', 'Sparkly'], sleepy: ['😌', 'Sleepy'] },
-  snout: { button: ['🔘', 'Button'], muzzle: ['🐾', 'Muzzle'], beak: ['🦆', 'Beak'] },
 };
 
 const TABS = [
-  { id: 'kind', label: 'Kind' },
-  { id: 'body', label: 'Body', creatureOnly: true },
-  { id: 'color', label: 'Colors', creatureOnly: true },
-  { id: 'pattern', label: 'Pattern', creatureOnly: true },
-  { id: 'eyes', label: 'Eyes', creatureOnly: true },
-  { id: 'earstail', label: 'Ears & Tail', creatureOnly: true },
-  { id: 'extras', label: 'Extras', creatureOnly: true },
+  { id: 'body', label: 'Body' },
+  { id: 'color', label: 'Colors' },
+  { id: 'coat', label: 'Coat' },
+  { id: 'eyes', label: 'Eyes' },
+  { id: 'earstail', label: 'Ears & Tail' },
 ];
 
 // ---- DOM builders ----
@@ -100,7 +97,6 @@ function set(field, value) { appearance[field] = value; rebuildPet(); renderActi
 function renderTabs() {
   const wrap = $('creator-tabs'); wrap.innerHTML = '';
   for (const t of TABS) {
-    if (t.creatureOnly && selectedType !== 'creature') continue;
     const b = document.createElement('button');
     b.className = 'cc-tab' + (activeTab === t.id ? ' active' : '');
     b.textContent = t.label;
@@ -123,22 +119,17 @@ function swatchRow(box, field, colors, header_) {
 
 function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
-  if (activeTab === 'kind') {
-    box.appendChild(chip('✨', 'Custom', 'Build your own', selectedType === 'creature', () => selectKind('creature')));
-    for (const p of PET_TYPES) box.appendChild(chip(p.emoji, p.label, p.desc, selectedType === p.id, () => selectKind(p.id)));
-    return;
-  }
-  if (selectedType !== 'creature') { activeTab = 'kind'; renderTabs(); return renderActiveTab(); }
   if (activeTab === 'body') {
     enumChips(box, 'build', 'Shape');
     enumChips(box, 'size', 'Size');
   } else if (activeTab === 'color') {
-    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Body');
+    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Coat');
     swatchRow(box, 'bellyColor', BELLY_SWATCHES, 'Belly');
-    swatchRow(box, 'accentColor', ACCENT_SWATCHES, 'Accent');
-  } else if (activeTab === 'pattern') {
+    swatchRow(box, 'accentColor', ACCENT_SWATCHES, 'Inner ear');
+  } else if (activeTab === 'coat') {
+    enumChips(box, 'fur', 'Fur texture');
     enumChips(box, 'pattern', 'Markings');
-    swatchRow(box, 'patternColor', COAT_SWATCHES, 'Marking colour');
+    swatchRow(box, 'patternColor', SPOT_SWATCHES, 'Marking colour');
   } else if (activeTab === 'eyes') {
     enumChips(box, 'eyeStyle', 'Eyes');
     swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
@@ -148,16 +139,7 @@ function renderActiveTab() {
   } else if (activeTab === 'earstail') {
     enumChips(box, 'ears', 'Ears');
     enumChips(box, 'tail', 'Tail');
-  } else if (activeTab === 'extras') {
-    enumChips(box, 'horns', 'Horns');
-    enumChips(box, 'snout', 'Snout');
   }
-}
-
-function selectKind(type) {
-  selectedType = type;
-  if (type !== 'creature' && TABS.find((t) => t.id === activeTab)?.creatureOnly) activeTab = 'kind';
-  rebuildPet(); renderTabs(); renderActiveTab();
 }
 
 function updateStart() { $('creator-start').disabled = !$('creator-name').value.trim(); }
@@ -165,8 +147,8 @@ function updateStart() { $('creator-start').disabled = !$('creator-name').value.
 function start() {
   const nm = $('creator-name').value.trim();
   if (!nm) return;
-  if (selectedType === 'creature') { state.creature = appearance; state.petType = 'creature'; }
-  else { state.petType = selectedType; }
+  state.creature = appearance;
+  state.petType = 'creature';
   state.petName = nm;
   save();
   close();
@@ -177,7 +159,7 @@ function bindOnce() {
   if (bound) return; bound = true;
   $('creator-name').addEventListener('input', updateStart);
   $('creator-start').addEventListener('click', start);
-  $('creator-random').addEventListener('click', () => { selectedType = 'creature'; appearance = randomCreature(); rebuildPet(); renderTabs(); renderActiveTab(); });
+  $('creator-random').addEventListener('click', () => { appearance = randomCreature(); rebuildPet(); renderTabs(); renderActiveTab(); });
   $('creator-left').addEventListener('click', () => { spin -= 0.6; });
   $('creator-right').addEventListener('click', () => { spin += 0.6; });
 }
@@ -188,10 +170,8 @@ export function openCreator(done, { editing = false } = {}) {
   onDone = done;
   initStage();
   bindOnce();
-  selectedType = editing || (state.petType === 'creature') ? 'creature'
-    : (state.petType ? state.petType : 'creature');
   appearance = JSON.parse(JSON.stringify(state.creature || defaultCreature()));
-  activeTab = 'kind';
+  activeTab = 'body';
   $('creator-name').value = editing ? (state.petName || '') : '';
   $('creator-start').textContent = editing ? 'Save ✓' : 'Start College! 🎒';
   $('creator-screen').style.display = 'flex';

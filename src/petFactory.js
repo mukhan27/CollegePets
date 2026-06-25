@@ -277,35 +277,40 @@ const BUILDERS = {
 };
 
 // ===================================================================== creature
-// "Birchling" — the player's original, modular, fully-customizable species. Built
-// from the same primitives as the animals and returns the same {head, legs, tail,
-// ears} shape so createPet's animation loop is reused. Head radius stays 0.52 so
-// all existing wearables fit.
+// "Aura" (working name) — the player's original, customizable species, modelled
+// on the concept sheet: a soft, mossy-furred, BIPEDAL critter with two arms and
+// two legs (four limbs total — NOT four-legged, and NO antlers/horns). Built from
+// the same primitives as the animals and returns the same {head, legs, tail, ears}
+// shape so createPet's animation loop is reused. Head radius stays 0.52 so all
+// existing wearables fit.
 
-// curated toon swatch palettes for the creator (cohesive, not free RGB)
-export const COAT_SWATCHES = [0xf2a25c, 0xef8fa6, 0x8fb0e8, 0x9fd6a0, 0xc6a6e8, 0xf2d06b, 0xece6da, 0x7fd0c8, 0xd9886a, 0x9a8fb0];
-export const BELLY_SWATCHES = [0xfae3c8, 0xfff1e0, 0xffe0e6, 0xe6f2e0, 0xf0e8fa, 0xfff6d8, 0xf4f4f0, 0xdcf2ee];
-export const ACCENT_SWATCHES = [0xe88fa6, 0xf2a93b, 0x6bbf8a, 0x5f9bd0, 0xb07fd0, 0xe0556b, 0x5a4636, 0xf2c14e];
-export const EYE_SWATCHES = [0x2a2420, 0x4a6e8a, 0x3f7d52, 0x7d4a8a, 0x8a5a2a, 0x2a6e6e];
+// curated toon swatch palettes for the creator. Mossy greens lead (the canon
+// look) with a few earthy alternates so every Aura still feels one-of-a-kind.
+export const COAT_SWATCHES = [0x5a8a3f, 0x3f6e3a, 0x7aa05a, 0x2f5a4a, 0x8a9a4a, 0x6a8a7a, 0xb0763a, 0x8a5a8a, 0x4a6a9a, 0x9a9a8a];
+export const BELLY_SWATCHES = [0xc8d6a0, 0xb8c87a, 0xe6e0c0, 0xd8c89a, 0xa8c89a, 0xcfe0c0, 0xe0d0b0, 0xc0d0c0];
+export const ACCENT_SWATCHES = [0xa8895a, 0xc89a6a, 0x8a6a4a, 0xb8a87a, 0xd0b080, 0x7a5a3a, 0x6b8f5a, 0xcf9f7f]; // inner ear / fur warmth
+export const SPOT_SWATCHES = [0x375a2a, 0x2a4a28, 0x1f3a2a, 0x5a4a2a, 0x6a5a3a, 0x3a3a4a]; // dappled moss markings
+export const EYE_SWATCHES = [0x7a5aa0, 0x2a8a8a, 0x8a5a2a, 0x3f7d52, 0x4a6e8a, 0x9a4a6a];
 
 export const CREATURE_OPTIONS = {
   build: ['slim', 'round', 'chonky'],
   size: ['small', 'medium', 'tall'],
-  pattern: ['none', 'spots', 'stripes', 'belly_patch', 'freckles'],
-  ears: ['cat', 'bunny', 'bear', 'fin', 'floppy', 'none'],
-  tail: ['puff', 'long', 'bunny', 'leaf', 'none'],
-  horns: ['none', 'nubs', 'antennae', 'unicorn'],
+  fur: ['velvety', 'silky', 'shaggy'],           // Short Velvety / Long Silky / Thick Shaggy
+  pattern: ['none', 'spots', 'stripes', 'patch', 'freckles'],
+  ears: ['rounded', 'upright', 'floppy'],         // Short Rounded / Tall Upright / Wide Floppy
+  tail: ['fluffy', 'pom'],                        // Long Fluffy / Short Pom-Pom
   eyeStyle: ['round', 'sparkly', 'sleepy'],
-  snout: ['button', 'muzzle', 'beak'],
 };
 
 export function defaultCreature() {
+  // matches the concept-art hero pose: mossy green, shaggy fur, dappled spots,
+  // short rounded ears, long fluffy tail, big violet eyes.
   return {
     build: 'round', size: 'medium',
-    bodyColor: 0x8fb0e8, bellyColor: 0xfff1e0, accentColor: 0xe88fa6,
-    pattern: 'none', patternColor: 0xffffff,
-    ears: 'cat', tail: 'puff', horns: 'none',
-    eyeColor: 0x2a2420, eyeStyle: 'round', snout: 'button', blush: true,
+    bodyColor: 0x5a8a3f, bellyColor: 0xb8c87a, accentColor: 0xa8895a,
+    pattern: 'spots', patternColor: 0x375a2a, fur: 'shaggy',
+    ears: 'rounded', tail: 'fluffy',
+    eyeColor: 0x7a5aa0, eyeStyle: 'round', blush: true,
   };
 }
 
@@ -314,96 +319,90 @@ export function randomCreature() {
   return {
     build: pick(CREATURE_OPTIONS.build), size: pick(CREATURE_OPTIONS.size),
     bodyColor: pick(COAT_SWATCHES), bellyColor: pick(BELLY_SWATCHES), accentColor: pick(ACCENT_SWATCHES),
-    pattern: pick(CREATURE_OPTIONS.pattern), patternColor: pick(COAT_SWATCHES),
-    ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail), horns: pick(CREATURE_OPTIONS.horns),
-    eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle), snout: pick(CREATURE_OPTIONS.snout),
+    pattern: pick(CREATURE_OPTIONS.pattern), patternColor: pick(SPOT_SWATCHES), fur: pick(CREATURE_OPTIONS.fur),
+    ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail),
+    eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle),
     blush: Math.random() < 0.72,
   };
 }
 
 function creatureEars(head, a, ears) {
-  if (a.ears === 'none') return;
   const coat = a.bodyColor, acc = a.accentColor;
   for (const s of [-1, 1]) {
-    if (a.ears === 'cat' || a.ears === 'fin') {
-      const fin = a.ears === 'fin';
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(fin ? 0.2 : 0.17, fin ? 0.26 : 0.32, 4), toonMat(coat));
-      ear.castShadow = true;
-      ear.position.set(s * 0.27, 0.52, fin ? -0.05 : -0.02);
-      ear.rotation.z = s * (fin ? -0.85 : -0.3);
-      if (fin) ear.scale.set(1, 1, 0.5);
-      head.add(ear);
-      const earIn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.18, 4), toonMat(acc));
-      earIn.position.set(s * 0.26, 0.52, fin ? 0.0 : 0.04);
-      earIn.rotation.z = ear.rotation.z;
-      if (fin) earIn.scale.set(1, 1, 0.5);
-      head.add(earIn);
-    } else if (a.ears === 'bunny') {
-      const ear = ball(0.12, coat, 0.7, 1.8, 0.6);
-      ear.position.set(s * 0.22, 0.72, -0.02); ear.rotation.z = s * 0.12; head.add(ear);
-      const earIn = ball(0.07, acc, 0.6, 1.5, 0.5);
-      earIn.position.set(s * 0.22, 0.74, 0.04); earIn.rotation.z = s * 0.12; head.add(earIn);
-    } else if (a.ears === 'bear') {
+    if (a.ears === 'rounded') {           // short rounded ears
       const ear = ball(0.16, coat);
-      ear.position.set(s * 0.36, 0.46, -0.05); head.add(ear);
-      const earIn = ball(0.08, acc, 1, 1, 0.5);
-      earIn.position.set(s * 0.35, 0.45, 0.05); head.add(earIn);
-    } else if (a.ears === 'floppy') {
-      const ear = ball(0.16, acc, 0.7, 1.5, 0.45);
-      ear.position.set(s * 0.46, 0.16, 0); ear.rotation.z = s * 0.55;
-      head.add(ear); ears.push(ear);
-    }
-  }
-}
-
-function creatureHorns(head, a) {
-  if (a.horns === 'none') return;
-  const c = a.accentColor;
-  if (a.horns === 'unicorn') {
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 8), toonMat(c));
-    horn.castShadow = true; horn.position.set(0, 0.5, 0.2); horn.rotation.x = -0.3; head.add(horn);
-    return;
-  }
-  for (const s of [-1, 1]) {
-    if (a.horns === 'nubs') {
-      const nub = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 8), toonMat(c));
-      nub.position.set(s * 0.2, 0.52, 0.0); head.add(nub);
-    } else if (a.horns === 'antennae') {
-      const stalk = capsule(0.025, 0.2, c);
-      stalk.position.set(s * 0.16, 0.6, -0.02); stalk.rotation.z = s * 0.25; head.add(stalk);
-      const tip = ball(0.07, c);
-      tip.position.set(s * 0.24, 0.78, -0.02); head.add(tip);
+      ear.position.set(s * 0.34, 0.48, -0.04); head.add(ear);
+      const earIn = ball(0.085, acc, 1, 1, 0.5);
+      earIn.position.set(s * 0.33, 0.47, 0.05); head.add(earIn);
+    } else if (a.ears === 'upright') {    // tall upright ears
+      const ear = ball(0.12, coat, 0.82, 1.7, 0.7);
+      ear.position.set(s * 0.26, 0.7, -0.02); ear.rotation.z = s * 0.16; head.add(ear);
+      const earIn = ball(0.07, acc, 0.65, 1.4, 0.5);
+      earIn.position.set(s * 0.26, 0.72, 0.05); earIn.rotation.z = s * 0.16; head.add(earIn);
+    } else if (a.ears === 'floppy') {     // wide floppy ears (animate with the ear-flap loop)
+      const ear = ball(0.15, coat, 0.7, 1.5, 0.5);
+      ear.position.set(s * 0.46, 0.18, 0); ear.rotation.z = s * 0.6; head.add(ear); ears.push(ear);
+      const earIn = ball(0.08, acc, 0.55, 1.25, 0.45);
+      earIn.position.set(s * 0.45, 0.2, 0.07); earIn.rotation.z = s * 0.6; head.add(earIn);
     }
   }
 }
 
 function creatureTail(inner, a) {
-  if (a.tail === 'none') return null;
-  if (a.tail === 'long') {
-    const tail = capsule(0.07, 0.45, a.bodyColor);
-    tail.position.set(0, 0.72, -0.5); tail.rotation.x = -0.9; inner.add(tail); return tail;
+  if (a.tail === 'pom') {                 // short fluffy pom-pom
+    const tail = ball(0.17, a.bodyColor);
+    tail.position.set(0, 0.46, -0.46); inner.add(tail);
+    const tip = ball(0.1, a.bellyColor); tip.position.set(0, 0.5, -0.56); tail.add(tip);
+    return tail;
   }
-  if (a.tail === 'leaf') {
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 6), toonMat(a.accentColor));
-    tail.castShadow = true; tail.scale.set(1, 1, 0.4);
-    tail.position.set(0, 0.66, -0.5); tail.rotation.x = -0.6; inner.add(tail); return tail;
+  // long fluffy (squirrel-like) tail: a curved stack of balls in a group so the
+  // createPet wag (rotation.y) sweeps the whole plume.
+  const g = new THREE.Group();
+  for (const [y, z, r] of [[0, 0, 0.16], [0.18, -0.03, 0.18], [0.36, -0.01, 0.19], [0.52, 0.08, 0.18], [0.64, 0.2, 0.15]]) {
+    const b = ball(r, a.bodyColor); b.position.set(0, y, z); g.add(b);
   }
-  const r = a.tail === 'bunny' ? 0.12 : 0.16;
-  const tail = ball(r, a.tail === 'bunny' ? a.bellyColor : a.bodyColor);
-  tail.position.set(0, 0.5, -0.5); inner.add(tail); return tail;
+  const tip = ball(0.13, a.bellyColor); tip.position.set(0, 0.72, 0.26); g.add(tip);
+  g.position.set(0, 0.5, -0.44); inner.add(g);
+  return g;
+}
+
+// soft fur look: velvety = smooth (nothing extra); shaggy = chunky tufts around
+// the body + cheeks; silky = a few smooth, elongated wisps on the chest/sides.
+function creatureFur(inner, head, a, bw) {
+  if (a.fur === 'velvety') return;
+  const c = a.bodyColor;
+  if (a.fur === 'shaggy') {
+    for (const [x, y, z] of [[0.34, 0.5, 0.08], [-0.34, 0.5, 0.08], [0.3, 0.42, -0.22], [-0.3, 0.42, -0.22], [0.2, 0.68, -0.18], [-0.2, 0.68, -0.18], [0.36, 0.6, -0.04], [-0.36, 0.6, -0.04]]) {
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.22, 5), toonMat(c));
+      t.castShadow = true;
+      t.position.set(x * bw, y, z * bw);
+      t.rotation.z = x > 0 ? -0.9 : 0.9;
+      t.rotation.x = z < 0 ? -0.6 : 0.4;
+      inner.add(t);
+    }
+    for (const s of [-1, 1]) {            // cheek fuzz
+      const cf = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 5), toonMat(c));
+      cf.position.set(s * 0.5, -0.05, 0.08); cf.rotation.z = s * 1.3; head.add(cf);
+    }
+  } else if (a.fur === 'silky') {
+    for (const [x, y, z, sy] of [[0, 0.34, 0.32, 1.5], [0.3, 0.32, 0.18, 1.25], [-0.3, 0.32, 0.18, 1.25]]) {
+      const w = ball(0.1, c, 0.7, sy, 0.7);
+      w.position.set(x * bw, y, z * bw); inner.add(w);
+    }
+  }
 }
 
 function creaturePattern(inner, head, a, bw) {
   const c = a.patternColor;
-  if (a.pattern === 'spots') {
-    for (const [x, y, z] of [[0.22, 0.62, 0.32], [-0.26, 0.58, 0.2], [0.0, 0.7, 0.32], [0.28, 0.5, -0.1], [-0.2, 0.48, -0.16], [0.12, 0.66, -0.26]]) {
+  if (a.pattern === 'spots') {            // dappled moss spots
+    for (const [x, y, z] of [[0.22, 0.64, 0.32], [-0.26, 0.6, 0.2], [0.0, 0.72, 0.32], [0.28, 0.52, -0.1], [-0.2, 0.5, -0.16], [0.12, 0.68, -0.26]]) {
       const sp = ball(0.09, c, 1, 1, 0.4);
       sp.position.set(x * bw, y, z * bw); inner.add(sp);
     }
   } else if (a.pattern === 'stripes') {
     for (const z of [0.12, -0.03, -0.18]) {
       const st = box(0.52 * bw, 0.05, 0.15, c);
-      st.position.set(0, 0.72, z); inner.add(st);
+      st.position.set(0, 0.74, z); inner.add(st);
     }
   } else if (a.pattern === 'freckles') {
     for (const s of [-1, 1]) for (const [dx, dy] of [[0, 0], [0.07, 0.02], [-0.05, -0.03]]) {
@@ -418,36 +417,47 @@ function buildCreature(inner, a) {
   inner.scale.setScalar(sizeScale);
   const bw = a.build === 'slim' ? 0.9 : a.build === 'chonky' ? 1.18 : 1.0; // body width factor
 
-  const body = ball(0.44, a.bodyColor, bw, 0.96, 1.05 * bw);
-  body.position.y = 0.54; inner.add(body); addOutline(body);
+  const body = ball(0.44, a.bodyColor, bw, 1.0, 1.02 * bw);
+  body.position.y = 0.56; inner.add(body); addOutline(body);
 
-  const bellyPatch = a.pattern === 'belly_patch';
-  const belly = ball(bellyPatch ? 0.36 : 0.3, bellyPatch ? a.patternColor : a.bellyColor, 0.92 * bw, 0.9, 0.6);
-  belly.position.set(0, 0.46, 0.22); inner.add(belly);
+  const patchBelly = a.pattern === 'patch';
+  const belly = ball(patchBelly ? 0.34 : 0.28, patchBelly ? a.patternColor : a.bellyColor, 0.9 * bw, 0.95, 0.6);
+  belly.position.set(0, 0.5, 0.24); inner.add(belly);
 
   const head = new THREE.Group();
-  head.position.set(0, 1.2, 0.12);
-  const skull = ball(0.52, a.bodyColor, 1, 0.95, 0.95); // radius locked for wearables
+  head.position.set(0, 1.22, 0.1);
+  const skull = ball(0.52, a.bodyColor, 1, 0.96, 0.96); // radius locked for wearables
   head.add(skull); addOutlineLater(head, skull);
+  const nose = ball(0.05, 0x2e2018, 1.2, 0.85, 0.8); nose.position.set(0, -0.04, 0.5); head.add(nose);
 
-  if (a.snout === 'muzzle') {
-    const muzzle = ball(0.18, a.bellyColor, 1.2, 0.82, 0.7); muzzle.position.set(0, -0.15, 0.42); head.add(muzzle);
-    const nose = ball(0.06, 0x4a3a30, 1.2, 0.85, 0.8); nose.position.set(0, -0.08, 0.56); head.add(nose);
-  } else if (a.snout === 'beak') {
-    const beak = ball(0.13, a.accentColor, 1.6, 0.5, 1.25); beak.position.set(0, -0.08, 0.46); head.add(beak);
-  } else { // button
-    const nose = ball(0.05, 0x4a3a30, 1.2, 0.85, 0.8); nose.position.set(0, -0.02, 0.52); head.add(nose);
-  }
-
-  addFace(head, { eyeColor: a.eyeColor, eyeStyle: a.eyeStyle, blush: a.blush });
+  addFace(head, { eyeSpread: 0.2, eyeY: 0.06, eyeColor: a.eyeColor, eyeStyle: a.eyeStyle, blush: a.blush });
   const ears = [];
   creatureEars(head, a, ears);
-  creatureHorns(head, a);
   inner.add(head);
+
+  // two arms, one on each side (bipedal — four limbs total, never four legs)
+  for (const s of [-1, 1]) {
+    const arm = capsule(0.1, 0.18, a.bodyColor);
+    arm.position.set(s * 0.46 * bw, 0.56, 0.04);
+    arm.rotation.z = s * 0.5; arm.rotation.x = -0.2;
+    inner.add(arm);
+    const hand = ball(0.1, a.bodyColor);
+    hand.position.set(s * 0.56 * bw, 0.4, 0.1); inner.add(hand);
+  }
 
   const tail = creatureTail(inner, a);
   creaturePattern(inner, head, a, bw);
-  const legs = stubbyLegs(inner, a.bodyColor, { spreadX: 0.2 * bw, spreadZ: 0.16 * bw });
+  creatureFur(inner, head, a, bw);
+
+  // two legs (bipedal stance)
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const leg = capsule(0.12, 0.16, a.bodyColor);
+    leg.position.set(s * 0.18 * bw, 0.16, 0.03);
+    inner.add(leg); legs.push(leg);
+    const foot = ball(0.12, a.bodyColor, 1.3, 0.7, 1.5);
+    foot.position.set(s * 0.18 * bw, 0.06, 0.12); inner.add(foot);
+  }
   return { head, legs, tail, ears };
 }
 
