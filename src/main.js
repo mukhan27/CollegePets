@@ -6,6 +6,7 @@ import { state, save, furnitureCount, takeFromPantry } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { openCreator } from './creator.js';
+import { preloadAura } from './auraModel.js';
 import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, initDiningUI } from './dining.js';
@@ -570,7 +571,21 @@ $('edit-room-btn').addEventListener('click', () => { if (currentLoc === 'bedroom
 // ----------------------------------------------------------- pet selection
 // Returning players (a pet already chosen) boot straight into the game; brand-new
 // players go through the character creator first.
-function bootOrCreate() {
+function showBootLoading() {
+  const el = document.createElement('div');
+  el.id = 'boot-loading';
+  el.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;'
+    + 'background:linear-gradient(160deg,#7ec8e3 0%,#b8e0c9 60%,#f5e6b8 100%);color:#2c3e50;'
+    + 'font:600 clamp(16px,2.4vw,22px)/1.4 system-ui,sans-serif;letter-spacing:.3px;';
+  el.textContent = '🎓 Loading…';
+  document.body.appendChild(el);
+  return el;
+}
+
+async function bootOrCreate() {
+  const loading = showBootLoading();
+  await preloadAura(); // load the authored Aura model (no-op fallback if absent)
+  loading.remove();
   if (state.petType) {
     $('creator-screen').style.display = 'none';
     startGame();

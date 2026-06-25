@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
+import { isAuraReady, buildAura } from './auraModel.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -626,7 +627,9 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const inner = new THREE.Group();
   g.add(inner);
   const parts = type === 'creature'
-    ? buildCreature(inner, appearance || defaultCreature())
+    ? (isAuraReady()
+      ? buildAura(inner, appearance || defaultCreature())          // authored .glb
+      : buildCreature(inner, appearance || defaultCreature()))     // primitive fallback
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.petType = type;
