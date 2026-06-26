@@ -45,6 +45,13 @@ export function preloadAura() {
     scene.position.x -= c.x; scene.position.z -= c.z; scene.position.y -= box.min.y;
     scene.updateMatrixWorld(true);
 
+    // strip baked texture so bodyColor swatch fully controls appearance
+    scene.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) { m.map = null; m.needsUpdate = true; }
+    });
+
     // remember head metrics (top ~quarter of the body) for ear/wearable anchors
     box = new THREE.Box3().setFromObject(scene);
     const headTop = box.max.y;
