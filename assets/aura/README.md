@@ -1,40 +1,64 @@
 # Aura model assets
 
-Drop the AI-generated `.glb` files for the player's "Aura" species here. The game
-loads them via `src/auraModel.js`. **If these files are absent, the game still
-boots** — `createPet('creature', …)` falls back to the primitive `buildCreature`
-in `src/petFactory.js`.
+The player's "Aura" species loads from here via `src/auraModel.js`. **If these
+files are absent the game still boots** — `createPet('creature', …)` falls back to
+the primitive `buildCreature` in `src/petFactory.js`.
 
 ## Files
 
 | File | What it is |
 | --- | --- |
-| `body.glb` | **Required.** Base Aura: torso, head, arms, legs. Ideally **no ears, no tail** (those swap separately). |
-| `ears_rounded.glb` | A *pair* of short rounded ears, modeled around the origin. |
-| `ears_upright.glb` | A *pair* of tall upright ears. |
-| `ears_floppy.glb` | A *pair* of wide floppy ears. |
-| `tail_fluffy.glb` | Long fluffy tail, modeled around the origin. |
-| `tail_pom.glb` | Short pom-pom tail. |
+| `body.glb` | **Required.** The rigged base Aura (torso, head, arms, legs) with the plain white-fur texture. Recolour works on this. |
+| `body_retex.glb` | **Optional.** A Meshy **Retexture** of the *same* model with an art-directed face (baked muzzle + eyebrows). If present it is loaded **instead of** `body.glb`. |
 
-Only `body.glb` is needed to light up the model; ear/tail parts are optional and
-each one simply enables that swap when present.
+The loader prefers `body_retex.glb` when it exists, so you can drop the
+retextured model in next to `body.glb` without overwriting anything.
 
-## Export contract
+## How recolouring works (read this before retexturing)
 
-- **Format:** glTF Binary (`.glb`).
-- **Up axis:** Y-up (glTF default).
-- **Facing:** +Z (character front toward the camera).
-- **Scale / origin:** don't stress — `auraModel.js` auto-normalizes the body to
-  ~1.7 units tall, centers it on X/Z, and drops the feet to y=0. Export ear/tail
-  **parts at the same scale as the body** so they match after normalization.
-- **Materials:** textures are fine; the loader re-shades everything to the game's
-  toon look. For best **per-zone recoloring**, name materials/meshes with hints:
-  `coat`, `belly`, `eye`, and `inner` (inner ear). Unnamed meshes are tinted as
-  coat. Colors come from the creator swatches in `src/petFactory.js`.
+At runtime the coat colour comes from the creator swatches. `auraModel.js`
+repaints **only the bright fur pixels** of the texture — found by a flood-fill
+that starts at the image borders. Every region that is **not bright fur** is left
+exactly as the texture bakes it:
+
+- **Bright / light pixels** (the body fur) → repainted to the chosen coat colour.
+- **Mid-tone & dark pixels** (muzzle, eyebrows, nose, mouth) → **kept as baked.**
+- **Light pixels fully enclosed by dark** (the eye catchlights) → **kept as baked**
+  (so the eye highlight never tints with the coat).
+
+This is exactly why a Meshy Retexture gives you a contrasting muzzle and brows for
+free: bake them as their own shades and they survive recolouring, while the body
+fur stays swatch-driven.
+
+## Meshy Retexture recipe (for the muzzle + eyebrows)
+
+1. In Meshy, run **Retexture / AI Texturing** on the existing base model so the
+   **mesh and UVs are unchanged** (do *not* regenerate the model from scratch —
+   that makes a new, incompatible mesh).
+2. Prompt for a look where the zones are clearly separated by tone, e.g.:
+   > *"Soft cartoon puppy. Body fur bright near-white. A clearly lighter-vs-body
+   > tan **muzzle** patch around the nose. Subtle dark-brown **eyebrows** above the
+   > eyes. Big glossy near-black eyes each with a small white highlight. Dark nose."*
+3. **Keep the body fur the brightest thing in the texture.** The muzzle should be a
+   distinct **mid-tone** (clearly darker than the body so it is preserved), and the
+   eyebrows darker still. If the muzzle is as bright as the body it will recolour
+   with the coat instead of staying a contrast.
+4. Export as **glTF Binary (`.glb`)** and save it here as **`body_retex.glb`**.
+
+Hand the `.glb` to me and I'll drop it in. If the body doesn't recolour or the
+muzzle picks up the coat colour, it's just the one brightness threshold in
+`buildTexturePrep` (`lum > 165`) — I'll calibrate it to your actual texture.
+
+## Export contract (unchanged)
+
+- **Format:** glTF Binary (`.glb`); **Y-up**; character facing **+Z**.
+- **Scale / origin:** don't stress — `auraModel.js` auto-normalises the body to
+  ~1.7 units tall, centres it on X/Z and drops the feet to y=0.
+- **Rig:** keep the existing skeleton + idle clip (the game plays clip 0).
 - **Poly count:** keep the body under ~50k triangles (mobile target).
 
-## Tuning anchors
+## Tuning
 
-Ear/tail/head attachment offsets live as constants at the top of
-`src/auraModel.js` (`HEAD_ANCHOR`, `EAR_ANCHOR`, `TAIL_ANCHOR`). Adjust them once
-the real model is in if parts or hats don't sit perfectly.
+The head/ear anchors and the fur brightness threshold live as constants in
+`src/auraModel.js`. They only need a tweak if hats sit wrong or the new texture's
+fur isn't bright enough to recolour.

@@ -21,9 +21,12 @@ let cache = null;            // { scene, animations, head, features, texSize }
 let ready = false;
 let loadingPromise = null;
 
-function loadGLB(url) {
+function loadGLB(url, quiet = false) {
   return new Promise((resolve) => {
-    loader.load(url, (g) => resolve(g), undefined, (e) => { console.warn('[aura] GLB load failed', url, (e && (e.message || e.type || e)) || ''); resolve(null); });
+    loader.load(url, (g) => resolve(g), undefined, (e) => {
+      if (!quiet) console.warn('[aura] GLB load failed', url, (e && (e.message || e.type || e)) || '');
+      resolve(null);
+    });
   });
 }
 
@@ -34,7 +37,9 @@ export function preloadAura() {
   if (loadingPromise) return loadingPromise;
   loadingPromise = (async () => {
    try {
-    const g = await loadGLB(BASE + 'body.glb');
+    // Prefer a Meshy-Retexture variant if present (same mesh/UVs, art-directed
+    // texture with a baked muzzle/brows); otherwise the plain base body.
+    const g = await loadGLB(BASE + 'body_retex.glb', true) || await loadGLB(BASE + 'body.glb');
     if (!g) { ready = false; return false; }
     const scene = g.scene;
 
