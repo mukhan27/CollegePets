@@ -1,9 +1,12 @@
 // Authored-model path for the player's "Aura" species. Loads the rigged Meshy
 // GLB (skeleton + idle clip), normalizes + caches it, and assembles a per-player
 // instance synchronously so the createPet() contract is preserved. Adds code-built
-// ears on the head and tints the coat to the chosen colour. If the asset is absent
-// (offline / first paint), isAuraReady() stays false and createPet falls back to
-// the primitive buildCreature.
+// ears on the head. The coat is recoloured by genuinely REPAINTING the texture
+// (the Meshy texture is flat-white fur with dark feature islands for the
+// eyes/nose/mouth) — we fill the fur with the chosen colour and keep the dark
+// features untouched, so it reads as a real recolour, not a wash-over tint that
+// would discolour the eyes. If the asset is absent (offline / first paint),
+// isAuraReady() stays false and createPet falls back to the primitive buildCreature.
 
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
@@ -12,8 +15,9 @@ import { clone as skeletonClone } from '../vendor/addons/utils/SkeletonUtils.js'
 const loader = new GLTFLoader();
 const BASE = 'assets/aura/';
 const TARGET_HEIGHT = 1.7;
+const MASK_SIZE = 1024;      // working resolution for the recolour canvases
 
-let cache = null;            // { scene, animations, head: {y,z,r} }
+let cache = null;            // { scene, animations, head, features, texSize }
 let ready = false;
 let loadingPromise = null;
 
@@ -45,23 +49,74 @@ export function preloadAura() {
     scene.position.x -= c.x; scene.position.z -= c.z; scene.position.y -= box.min.y;
     scene.updateMatrixWorld(true);
 
-    // strip baked texture so bodyColor swatch fully controls appearance
-    scene.traverse((o) => {
-      if (!o.isMesh || !o.material) return;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) { m.map = null; m.needsUpdate = true; }
-    });
-
     // remember head metrics (top ~quarter of the body) for ear/wearable anchors
     box = new THREE.Box3().setFromObject(scene);
     const headTop = box.max.y;
     const headR = (box.max.x - box.min.x) * 0.5 * 0.78;
-    cache = { scene, animations: g.animations || [], head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR } };
+    cache = {
+      scene, animations: g.animations || [],
+      head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR },
+      features: buildFeatureMask(scene), texSize: MASK_SIZE,
+    };
     ready = true;
     return true;
    } catch (e) { console.warn('[aura] preload error', e && e.message, e && e.stack); ready = false; return false; }
   })();
   return loadingPromise;
+}
+
+// ---- texture recolouring -------------------------------------------------
+// Build a one-time "features" canvas from the GLB texture: the dark eye/nose/
+// mouth islands become opaque, the white fur becomes transparent. Recolouring is
+// then just "fill with coat colour, stamp the features on top".
+function findSourceImage(scene) {
+  let img = null;
+  scene.traverse((o) => {
+    if (img || !o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      const t = m.map || m.emissiveMap;
+      if (t && t.image && t.image.width) { img = t.image; break; }
+    }
+  });
+  return img;
+}
+
+function buildFeatureMask(scene) {
+  const img = findSourceImage(scene);
+  if (!img || typeof document === 'undefined') return null;
+  const s = MASK_SIZE;
+  const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(img, 0, 0, s, s);
+  const id = cx.getImageData(0, 0, s, s);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    // dark = feature (opaque), light = fur (transparent); contrast-stretch the edge
+    let a = (215 - lum) * 2.2;
+    d[i + 3] = a < 0 ? 0 : a > 255 ? 255 : a;
+  }
+  cx.putImageData(id, 0, 0);
+  return cv;
+}
+
+const texCache = new Map();  // hex -> CanvasTexture (bounded; recolour is reused)
+function coatTexture(hex) {
+  if (!cache.features) return null;
+  if (texCache.has(hex)) return texCache.get(hex);
+  const s = cache.texSize;
+  const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
+  const cx = cv.getContext('2d');
+  cx.fillStyle = '#' + new THREE.Color(hex).getHexString();
+  cx.fillRect(0, 0, s, s);
+  cx.drawImage(cache.features, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  if (texCache.size > 10) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
+  texCache.set(hex, tex);
+  return tex;
 }
 
 function smoothMesh(geo, hex, rough = 0.82) {
@@ -97,24 +152,29 @@ function addEars(head, a, ears) {
 // plus a `mixer` that createPet drives each frame.
 export function buildAura(inner, a) {
   const model = skeletonClone(cache.scene);
-  // The Meshy coat colour is baked into the EMISSIVE channel (white emissive
-  // texture = self-lit white pup), so the swatch must drive `emissive`, not the
-  // base colour. The emissive texture also carries the face (dark eyes/nose), so
-  // we keep it: white coat pixels take the tint, dark face pixels stay dark.
-  const tint = (m) => {
+  // Repaint the coat: a freshly recoloured texture (fur = chosen colour, dark
+  // eyes/nose/mouth preserved) drives both the lit base colour and a soft
+  // emissive so the coat stays vivid without washing the features.
+  const coat = coatTexture(a.bodyColor);
+  const recolour = (m) => {
     const c = m.clone();
-    const col = new THREE.Color(a.bodyColor);
-    if (c.emissive) { c.emissive.copy(col); c.emissiveIntensity = 0.9; }
-    if (c.color) c.color.copy(col).multiplyScalar(0.5); // gentle lit shading on top
-    if ('specularIntensity' in c) c.specularIntensity = 0.2;
+    if (coat) {
+      c.map = coat; if (c.color) c.color.setRGB(1, 1, 1);
+      c.emissiveMap = coat; if (c.emissive) c.emissive.setRGB(1, 1, 1);
+      c.emissiveIntensity = 0.35;
+    } else if (c.color) {                 // mask unavailable: fall back to a tint
+      c.color.setHex(a.bodyColor);
+      if (c.emissive) { c.emissive.setHex(a.bodyColor); c.emissiveIntensity = 0.5; }
+    }
+    if ('specularIntensity' in c) c.specularIntensity = 0.15;
     if (c.specularColor) c.specularColor.setRGB(1, 1, 1);
-    c.metalness = 0; c.roughness = 0.85;
+    c.metalness = 0; c.roughness = 0.9;
     return c;
   };
   model.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     o.castShadow = true; o.receiveShadow = true;
-    o.material = Array.isArray(o.material) ? o.material.map(tint) : tint(o.material);
+    o.material = Array.isArray(o.material) ? o.material.map(recolour) : recolour(o.material);
   });
   inner.add(model);
 
