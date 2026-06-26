@@ -97,8 +97,20 @@ function addEars(head, a, ears) {
 // plus a `mixer` that createPet drives each frame.
 export function buildAura(inner, a) {
   const model = skeletonClone(cache.scene);
-  // tint the coat (multiply over the baked texture); fresh materials per instance
-  const tint = (m) => { const c = m.clone(); if (c.color) c.color.setHex(a.bodyColor); return c; };
+  // The Meshy coat colour is baked into the EMISSIVE channel (white emissive
+  // texture = self-lit white pup), so the swatch must drive `emissive`, not the
+  // base colour. The emissive texture also carries the face (dark eyes/nose), so
+  // we keep it: white coat pixels take the tint, dark face pixels stay dark.
+  const tint = (m) => {
+    const c = m.clone();
+    const col = new THREE.Color(a.bodyColor);
+    if (c.emissive) { c.emissive.copy(col); c.emissiveIntensity = 0.9; }
+    if (c.color) c.color.copy(col).multiplyScalar(0.5); // gentle lit shading on top
+    if ('specularIntensity' in c) c.specularIntensity = 0.2;
+    if (c.specularColor) c.specularColor.setRGB(1, 1, 1);
+    c.metalness = 0; c.roughness = 0.85;
+    return c;
+  };
   model.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     o.castShadow = true; o.receiveShadow = true;
