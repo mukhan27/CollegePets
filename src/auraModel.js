@@ -95,7 +95,10 @@ function buildFeatureMask(scene) {
     const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
     // dark = feature (opaque), light = fur (transparent); contrast-stretch the edge
     let a = (215 - lum) * 2.2;
-    d[i + 3] = a < 0 ? 0 : a > 255 ? 255 : a;
+    a = a < 0 ? 0 : a > 255 ? 255 : a;
+    // force features to pure black so eyes/pupils never pick up the coat colour
+    d[i] = d[i + 1] = d[i + 2] = 0;
+    d[i + 3] = a;
   }
   cx.putImageData(id, 0, 0);
   return cv;

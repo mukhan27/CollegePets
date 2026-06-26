@@ -29,10 +29,13 @@ function init() {
 }
 
 function resize() {
+  if (!renderer) return;
   const canvas = $('tryon-canvas');
-  const r = canvas.getBoundingClientRect();
-  const w = Math.max(1, r.width), h = Math.max(1, r.height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
+  const pr = Math.min(window.devicePixelRatio, 2);
+  const needW = Math.round(w * pr), needH = Math.round(h * pr);
+  if (canvas.width === needW && canvas.height === needH) return;
+  renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
 }
@@ -45,6 +48,7 @@ function buildPet() {
 
 function loop() {
   raf = requestAnimationFrame(loop);
+  resize();
   if (!pet) return;
   if (!dragging) spin += 0.004;
   pet.rotation.y = spin;

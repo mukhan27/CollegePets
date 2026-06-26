@@ -285,13 +285,14 @@ const BUILDERS = {
 // shape so createPet's animation loop is reused. Head radius stays 0.52 so all
 // existing wearables fit.
 
-// curated coat palette for the creator: real animal coats (white→cream→fawn→
-// golden→brown→chocolate→ginger, greys→charcoal→soft black) plus muted colours
-// that read as distinct without ever going neon.
+// curated coat palette for the creator: natural animal coats (white→cream→fawn→
+// golden→brown→cocoa, greys→charcoal) followed by a row of playful candy tones —
+// saturated and cheerful, but soft enough that they never glow neon.
 export const COAT_SWATCHES = [
-  0xf7f3ea, 0xe7d6b8, 0xd2b48c, 0xc89b5c, 0xa9743f, 0x76502f, 0xb86b3a,
-  0xc3c5c6, 0x9398a4, 0x6c7075, 0x44464a,
-  0x7fa8c9, 0x8fb89a, 0xab97c8, 0xdda0a8, 0x6fb3aa, 0xd9b566, 0xd28e6e,
+  0xf7f3ea, 0xf0dcb4, 0xe3b878, 0xd99a3e, 0xb06b30, 0x6b4226,
+  0xbac0c6, 0x808d9b, 0x444b54,
+  0xf2785c, 0xf7a23b, 0xf3cf52, 0x7ecb6e, 0x3fc0b0, 0x57a8e6,
+  0x7d8fe0, 0xb27cd6, 0xf48fb1,
 ];
 export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
 export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks

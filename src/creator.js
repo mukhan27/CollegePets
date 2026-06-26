@@ -33,10 +33,17 @@ function initStage() {
   window.addEventListener('resize', () => { if (isOpen()) resize(); });
 }
 
+// Resize only when the canvas's displayed box actually changes. Called every
+// frame so it self-corrects no matter when layout settles (fixes the
+// open-time stretch / letterbox-gap race), and on explicit resize events.
 function resize() {
-  const c = $('creator-canvas'); const r = c.getBoundingClientRect();
-  const w = Math.max(1, r.width), h = Math.max(1, r.height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  if (!renderer) return;
+  const c = $('creator-canvas');
+  const w = Math.max(1, c.clientWidth), h = Math.max(1, c.clientHeight);
+  const pr = Math.min(window.devicePixelRatio, 2);
+  const needW = Math.round(w * pr), needH = Math.round(h * pr);
+  if (c.width === needW && c.height === needH) return;
+  renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
 }
@@ -49,6 +56,7 @@ function rebuildPet() {
 
 function loop() {
   raf = requestAnimationFrame(loop);
+  resize();
   if (!pet) return;
   // no auto-spin — the player rotates the character by dragging (or arrows)
   pet.rotation.y = spin;
