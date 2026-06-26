@@ -60,10 +60,10 @@ function loop() {
 const LABELS = {
   build: { slim: ['🥒', 'Slim'], round: ['🔵', 'Round'], chonky: ['🟠', 'Chonky'] },
   size: { small: ['🐁', 'Small'], medium: ['🐈', 'Medium'], tall: ['🦒', 'Tall'] },
-  fur: { velvety: ['🟢', 'Velvety'], silky: ['🪶', 'Silky'], shaggy: ['🧶', 'Shaggy'] },
+  fur: { velvety: ['⚪', 'Smooth'], silky: ['🪶', 'Soft'], shaggy: ['🧶', 'Fuzzy'] },
   pattern: { none: ['⬜', 'Plain'], spots: ['🐆', 'Spots'], stripes: ['🦓', 'Stripes'], patch: ['🥚', 'Patch'], freckles: ['✨', 'Freckles'] },
   ears: { rounded: ['🐻', 'Rounded'], upright: ['🐰', 'Upright'], floppy: ['🐶', 'Floppy'] },
-  tail: { fluffy: ['🐿️', 'Fluffy'], pom: ['☁️', 'Pom-Pom'] },
+  tail: { none: ['🚫', 'None'], fluffy: ['🐿️', 'Fluffy'], pom: ['☁️', 'Pom-Pom'] },
   eyeStyle: { round: ['😊', 'Round'], sparkly: ['🤩', 'Sparkly'], sleepy: ['😌', 'Sleepy'] },
 };
 
