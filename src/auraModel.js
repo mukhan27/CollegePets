@@ -1,164 +1,114 @@
-// Authored-model path for the player's "Aura" species. Loads AI-generated .glb
-// assets (a recolorable base body + swappable ear/tail parts), normalizes and
-// toon-shades them like interiors.js does for furniture props, caches the parsed
-// scenes, and assembles a per-player instance synchronously so the createPet()
-// contract (a Group with userData {head, legs, tail, ears}) is preserved.
-//
-// If the assets are absent (not yet generated / offline first paint), preloadAura
-// resolves with the cache empty and isAuraReady() stays false — createPet then
-// falls back to the primitive buildCreature so the game always boots.
+// Authored-model path for the player's "Aura" species. Loads the rigged Meshy
+// GLB (skeleton + idle clip), normalizes + caches it, and assembles a per-player
+// instance synchronously so the createPet() contract is preserved. Adds code-built
+// ears on the head and tints the coat to the chosen colour. If the asset is absent
+// (offline / first paint), isAuraReady() stays false and createPet falls back to
+// the primitive buildCreature.
 
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
-import { toonMat } from './textures.js';
+import { clone as skeletonClone } from '../vendor/addons/utils/SkeletonUtils.js';
 
 const loader = new GLTFLoader();
 const BASE = 'assets/aura/';
+const TARGET_HEIGHT = 1.7;
 
-// asset manifest — file names match assets/aura/README.md
-const PART_FILES = {
-  ears: { rounded: 'ears_rounded.glb', upright: 'ears_upright.glb', floppy: 'ears_floppy.glb' },
-  tail: { fluffy: 'tail_fluffy.glb', pom: 'tail_pom.glb' },
-};
-
-// anchor transforms (in `inner` space, matching the primitive build heights:
-// body center y≈0.56, head center y≈1.22). Tuned once the real model lands; the
-// head anchor keeps wearables sitting where they did on the 0.52-radius skull.
-const HEAD_ANCHOR = [0, 1.22, 0.1];
-const EAR_ANCHOR = [0, 0.45, -0.05]; // relative to the head anchor
-const TAIL_ANCHOR = [0, 0.6, -0.5];  // in inner space
-const TARGET_HEIGHT = 1.7;           // world units, matches the primitive creature
-
-const cache = { body: null, ears: {}, tail: {} };
+let cache = null;            // { scene, animations, head: {y,z,r} }
 let ready = false;
 let loadingPromise = null;
 
-function loadScene(url) {
+function loadGLB(url) {
   return new Promise((resolve) => {
-    loader.load(url, (gltf) => resolve(gltf.scene), undefined, () => resolve(null));
+    loader.load(url, (g) => resolve(g), undefined, (e) => { console.warn('[aura] GLB load failed', url, (e && (e.message || e.type || e)) || ''); resolve(null); });
   });
-}
-
-// guess a recolor "zone" from mesh/material naming so per-zone tinting works when
-// the model exposes named materials; everything unknown is treated as coat.
-function zoneOf(mesh) {
-  const n = ((mesh.name || '') + ' ' + ((mesh.material && mesh.material.name) || '')).toLowerCase();
-  if (/eye|pupil|iris/.test(n)) return 'eye';
-  if (/belly|tummy|chest|cream|underside/.test(n)) return 'belly';
-  if (/inner|in_ear|ear_in|canal/.test(n)) return 'accent';
-  return 'coat';
-}
-
-// replace imported materials with toon materials (same pass loadProp uses) and
-// record each mesh's recolor zone for later tinting.
-function toonify(scene) {
-  scene.traverse((o) => {
-    if (!o.isMesh) return;
-    o.castShadow = true; o.receiveShadow = true;
-    const src = o.material;
-    const color = src && src.color ? src.color.getHex() : 0xb0a080;
-    o.material = toonMat(color, { noCache: true });
-    o.userData.zone = zoneOf(o);
-  });
-  return scene;
-}
-
-// center on X/Z, drop feet to y=0, scale to TARGET_HEIGHT. Returns the applied
-// uniform scale so parts can be matched to the body.
-function normalize(scene) {
-  scene.updateMatrixWorld(true);
-  let box = new THREE.Box3().setFromObject(scene);
-  const size = new THREE.Vector3(); box.getSize(size);
-  const s = TARGET_HEIGHT / (size.y || 1);
-  scene.scale.multiplyScalar(s);
-  scene.updateMatrixWorld(true);
-  box = new THREE.Box3().setFromObject(scene);
-  const center = new THREE.Vector3(); box.getCenter(center);
-  scene.position.x -= center.x;
-  scene.position.z -= center.z;
-  scene.position.y -= box.min.y;
-  return s;
 }
 
 export function isAuraReady() { return ready; }
 
-// Load body + every part once. Idempotent; never rejects.
+// Load + normalize the rigged body once. Idempotent; never rejects.
 export function preloadAura() {
   if (loadingPromise) return loadingPromise;
   loadingPromise = (async () => {
-    const body = await loadScene(BASE + 'body.glb');
-    if (!body) { ready = false; return false; } // no assets yet → primitive fallback
-    cache.bodyScale = normalize(toonify(body));
-    cache.body = body;
+   try {
+    const g = await loadGLB(BASE + 'body.glb');
+    if (!g) { ready = false; return false; }
+    const scene = g.scene;
 
-    for (const [kind, files] of Object.entries(PART_FILES)) {
-      for (const [key, file] of Object.entries(files)) {
-        const part = await loadScene(BASE + file);
-        if (!part) continue;
-        toonify(part);
-        part.scale.multiplyScalar(cache.bodyScale); // match the body's normalization
-        cache[kind][key] = part;
-      }
-    }
+    // normalize: scale to TARGET_HEIGHT, centre on X/Z, drop feet to y=0
+    scene.updateMatrixWorld(true);
+    let box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3(); box.getSize(size);
+    scene.scale.multiplyScalar(TARGET_HEIGHT / (size.y || 1));
+    scene.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(scene);
+    const c = new THREE.Vector3(); box.getCenter(c);
+    scene.position.x -= c.x; scene.position.z -= c.z; scene.position.y -= box.min.y;
+    scene.updateMatrixWorld(true);
+
+    // remember head metrics (top ~quarter of the body) for ear/wearable anchors
+    box = new THREE.Box3().setFromObject(scene);
+    const headTop = box.max.y;
+    const headR = (box.max.x - box.min.x) * 0.5 * 0.78;
+    cache = { scene, animations: g.animations || [], head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR } };
     ready = true;
     return true;
+   } catch (e) { console.warn('[aura] preload error', e && e.message, e && e.stack); ready = false; return false; }
   })();
   return loadingPromise;
 }
 
-// pick the tint for a zone from the appearance object
-function tintFor(zone, a) {
-  if (zone === 'eye') return a.eyeColor;
-  if (zone === 'belly') return a.bellyColor;
-  if (zone === 'accent') return a.accentColor;
-  return a.bodyColor;
+function smoothMesh(geo, hex, rough = 0.82) {
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0 }));
+  m.castShadow = true;
+  return m;
+}
+const SPHERE = new THREE.SphereGeometry(1, 18, 14);
+function blob(r, hex, sx = 1, sy = 1, sz = 1) { const m = smoothMesh(SPHERE, hex); m.scale.set(r * sx, r * sy, r * sz); return m; }
+
+// code-built ear pair attached to the head anchor (so the ear-flap animation works).
+// Each ear hugs the head side so it reads as attached, not a floating disc.
+function addEars(head, a, ears) {
+  if (a.ears === 'none') return;
+  const r = cache.head.r, coat = a.bodyColor;
+  for (const s of [-1, 1]) {
+    let ear;
+    if (a.ears === 'upright') {            // tall pointed ears, up and slightly out
+      ear = blob(r * 0.3, coat, 0.75, 1.6, 0.75);
+      ear.position.set(s * r * 0.52, r * 0.92, 0); ear.rotation.z = s * 0.14;
+    } else if (a.ears === 'rounded') {      // small round ears on top corners
+      ear = blob(r * 0.34, coat, 0.95, 0.95, 0.9);
+      ear.position.set(s * r * 0.6, r * 0.86, 0);
+    } else {                                // floppy (default) — soft lobes draping the sides
+      ear = blob(r * 0.46, coat, 0.72, 1.45, 0.8);
+      ear.position.set(s * r * 0.74, r * 0.06, 0); ear.rotation.z = s * 0.30;
+    }
+    head.add(ear); ears.push(ear);
+  }
 }
 
-// clone a cached scene and recolor it per the appearance zones
-function cloneTinted(scene, a, forceZone) {
-  const c = scene.clone(true);
-  c.traverse((o) => {
-    if (!o.isMesh) return;
-    const zone = forceZone || o.userData.zone || 'coat';
-    o.material = toonMat(tintFor(zone, a), { noCache: true });
-  });
-  return c;
-}
-
-// Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape.
+// Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape,
+// plus a `mixer` that createPet drives each frame.
 export function buildAura(inner, a) {
-  const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
-  inner.scale.setScalar(sizeScale);
+  const model = skeletonClone(cache.scene);
+  // tint the coat (multiply over the baked texture); fresh materials per instance
+  const tint = (m) => { const c = m.clone(); if (c.color) c.color.setHex(a.bodyColor); return c; };
+  model.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    o.castShadow = true; o.receiveShadow = true;
+    o.material = Array.isArray(o.material) ? o.material.map(tint) : tint(o.material);
+  });
+  inner.add(model);
 
-  inner.add(cloneTinted(cache.body, a));
-
-  // head anchor: wearables + the eating food-prop parent here (radius-0.52 offsets)
+  // head anchor (world-aligned, at the top of the head) for ears + wearables
   const head = new THREE.Group();
-  head.position.set(...HEAD_ANCHOR);
+  head.position.set(0, cache.head.y, cache.head.z * 0.4);
   inner.add(head);
 
-  // ears: the selected pair, wrapped in an anchor group so the ear-flap animation
-  // (ears[].rotation.x) sweeps it; parented to the head so it rides wearables/head.
   const ears = [];
-  const earPart = cache.ears[a.ears];
-  if (earPart) {
-    const earAnchor = new THREE.Group();
-    earAnchor.position.set(...EAR_ANCHOR);
-    earAnchor.add(cloneTinted(earPart, a));
-    head.add(earAnchor);
-    ears.push(earAnchor);
-  }
+  addEars(head, a, ears);
 
-  // tail: anchor group so the wag animation (tail.rotation.y) works
-  let tail = null;
-  const tailPart = cache.tail[a.tail];
-  if (tailPart) {
-    tail = new THREE.Group();
-    tail.position.set(...TAIL_ANCHOR);
-    tail.add(cloneTinted(tailPart, a));
-    inner.add(tail);
-  }
+  const mixer = new THREE.AnimationMixer(model);
+  if (cache.animations[0]) mixer.clipAction(cache.animations[0]).play();
 
-  // fused mesh has no separable legs; the hop+squash carries the walk read
-  return { head, legs: [], tail, ears };
+  return { head, legs: [], tail: null, ears, mixer };
 }

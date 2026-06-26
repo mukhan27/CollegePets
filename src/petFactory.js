@@ -287,7 +287,7 @@ const BUILDERS = {
 
 // curated toon swatch palettes for the creator. Soft toy-vinyl tones — clean
 // white leads (the canon look), with gentle pastels so every Aura feels distinct.
-export const COAT_SWATCHES = [0xffffff, 0xf3e9da, 0xd8e6f2, 0xf6dce4, 0xe2f0dc, 0xefe6f5, 0xf7ead0, 0xdfeeea, 0xe8e2da, 0xcfd6dd];
+export const COAT_SWATCHES = [0xffffff, 0xf2ece1, 0xe8dcc8, 0xdac9ad, 0xc9b598, 0xb39d82, 0xd8d2cb, 0xb9b2a8, 0x9a9183, 0x8a7d6a];
 export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
 export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks
 export const SPOT_SWATCHES = [0xcfcfcf, 0xbfbfbf, 0xe0d6c8, 0xd6c0c0, 0xc8d2dc, 0xbcbcc6]; // soft markings
@@ -298,7 +298,7 @@ export const CREATURE_OPTIONS = {
   size: ['small', 'medium', 'tall'],
   fur: ['velvety', 'silky', 'shaggy'],           // Smooth / Soft / Fuzzy
   pattern: ['none', 'spots', 'stripes', 'patch', 'freckles'],
-  ears: ['rounded', 'upright', 'floppy'],         // Round / Upright / Floppy
+  ears: ['none', 'rounded', 'upright', 'floppy'], // None / Round / Upright / Floppy
   tail: ['none', 'fluffy', 'pom'],                // None / Long Fluffy / Pom-Pom
   eyeStyle: ['round', 'sparkly', 'sleepy'],
 };
@@ -323,7 +323,7 @@ export function randomCreature() {
     pattern: pick(CREATURE_OPTIONS.pattern), patternColor: pick(SPOT_SWATCHES), fur: pick(CREATURE_OPTIONS.fur),
     ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail),
     eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle),
-    blush: Math.random() < 0.72,
+    blush: false,
   };
 }
 
@@ -676,7 +676,16 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   // hop + squash walk, idle breathing/tail-wag — driven from the main loop
   const baseHeadY = parts.head.position.y;
   const baseScaleY = inner.scale.y;
+  let prevT = 0;
   g.userData.animate = (t, moving) => {
+    // rigged authored model: let the skeletal clip drive it, plus a soft ear flap
+    if (parts.mixer) {
+      const dt = prevT ? Math.min(0.05, t - prevT) : 0; prevT = t;
+      parts.mixer.update(dt);
+      inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0; // gentle walk hop
+      for (const e of parts.ears) e.rotation.x = Math.sin(t * 3 + 1) * 0.07;
+      return;
+    }
     if (moving) {
       const hop = Math.abs(Math.sin(t * 9));
       inner.position.y = hop * 0.09;

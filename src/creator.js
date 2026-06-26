@@ -50,7 +50,7 @@ function rebuildPet() {
 function loop() {
   raf = requestAnimationFrame(loop);
   if (!pet) return;
-  if (!dragging) spin += 0.004;
+  // no auto-spin — the player rotates the character by dragging (or arrows)
   pet.rotation.y = spin;
   if (pet.userData.animate) pet.userData.animate(performance.now() / 1000, false);
   renderer.render(scene, camera);
@@ -62,17 +62,14 @@ const LABELS = {
   size: { small: ['🐁', 'Small'], medium: ['🐈', 'Medium'], tall: ['🦒', 'Tall'] },
   fur: { velvety: ['⚪', 'Smooth'], silky: ['🪶', 'Soft'], shaggy: ['🧶', 'Fuzzy'] },
   pattern: { none: ['⬜', 'Plain'], spots: ['🐆', 'Spots'], stripes: ['🦓', 'Stripes'], patch: ['🥚', 'Patch'], freckles: ['✨', 'Freckles'] },
-  ears: { rounded: ['🐻', 'Rounded'], upright: ['🐰', 'Upright'], floppy: ['🐶', 'Floppy'] },
+  ears: { none: ['🚫', 'None'], rounded: ['🐻', 'Rounded'], upright: ['🐰', 'Upright'], floppy: ['🐶', 'Floppy'] },
   tail: { none: ['🚫', 'None'], fluffy: ['🐿️', 'Fluffy'], pom: ['☁️', 'Pom-Pom'] },
   eyeStyle: { round: ['😊', 'Round'], sparkly: ['🤩', 'Sparkly'], sleepy: ['😌', 'Sleepy'] },
 };
 
 const TABS = [
-  { id: 'body', label: 'Body' },
-  { id: 'color', label: 'Colors' },
-  { id: 'coat', label: 'Coat' },
-  { id: 'eyes', label: 'Eyes' },
-  { id: 'earstail', label: 'Ears & Tail' },
+  { id: 'color', label: 'Colour' },
+  { id: 'ears', label: 'Ears' },
 ];
 
 // ---- DOM builders ----
@@ -119,26 +116,10 @@ function swatchRow(box, field, colors, header_) {
 
 function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
-  if (activeTab === 'body') {
-    enumChips(box, 'build', 'Shape');
-    enumChips(box, 'size', 'Size');
-  } else if (activeTab === 'color') {
-    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Coat');
-    swatchRow(box, 'bellyColor', BELLY_SWATCHES, 'Belly');
-    swatchRow(box, 'accentColor', ACCENT_SWATCHES, 'Inner ear');
-  } else if (activeTab === 'coat') {
-    enumChips(box, 'fur', 'Fur texture');
-    enumChips(box, 'pattern', 'Markings');
-    swatchRow(box, 'patternColor', SPOT_SWATCHES, 'Marking colour');
-  } else if (activeTab === 'eyes') {
-    enumChips(box, 'eyeStyle', 'Eyes');
-    swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
-    box.appendChild(header('Blush'));
-    box.appendChild(chip('😊', 'On', '', appearance.blush === true, () => set('blush', true)));
-    box.appendChild(chip('😐', 'Off', '', appearance.blush === false, () => set('blush', false)));
-  } else if (activeTab === 'earstail') {
-    enumChips(box, 'ears', 'Ears');
-    enumChips(box, 'tail', 'Tail');
+  if (activeTab === 'color') {
+    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Coat colour');
+  } else if (activeTab === 'ears') {
+    enumChips(box, 'ears', 'Ear shape');
   }
 }
 
@@ -171,7 +152,7 @@ export function openCreator(done, { editing = false } = {}) {
   initStage();
   bindOnce();
   appearance = JSON.parse(JSON.stringify(state.creature || defaultCreature()));
-  activeTab = 'body';
+  activeTab = 'color';
   $('creator-name').value = editing ? (state.petName || '') : '';
   $('creator-start').textContent = editing ? 'Save ✓' : 'Start College! 🎒';
   $('creator-screen').style.display = 'flex';
