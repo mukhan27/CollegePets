@@ -285,9 +285,14 @@ const BUILDERS = {
 // shape so createPet's animation loop is reused. Head radius stays 0.52 so all
 // existing wearables fit.
 
-// curated toon swatch palettes for the creator. Soft toy-vinyl tones — clean
-// white leads (the canon look), with gentle pastels so every Aura feels distinct.
-export const COAT_SWATCHES = [0xffffff, 0xf2ece1, 0xe8dcc8, 0xdac9ad, 0xc9b598, 0xb39d82, 0xd8d2cb, 0xb9b2a8, 0x9a9183, 0x8a7d6a];
+// curated coat palette for the creator: real animal coats (white→cream→fawn→
+// golden→brown→chocolate→ginger, greys→charcoal→soft black) plus muted colours
+// that read as distinct without ever going neon.
+export const COAT_SWATCHES = [
+  0xf7f3ea, 0xe7d6b8, 0xd2b48c, 0xc89b5c, 0xa9743f, 0x76502f, 0xb86b3a,
+  0xc3c5c6, 0x9398a4, 0x6c7075, 0x44464a,
+  0x7fa8c9, 0x8fb89a, 0xab97c8, 0xdda0a8, 0x6fb3aa, 0xd9b566, 0xd28e6e,
+];
 export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
 export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks
 export const SPOT_SWATCHES = [0xcfcfcf, 0xbfbfbf, 0xe0d6c8, 0xd6c0c0, 0xc8d2dc, 0xbcbcc6]; // soft markings
@@ -308,7 +313,7 @@ export function defaultCreature() {
   // black eyes, soft floppy ears, little nose, no tail.
   return {
     build: 'round', size: 'medium',
-    bodyColor: 0xffffff, bellyColor: 0xf3f3f3, accentColor: 0xf0b8c0,
+    bodyColor: 0xf7f3ea, bellyColor: 0xf3f3f3, accentColor: 0xf0b8c0,
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
     eyeColor: 0x1a1a1a, eyeStyle: 'round', blush: false,
