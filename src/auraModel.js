@@ -56,7 +56,7 @@ export function preloadAura() {
     cache = {
       scene, animations: g.animations || [],
       head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR },
-      features: buildFeatureMask(scene), texSize: MASK_SIZE,
+      tex: buildTexturePrep(scene),
     };
     ready = true;
     return true;
@@ -66,9 +66,11 @@ export function preloadAura() {
 }
 
 // ---- texture recolouring -------------------------------------------------
-// Build a one-time "features" canvas from the GLB texture: the dark eye/nose/
-// mouth islands become opaque, the white fur becomes transparent. Recolouring is
-// then just "fill with coat colour, stamp the features on top".
+// The coat is recoloured by REPAINTING the texture, not by adding geometry. We
+// only repaint the fur pixels; the dark eye/nose/mouth islands AND the small
+// light catchlight inside each eye keep their original colour, so neither the
+// pupils nor their highlight ever pick up the coat colour.
+
 function findSourceImage(scene) {
   let img = null;
   scene.traverse((o) => {
@@ -82,38 +84,53 @@ function findSourceImage(scene) {
   return img;
 }
 
-function buildFeatureMask(scene) {
+// One-time prep: original pixels + a fur mask (border-connected light pixels).
+// Recolouring then just rewrites the fur pixels per colour; every dark feature
+// AND the enclosed eye catchlights keep their original colour.
+function buildTexturePrep(scene) {
   const img = findSourceImage(scene);
   if (!img || typeof document === 'undefined') return null;
   const s = MASK_SIZE;
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
   const cx = cv.getContext('2d', { willReadFrequently: true });
   cx.drawImage(img, 0, 0, s, s);
-  const id = cx.getImageData(0, 0, s, s);
-  const d = id.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-    // dark = feature (opaque), light = fur (transparent); contrast-stretch the edge
-    let a = (215 - lum) * 2.2;
-    a = a < 0 ? 0 : a > 255 ? 255 : a;
-    // force features to pure black so eyes/pupils never pick up the coat colour
-    d[i] = d[i + 1] = d[i + 2] = 0;
-    d[i + 3] = a;
+  const orig = cx.getImageData(0, 0, s, s);
+  const d = orig.data;
+
+  // fur = light pixels reachable from the border. Enclosed light pixels (the eye
+  // catchlights) are NOT reached, so they stay their original white.
+  const fur = new Uint8Array(s * s);
+  const lum = (idx) => { const p = idx * 4; return d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; };
+  const stack = [];
+  const push = (idx) => { if (!fur[idx] && lum(idx) > 165) { fur[idx] = 1; stack.push(idx); } };
+  for (let x = 0; x < s; x++) { push(x); push((s - 1) * s + x); }
+  for (let y = 0; y < s; y++) { push(y * s); push(y * s + s - 1); }
+  while (stack.length) {
+    const idx = stack.pop(), x = idx % s, y = (idx / s) | 0;
+    if (x > 0) push(idx - 1); if (x < s - 1) push(idx + 1);
+    if (y > 0) push(idx - s); if (y < s - 1) push(idx + s);
   }
-  cx.putImageData(id, 0, 0);
-  return cv;
+
+  return { orig, fur, size: s };
 }
 
 const texCache = new Map();  // hex -> CanvasTexture (bounded; recolour is reused)
 function coatTexture(hex) {
-  if (!cache.features) return null;
+  const prep = cache.tex;
+  if (!prep) return null;
   if (texCache.has(hex)) return texCache.get(hex);
-  const s = cache.texSize;
+  const s = prep.size;
+  const out = new Uint8ClampedArray(prep.orig.data);   // start from the original
+  const coat = new THREE.Color(hex);
+  const cR = coat.r * 255, cG = coat.g * 255, cB = coat.b * 255;
+  const fur = prep.fur;
+  for (let i = 0; i < fur.length; i++) {
+    if (!fur[i]) continue;                              // features/catchlights: untouched
+    const p = i * 4;
+    out[p] = cR; out[p + 1] = cG; out[p + 2] = cB;
+  }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
-  const cx = cv.getContext('2d');
-  cx.fillStyle = '#' + new THREE.Color(hex).getHexString();
-  cx.fillRect(0, 0, s, s);
-  cx.drawImage(cache.features, 0, 0);
+  cv.getContext('2d').putImageData(new ImageData(out, s, s), 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   tex.needsUpdate = true;
@@ -149,27 +166,6 @@ function addEars(head, a, ears) {
     }
     head.add(ear); ears.push(ear);
   }
-}
-
-// A contrasting shade derived from the coat: lighter for dark coats, a touch
-// deeper for light ones, so the muzzle always reads as a distinct patch.
-function contrastColor(hex) {
-  const c = new THREE.Color(hex);
-  const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
-  return lum > 0.62
-    ? c.clone().multiplyScalar(0.66)
-    : c.clone().lerp(new THREE.Color(0xfdf6ec), 0.55);
-}
-
-// Soft contrasting muzzle patch on the front-lower face. Attached to the head
-// anchor (like the ears) so it tracks the head. Returns the mesh for animation.
-function addMuzzle(head, a) {
-  const r = cache.head.r;
-  const col = contrastColor(a.bodyColor).getHex();
-  const m = blob(r * 0.32, col, 1.15, 0.82, 0.55);
-  m.position.set(0, -r * 0.5, r * 0.82);
-  head.add(m);
-  return m;
 }
 
 // Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape,
@@ -209,7 +205,6 @@ export function buildAura(inner, a) {
 
   const ears = [];
   addEars(head, a, ears);
-  addMuzzle(head, a);
 
   const mixer = new THREE.AnimationMixer(model);
   if (cache.animations[0]) mixer.clipAction(cache.animations[0]).play();
