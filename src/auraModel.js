@@ -151,6 +151,27 @@ function addEars(head, a, ears) {
   }
 }
 
+// A contrasting shade derived from the coat: lighter for dark coats, a touch
+// deeper for light ones, so the muzzle always reads as a distinct patch.
+function contrastColor(hex) {
+  const c = new THREE.Color(hex);
+  const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+  return lum > 0.62
+    ? c.clone().multiplyScalar(0.66)
+    : c.clone().lerp(new THREE.Color(0xfdf6ec), 0.55);
+}
+
+// Soft contrasting muzzle patch on the front-lower face. Attached to the head
+// anchor (like the ears) so it tracks the head. Returns the mesh for animation.
+function addMuzzle(head, a) {
+  const r = cache.head.r;
+  const col = contrastColor(a.bodyColor).getHex();
+  const m = blob(r * 0.32, col, 1.15, 0.82, 0.55);
+  m.position.set(0, -r * 0.5, r * 0.82);
+  head.add(m);
+  return m;
+}
+
 // Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape,
 // plus a `mixer` that createPet drives each frame.
 export function buildAura(inner, a) {
@@ -188,6 +209,7 @@ export function buildAura(inner, a) {
 
   const ears = [];
   addEars(head, a, ears);
+  addMuzzle(head, a);
 
   const mixer = new THREE.AnimationMixer(model);
   if (cache.animations[0]) mixer.clipAction(cache.animations[0]).play();
