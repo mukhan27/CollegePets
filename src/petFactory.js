@@ -354,23 +354,23 @@ function shade(hex, f) {
   return (r << 16) | (g << 8) | b;
 }
 
-// the toy face: big glossy oval eyes + highlight, soft worried brows, little nose
+// the toy face: big glossy oval eyes + soft highlight, subtle worried brows, nose
 function creatureFace(head, a) {
   const sparkly = a.eyeStyle === 'sparkly', sleepy = a.eyeStyle === 'sleepy';
-  const eyeR = sparkly ? 0.12 : 0.11;
-  const eyeSy = sleepy ? 0.85 : 1.32;
+  const eyeR = sparkly ? 0.135 : 0.125;
+  const eyeSy = sleepy ? 0.8 : 1.28;
   for (const s of [-1, 1]) {
-    const eye = ball(eyeR, a.eyeColor, 0.92, eyeSy, 0.5);
-    eye.position.set(s * 0.21, 0.04, 0.45); head.add(eye);
-    const shine = ball(0.038, 0xffffff, 1, 1, 0.6);
-    shine.position.set(s * 0.21 + 0.04, 0.13, 0.49); head.add(shine);
-    if (sparkly) { const sh2 = ball(0.022, 0xffffff, 1, 1, 0.6); sh2.position.set(s * 0.21 - 0.035, 0.0, 0.49); head.add(sh2); }
-    // soft worried brow (a touch darker than the coat)
-    const brow = ball(0.07, shade(a.bodyColor, 0.8), 1.5, 0.34, 0.5);
-    brow.position.set(s * 0.21, 0.21, 0.45); brow.rotation.z = s * -0.16; head.add(brow);
+    const eye = ball(eyeR, a.eyeColor, 0.94, eyeSy, 0.5);
+    eye.position.set(s * 0.205, 0.02, 0.45); head.add(eye);
+    const shine = ball(0.052, 0xffffff, 1, 1, 0.6);
+    shine.position.set(s * 0.205 + 0.05, 0.13, 0.5); head.add(shine);
+    if (sparkly) { const sh2 = ball(0.026, 0xffffff, 1, 1, 0.6); sh2.position.set(s * 0.205 - 0.04, -0.04, 0.5); head.add(sh2); }
+    // subtle soft worried brow — slightly above the eye, gently angled
+    const brow = ball(0.075, shade(a.bodyColor, 0.86), 1.5, 0.2, 0.45);
+    brow.position.set(s * 0.205, 0.22, 0.46); brow.rotation.z = s * -0.13; head.add(brow);
     if (a.blush) { const b = ball(0.07, P.blush, 1, 0.6, 0.3); b.position.set(s * 0.34, -0.12, 0.4); head.add(b); }
   }
-  const nose = ball(0.055, 0x1a1a1a, 1.25, 0.95, 0.85); nose.position.set(0, -0.07, 0.49); head.add(nose);
+  const nose = ball(0.055, 0x1a1a1a, 1.25, 0.95, 0.85); nose.position.set(0, -0.08, 0.49); head.add(nose);
 }
 
 function creatureTail(inner, a) {
@@ -443,20 +443,23 @@ function buildCreature(inner, a) {
   inner.scale.setScalar(sizeScale);
   const bw = a.build === 'slim' ? 0.92 : a.build === 'chonky' ? 1.16 : 1.0; // body width factor
 
-  // smooth egg-shaped body (small relative to the big head)
-  const body = ball(0.40, a.bodyColor, bw, 1.06, 0.98 * bw);
-  body.position.y = 0.52; inner.add(body); addOutline(body, 1.04);
+  // smooth egg-shaped body (small relative to the big head). No outline — this
+  // species uses soft vinyl-toy shading instead of the cel outline, so the head
+  // and body blend into one seamless form (see smooth-material pass below).
+  const body = ball(0.40, a.bodyColor, bw, 1.08, 0.98 * bw);
+  body.position.y = 0.54; inner.add(body);
 
   if (a.pattern === 'patch') {            // optional belly patch (off by default)
     const belly = ball(0.3, a.patternColor, 0.9 * bw, 0.95, 0.6);
-    belly.position.set(0, 0.48, 0.22); inner.add(belly);
+    belly.position.set(0, 0.5, 0.22); inner.add(belly);
   }
 
-  // big round head — radius locked at 0.52 so all wearables still fit
+  // big round head — radius locked at 0.52 so all wearables still fit. Sunk into
+  // the body a touch (no outline) for a seamless neck.
   const head = new THREE.Group();
-  head.position.set(0, 1.18, 0.08);
-  const skull = ball(0.52, a.bodyColor, 1.04, 0.97, 1.0);
-  head.add(skull); addOutlineLater(head, skull, 1.04);
+  head.position.set(0, 1.12, 0.08);
+  const skull = ball(0.52, a.bodyColor, 1.05, 0.98, 1.0);
+  head.add(skull);
 
   creatureFace(head, a);
   const ears = [];
@@ -481,6 +484,17 @@ function buildCreature(inner, a) {
     foot.position.set(s * 0.16 * bw, 0.06, 0.06);
     inner.add(foot); legs.push(foot);
   }
+
+  // smooth-vinyl pass: swap this species off the cel-shaded toon material onto
+  // soft standard shading (no hard bands, no outline) to match the toy look.
+  // Dark parts (eyes, nose) get a glossy finish; everything else is soft-matte.
+  inner.traverse((o) => {
+    if (!o.isMesh) return;
+    const hex = o.material.color.getHex();
+    const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
+    o.material = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.3 : 0.82, metalness: 0 });
+  });
+
   return { head, legs, tail, ears };
 }
 
