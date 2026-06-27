@@ -699,6 +699,8 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
     if (parts.mixer) {
       const dt = prevT ? Math.min(0.05, t - prevT) : 0; prevT = t;
       parts.mixer.update(dt);
+      // re-tuck the arms after the clip sets the bones (turns the A-pose into idle)
+      if (parts.arms) for (const a of parts.arms) a.b.quaternion.premultiply(a.q);
       inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0; // gentle walk hop
       for (const e of parts.ears) e.rotation.x = Math.sin(t * 3 + 1) * 0.07;
       return;

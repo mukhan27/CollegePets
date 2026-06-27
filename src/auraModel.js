@@ -359,9 +359,10 @@ export function buildAura(inner, a) {
   });
   inner.add(model);
 
-  // head anchor (world-aligned, at the top of the head) for ears + wearables
+  // head anchor (world-aligned, near the crown) for ears + wearables. Keep it
+  // centred over the head (no forward push) so ears sit on top, not in front.
   const head = new THREE.Group();
-  head.position.set(0, cache.head.y, cache.head.z * 0.4);
+  head.position.set(0, cache.head.y, 0);
   inner.add(head);
 
   const ears = [];
@@ -370,5 +371,26 @@ export function buildAura(inner, a) {
   const mixer = new THREE.AnimationMixer(model);
   if (cache.animations[0]) mixer.clipAction(cache.animations[0]).play();
 
-  return { head, legs: [], tail: null, ears, mixer };
+  // Relax the arms out of the authored A-pose down to the sides. We compute, per
+  // arm, the world rotation that swings the upper-arm direction down to the body,
+  // then express it in the bone's parent frame so it can be pre-applied on top of
+  // the clip each frame (createPet re-applies it after every mixer update).
+  inner.updateMatrixWorld(true);
+  const armSetup = (name) => {
+    const b = model.getObjectByName(name), child = b && b.children[0];
+    if (!b || !child) return null;
+    const a = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+    const c = new THREE.Vector3().setFromMatrixPosition(child.matrixWorld);
+    const u = c.sub(a).normalize();                       // current arm direction (world)
+    const out = Math.sign(u.x) || 1;                      // which side this arm is on
+    const v = new THREE.Vector3(out * ARM_OUT, -1, 0).normalize(); // target: mostly down
+    const Rw = new THREE.Quaternion().setFromUnitVectors(u, v);
+    const Qp = new THREE.Quaternion(); b.parent.getWorldQuaternion(Qp);
+    const q = Qp.clone().invert().multiply(Rw).multiply(Qp); // world rot → parent frame
+    return { b, q };
+  };
+  const arms = [armSetup('LeftArm'), armSetup('RightArm')].filter(Boolean);
+
+  return { head, legs: [], tail: null, ears, arms, mixer };
 }
+const ARM_OUT = 0.18;   // how far the relaxed arms splay from straight-down
