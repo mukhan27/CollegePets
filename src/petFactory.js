@@ -302,9 +302,10 @@ export const MUZZLE_SWATCHES = [
   0xe8dcc6, 0xdcc7a4, 0xc9a87e, 0xb0895e, 0x8a6a48,
   0xf4cdc4, 0xe79aa2, 0xcfd3d6, 0x9aa0a6, 0x46484c,
 ];
-// eye / pupil (flat fill): near-black, browns, then bright irises
+// eye / iris colours — natural shades: near-black, browns, hazel/amber, then
+// muted blue / green / grey (rendered with a brightness floor so they read).
 export const EYE_SWATCHES = [
-  0x161616, 0x3a2a1e, 0x6a4a2e, 0x2f6fb0, 0x2f8f6a, 0x9c6b2e, 0x7a4fb0, 0xb0402f,
+  0x2a2018, 0x4a3526, 0x6e4a2c, 0x8a5e30, 0x3a5a78, 0x3f6f5a, 0x5c5c66, 0x4a3550,
 ];
 
 export const CREATURE_OPTIONS = {
@@ -326,7 +327,7 @@ export function defaultCreature() {
     muzzleColor: 0xe8dcc6,
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
-    eyeColor: 0x161616, eyeStyle: 'round', blush: false,
+    eyeColor: 0x2a2018, eyeStyle: 'round', blush: false,
   };
 }
 
