@@ -265,54 +265,53 @@ const innerShade = (coat) => new THREE.Color(coat).multiplyScalar(0.7).getHex();
 // head centre. The returned object's rotation.x is left free for the ear-flap.
 export const EAR_TYPES = ['none', 'round', 'pointed', 'tall', 'floppy', 'folded', 'wide'];
 
+// Build one ear: a flattened outer shell + a recessed inner-ear, with a base
+// tilt stored in userData.flapX (the flap animation adds to it instead of
+// overwriting, so folds/tilts survive). `lobe` builds the two-shell ear.
+function lobe(geo, r, coat, inner, ox, oy, oz, ix, iy, iz, iyOff, izOff) {
+  const g = new THREE.Group();
+  g.add(part(geo, coat, r * ox, r * oy, r * oz));
+  const inr = part(geo, inner, r * ix, r * iy, r * iz);
+  inr.position.set(0, r * iyOff, r * izOff); g.add(inr);
+  return g;
+}
+function place(g, s, r, px, py, pz, rx, ry, rz) {
+  g.position.set(s * r * px, r * py, r * pz);
+  g.rotation.set(rx, s * ry, s * rz);
+  g.userData.flapX = rx;                 // base tilt; flap animates around it
+  return g;
+}
+
 const EAR_BUILDERS = {
-  // soft bear-cub buttons on the crown
+  // soft rounded bear ears — flat discs on the crown, leaned back a touch
   round(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(SPHERE, coat, r * 0.36, r * 0.36, r * 0.26));
-    const i = part(SPHERE, inner, r * 0.22, r * 0.22, r * 0.2); i.position.set(0, 0, r * 0.16); g.add(i);
-    g.position.set(s * r * 0.62, r * 0.8, r * 0.05);
-    return g;
+    const g = lobe(SPHERE, r, coat, inner, 0.42, 0.42, 0.15, 0.26, 0.26, 0.1, -0.02, 0.1);
+    return place(g, s, r, 0.58, 0.82, -0.05, -0.14, -0.25, 0);
   },
-  // pointed cat triangles, splayed slightly out
+  // upright pointed cat ears — thin triangles
   pointed(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(CONE, coat, r * 0.34, r * 0.62, r * 0.2));
-    const i = part(CONE, inner, r * 0.2, r * 0.46, r * 0.12); i.position.set(0, -r * 0.05, r * 0.1); g.add(i);
-    g.position.set(s * r * 0.5, r * 0.92, 0); g.rotation.z = -s * 0.16;
-    return g;
+    const g = lobe(CONE, r, coat, inner, 0.32, 0.66, 0.14, 0.18, 0.5, 0.09, -0.06, 0.08);
+    return place(g, s, r, 0.46, 0.9, -0.04, -0.12, 0, -0.18);
   },
-  // long rounded bunny ears, standing tall
+  // long upright bunny ears
   tall(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(SPHERE, coat, r * 0.2, r * 0.78, r * 0.16));
-    const i = part(SPHERE, inner, r * 0.11, r * 0.6, r * 0.1); i.position.set(0, r * 0.02, r * 0.09); g.add(i);
-    g.position.set(s * r * 0.4, r * 1.15, 0); g.rotation.z = -s * 0.1;
-    return g;
+    const g = lobe(SPHERE, r, coat, inner, 0.18, 0.82, 0.12, 0.1, 0.64, 0.08, 0.02, 0.08);
+    return place(g, s, r, 0.36, 1.18, -0.04, -0.1, 0, -0.08);
   },
-  // wide soft lobes draping down the sides (default puppy)
+  // wide floppy puppy ears draping the sides
   floppy(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(SPHERE, coat, r * 0.34, r * 0.62, r * 0.2));
-    const i = part(SPHERE, inner, r * 0.2, r * 0.44, r * 0.12); i.position.set(0, 0, r * 0.1); g.add(i);
-    g.position.set(s * r * 0.74, r * 0.34, 0); g.rotation.z = s * 0.5;
-    return g;
+    const g = lobe(SPHERE, r, coat, inner, 0.3, 0.66, 0.14, 0.17, 0.46, 0.09, 0.05, 0.08);
+    return place(g, s, r, 0.66, 0.42, -0.02, 0.05, 0, 0.72);
   },
-  // small folded-over flaps (scottish-fold style)
+  // small folded-down flaps (scottish-fold style)
   folded(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(SPHERE, coat, r * 0.32, r * 0.24, r * 0.2));
-    const i = part(SPHERE, inner, r * 0.18, r * 0.13, r * 0.12); i.position.set(0, -r * 0.04, r * 0.13); g.add(i);
-    g.position.set(s * r * 0.58, r * 0.7, r * 0.08); g.rotation.x = 0.7; g.rotation.z = s * 0.2;
-    return g;
+    const g = lobe(SPHERE, r, coat, inner, 0.34, 0.26, 0.13, 0.2, 0.14, 0.08, -0.05, 0.1);
+    return place(g, s, r, 0.54, 0.74, 0.02, 0.9, 0, 0.18);
   },
-  // big round panda discs, set wide
+  // big round panda ears, set wide
   wide(s, r, coat, inner) {
-    const g = new THREE.Group();
-    g.add(part(SPHERE, coat, r * 0.46, r * 0.46, r * 0.22));
-    const i = part(SPHERE, inner, r * 0.3, r * 0.3, r * 0.16); i.position.set(0, 0, r * 0.14); g.add(i);
-    g.position.set(s * r * 0.78, r * 0.62, 0);
-    return g;
+    const g = lobe(SPHERE, r, coat, inner, 0.48, 0.48, 0.16, 0.3, 0.3, 0.11, 0, 0.11);
+    return place(g, s, r, 0.74, 0.64, -0.05, -0.12, -0.2, 0);
   },
 };
 

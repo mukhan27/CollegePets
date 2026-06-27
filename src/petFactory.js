@@ -702,7 +702,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
       // re-tuck the arms after the clip sets the bones (turns the A-pose into idle)
       if (parts.arms) for (const a of parts.arms) a.b.quaternion.premultiply(a.q);
       inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0; // gentle walk hop
-      for (const e of parts.ears) e.rotation.x = Math.sin(t * 3 + 1) * 0.07;
+      for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.07;
       return;
     }
     if (moving) {
@@ -723,7 +723,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
     // eating: a quick chewing head-nod that overrides the idle/walk head tilt
     parts.head.rotation.x = (g.userData.eatUntil && t < g.userData.eatUntil) ? (-0.16 + Math.abs(Math.sin(t * 14)) * 0.22) : 0;
     if (parts.tail) parts.tail.rotation.y = Math.sin(t * 5) * 0.35;
-    for (const e of parts.ears) e.rotation.x = Math.sin(t * 3 + 1) * 0.08;
+    for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.08;
   };
   return g;
 }
