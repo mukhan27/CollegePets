@@ -115,7 +115,7 @@ function defaults() {
 function ensureShape(s) {
   const d = defaults();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['stats', 'needs', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped']) {
+  for (const k of ['stats', 'needs', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped', 'creature']) {
     if (typeof s[k] !== 'object' || s[k] === null) s[k] = d[k];
     else if (d[k] && !Array.isArray(d[k])) for (const f of Object.keys(d[k])) if (s[k][f] === undefined) s[k][f] = d[k][f];
   }

@@ -89,9 +89,15 @@ function findSourceImage(scene) {
   return img;
 }
 
-// One-time prep: original pixels + a fur mask (border-connected light pixels).
-// Recolouring then just rewrites the fur pixels per colour; every dark feature
-// AND the enclosed eye catchlights keep their original colour.
+// Per-pixel ZONE classification of the baked texture, computed once:
+//   FUR    – bright, colourless, border-reachable (the body coat)      → bodyColor
+//   MUZZLE – brightish & warm/chromatic (the baked cream snout)        → muzzleColor
+//   EYE    – dark (eyes, pupils, nose, brows)                          → eyeColor
+//   KEEP   – everything else, incl. the enclosed white eye catchlights → untouched
+// Border flood-fill defines FUR so an enclosed catchlight can never be coloured by
+// the coat. Recolouring then maps each zone to its chosen colour.
+const Z_KEEP = 0, Z_FUR = 1, Z_MUZZLE = 2, Z_EYE = 3;
+
 function buildTexturePrep(scene) {
   const img = findSourceImage(scene);
   if (!img || typeof document === 'undefined') return null;
@@ -101,53 +107,64 @@ function buildTexturePrep(scene) {
   cx.drawImage(img, 0, 0, s, s);
   const orig = cx.getImageData(0, 0, s, s);
   const d = orig.data;
+  const lumOf = (p) => d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+  const chromaOf = (p) => Math.max(d[p], d[p + 1], d[p + 2]) - Math.min(d[p], d[p + 1], d[p + 2]);
 
-  // fur = bright, COLOURLESS pixels reachable from the border. "Colourless" (low
-  // chroma) is what separates the white body fur — which recolours — from the
-  // warm baked muzzle/brows, which keep their tone. Enclosed bright pixels (the
-  // eye catchlights) aren't border-reachable, so they also stay original.
-  const fur = new Uint8Array(s * s);
-  const isFur = (idx) => {
-    const p = idx * 4, r = d[p], gg = d[p + 1], b = d[p + 2];
-    const lum = r * 0.299 + gg * 0.587 + b * 0.114;
-    const chroma = Math.max(r, gg, b) - Math.min(r, gg, b);
-    return lum > 150 && chroma < 16;
-  };
+  const zone = new Uint8Array(s * s);
+  // 1) FUR — flood-fill bright + colourless pixels inward from the border.
   const stack = [];
-  const push = (idx) => { if (!fur[idx] && isFur(idx)) { fur[idx] = 1; stack.push(idx); } };
-  for (let x = 0; x < s; x++) { push(x); push((s - 1) * s + x); }
-  for (let y = 0; y < s; y++) { push(y * s); push(y * s + s - 1); }
+  const pushFur = (idx) => {
+    if (zone[idx]) return;
+    const p = idx * 4;
+    if (lumOf(p) > 150 && chromaOf(p) < 16) { zone[idx] = Z_FUR; stack.push(idx); }
+  };
+  for (let x = 0; x < s; x++) { pushFur(x); pushFur((s - 1) * s + x); }
+  for (let y = 0; y < s; y++) { pushFur(y * s); pushFur(y * s + s - 1); }
   while (stack.length) {
     const idx = stack.pop(), x = idx % s, y = (idx / s) | 0;
-    if (x > 0) push(idx - 1); if (x < s - 1) push(idx + 1);
-    if (y > 0) push(idx - s); if (y < s - 1) push(idx + s);
+    if (x > 0) pushFur(idx - 1); if (x < s - 1) pushFur(idx + 1);
+    if (y > 0) pushFur(idx - s); if (y < s - 1) pushFur(idx + s);
   }
-
-  return { orig, fur, size: s };
+  // 2) classify the remaining pixels; track each recolour zone's brightest lum so
+  //    recolouring can preserve the baked shading (factor = lum / zoneMax).
+  let furMax = 1, muzMax = 1;
+  for (let i = 0; i < zone.length; i++) {
+    const p = i * 4, lum = lumOf(p);
+    if (zone[i] === Z_FUR) { if (lum > furMax) furMax = lum; continue; }
+    if (lum < 95) zone[i] = Z_EYE;
+    else if (chromaOf(p) >= 16 && lum > 120) { zone[i] = Z_MUZZLE; if (lum > muzMax) muzMax = lum; }
+    else zone[i] = Z_KEEP;
+  }
+  return { orig, zone, furMax, muzMax, size: s };
 }
 
-const texCache = new Map();  // hex -> CanvasTexture (bounded; recolour is reused)
-function coatTexture(hex) {
+const texCache = new Map();  // key -> CanvasTexture (bounded; recolour is reused)
+function coatTexture(bodyHex, muzzleHex, eyeHex) {
   const prep = cache.tex;
   if (!prep) return null;
-  if (texCache.has(hex)) return texCache.get(hex);
-  const s = prep.size;
-  const out = new Uint8ClampedArray(prep.orig.data);   // start from the original
-  const coat = new THREE.Color(hex);
-  const cR = coat.r * 255, cG = coat.g * 255, cB = coat.b * 255;
-  const fur = prep.fur;
-  for (let i = 0; i < fur.length; i++) {
-    if (!fur[i]) continue;                              // features/catchlights: untouched
+  const key = bodyHex + '|' + muzzleHex + '|' + eyeHex;
+  if (texCache.has(key)) return texCache.get(key);
+  const s = prep.size, d = prep.orig.data, zone = prep.zone;
+  const out = new Uint8ClampedArray(d);                 // start from the original
+  const body = new THREE.Color(bodyHex), muz = new THREE.Color(muzzleHex), eye = new THREE.Color(eyeHex);
+  const fMax = prep.furMax, mMax = prep.muzMax;
+  for (let i = 0; i < zone.length; i++) {
+    const z = zone[i]; if (z === Z_KEEP) continue;
     const p = i * 4;
-    out[p] = cR; out[p + 1] = cG; out[p + 2] = cB;
+    if (z === Z_EYE) { out[p] = eye.r * 255; out[p + 1] = eye.g * 255; out[p + 2] = eye.b * 255; continue; }
+    // FUR / MUZZLE: shade the chosen colour by the baked luminance so form survives
+    const lum = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+    const c = z === Z_FUR ? body : muz;
+    const f = Math.min(1, lum / (z === Z_FUR ? fMax : mMax));
+    out[p] = c.r * 255 * f; out[p + 1] = c.g * 255 * f; out[p + 2] = c.b * 255 * f;
   }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
   cv.getContext('2d').putImageData(new ImageData(out, s, s), 0, 0);
   const tex = new THREE.CanvasTexture(cv);
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   tex.needsUpdate = true;
-  if (texCache.size > 10) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
-  texCache.set(hex, tex);
+  if (texCache.size > 12) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
+  texCache.set(key, tex);
   return tex;
 }
 
@@ -184,10 +201,10 @@ function addEars(head, a, ears) {
 // plus a `mixer` that createPet drives each frame.
 export function buildAura(inner, a) {
   const model = skeletonClone(cache.scene);
-  // Repaint the coat: a freshly recoloured texture (fur = chosen colour, dark
-  // eyes/nose/mouth preserved) drives both the lit base colour and a soft
-  // emissive so the coat stays vivid without washing the features.
-  const coat = coatTexture(a.bodyColor);
+  // Repaint the coat: a freshly recoloured texture (fur / muzzle / eye zones each
+  // take their chosen colour, catchlights preserved) drives both the lit base
+  // colour and a soft emissive so the coat stays vivid without washing features.
+  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x1a1a1a);
   const recolour = (m) => {
     const c = m.clone();
     if (coat) {

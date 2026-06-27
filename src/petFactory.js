@@ -297,7 +297,15 @@ export const COAT_SWATCHES = [
 export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
 export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks
 export const SPOT_SWATCHES = [0xcfcfcf, 0xbfbfbf, 0xe0d6c8, 0xd6c0c0, 0xc8d2dc, 0xbcbcc6]; // soft markings
-export const EYE_SWATCHES = [0x1a1a1a, 0x3a3a44, 0x4a6e8a, 0x6a4a3a, 0x3f7d52, 0x7a5aa0];
+// muzzle / snout patch: creams & tans → browns → pinks → greys → charcoal
+export const MUZZLE_SWATCHES = [
+  0xe8dcc6, 0xdcc7a4, 0xc9a87e, 0xb0895e, 0x8a6a48,
+  0xf4cdc4, 0xe79aa2, 0xcfd3d6, 0x9aa0a6, 0x46484c,
+];
+// eye / pupil (flat fill): near-black, browns, then bright irises
+export const EYE_SWATCHES = [
+  0x161616, 0x3a2a1e, 0x6a4a2e, 0x2f6fb0, 0x2f8f6a, 0x9c6b2e, 0x7a4fb0, 0xb0402f,
+];
 
 export const CREATURE_OPTIONS = {
   build: ['slim', 'round', 'chonky'],
@@ -315,9 +323,10 @@ export function defaultCreature() {
   return {
     build: 'round', size: 'medium',
     bodyColor: 0xf7f3ea, bellyColor: 0xf3f3f3, accentColor: 0xf0b8c0,
+    muzzleColor: 0xe8dcc6,
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
-    eyeColor: 0x1a1a1a, eyeStyle: 'round', blush: false,
+    eyeColor: 0x161616, eyeStyle: 'round', blush: false,
   };
 }
 
@@ -326,6 +335,7 @@ export function randomCreature() {
   return {
     build: pick(CREATURE_OPTIONS.build), size: pick(CREATURE_OPTIONS.size),
     bodyColor: pick(COAT_SWATCHES), bellyColor: pick(BELLY_SWATCHES), accentColor: pick(ACCENT_SWATCHES),
+    muzzleColor: pick(MUZZLE_SWATCHES),
     pattern: pick(CREATURE_OPTIONS.pattern), patternColor: pick(SPOT_SWATCHES), fur: pick(CREATURE_OPTIONS.fur),
     ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail),
     eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle),

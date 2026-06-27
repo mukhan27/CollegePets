@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import {
   createPet, defaultCreature, randomCreature, CREATURE_OPTIONS,
-  COAT_SWATCHES, BELLY_SWATCHES, ACCENT_SWATCHES, SPOT_SWATCHES, EYE_SWATCHES,
+  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES,
 } from './petFactory.js';
 import { state, save } from './state.js';
 
@@ -77,6 +77,8 @@ const LABELS = {
 
 const TABS = [
   { id: 'color', label: 'Colour' },
+  { id: 'muzzle', label: 'Muzzle' },
+  { id: 'eyes', label: 'Eyes' },
   { id: 'ears', label: 'Ears' },
 ];
 
@@ -126,6 +128,10 @@ function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
   if (activeTab === 'color') {
     swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Coat colour');
+  } else if (activeTab === 'muzzle') {
+    swatchRow(box, 'muzzleColor', MUZZLE_SWATCHES, 'Muzzle colour');
+  } else if (activeTab === 'eyes') {
+    swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
   } else if (activeTab === 'ears') {
     enumChips(box, 'ears', 'Ear shape');
   }
