@@ -312,7 +312,7 @@ export const CREATURE_OPTIONS = {
   size: ['small', 'medium', 'tall'],
   fur: ['velvety', 'silky', 'shaggy'],           // Smooth / Soft / Fuzzy
   pattern: ['none', 'spots', 'stripes', 'patch', 'freckles'],
-  ears: ['none', 'rounded', 'upright', 'floppy'], // None / Round / Upright / Floppy
+  ears: ['none', 'round', 'pointed', 'tall', 'floppy', 'folded', 'wide'],
   tail: ['none', 'fluffy', 'pom'],                // None / Long Fluffy / Pom-Pom
   eyeStyle: ['round', 'sparkly', 'sleepy'],
 };

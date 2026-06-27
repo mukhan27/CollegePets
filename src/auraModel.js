@@ -173,28 +173,79 @@ function smoothMesh(geo, hex, rough = 0.82) {
   m.castShadow = true;
   return m;
 }
-const SPHERE = new THREE.SphereGeometry(1, 18, 14);
-function blob(r, hex, sx = 1, sy = 1, sz = 1) { const m = smoothMesh(SPHERE, hex); m.scale.set(r * sx, r * sy, r * sz); return m; }
+const SPHERE = new THREE.SphereGeometry(1, 20, 16);
+const CONE = new THREE.ConeGeometry(1, 2, 20);          // base r=1 at y=-1, apex y=+1
+function part(geo, hex, sx, sy, sz) { const m = smoothMesh(geo, hex); m.scale.set(sx, sy, sz); return m; }
+const innerShade = (coat) => new THREE.Color(coat).multiplyScalar(0.7).getHex();
 
-// code-built ear pair attached to the head anchor (so the ear-flap animation works).
-// Each ear hugs the head side so it reads as attached, not a floating disc.
+// ---- modular ears ---------------------------------------------------------
+// Each builder returns one ear (outer shell + inner-ear hollow) for side s
+// (-1 left / +1 right), sized to head radius r and positioned relative to the
+// head centre. The returned object's rotation.x is left free for the ear-flap.
+export const EAR_TYPES = ['none', 'round', 'pointed', 'tall', 'floppy', 'folded', 'wide'];
+
+const EAR_BUILDERS = {
+  // soft bear-cub buttons on the crown
+  round(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(SPHERE, coat, r * 0.36, r * 0.36, r * 0.26));
+    const i = part(SPHERE, inner, r * 0.22, r * 0.22, r * 0.2); i.position.set(0, 0, r * 0.16); g.add(i);
+    g.position.set(s * r * 0.62, r * 0.8, r * 0.05);
+    return g;
+  },
+  // pointed cat triangles, splayed slightly out
+  pointed(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(CONE, coat, r * 0.34, r * 0.62, r * 0.2));
+    const i = part(CONE, inner, r * 0.2, r * 0.46, r * 0.12); i.position.set(0, -r * 0.05, r * 0.1); g.add(i);
+    g.position.set(s * r * 0.5, r * 0.92, 0); g.rotation.z = -s * 0.16;
+    return g;
+  },
+  // long rounded bunny ears, standing tall
+  tall(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(SPHERE, coat, r * 0.2, r * 0.78, r * 0.16));
+    const i = part(SPHERE, inner, r * 0.11, r * 0.6, r * 0.1); i.position.set(0, r * 0.02, r * 0.09); g.add(i);
+    g.position.set(s * r * 0.4, r * 1.15, 0); g.rotation.z = -s * 0.1;
+    return g;
+  },
+  // wide soft lobes draping down the sides (default puppy)
+  floppy(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(SPHERE, coat, r * 0.34, r * 0.62, r * 0.2));
+    const i = part(SPHERE, inner, r * 0.2, r * 0.44, r * 0.12); i.position.set(0, 0, r * 0.1); g.add(i);
+    g.position.set(s * r * 0.74, r * 0.34, 0); g.rotation.z = s * 0.5;
+    return g;
+  },
+  // small folded-over flaps (scottish-fold style)
+  folded(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(SPHERE, coat, r * 0.32, r * 0.24, r * 0.2));
+    const i = part(SPHERE, inner, r * 0.18, r * 0.13, r * 0.12); i.position.set(0, -r * 0.04, r * 0.13); g.add(i);
+    g.position.set(s * r * 0.58, r * 0.7, r * 0.08); g.rotation.x = 0.7; g.rotation.z = s * 0.2;
+    return g;
+  },
+  // big round panda discs, set wide
+  wide(s, r, coat, inner) {
+    const g = new THREE.Group();
+    g.add(part(SPHERE, coat, r * 0.46, r * 0.46, r * 0.22));
+    const i = part(SPHERE, inner, r * 0.3, r * 0.3, r * 0.16); i.position.set(0, 0, r * 0.14); g.add(i);
+    g.position.set(s * r * 0.78, r * 0.62, 0);
+    return g;
+  },
+};
+
+// Build the ear pair for a type, sized to head radius r and coloured from coat.
+// Shared by the live model and the creator's preview thumbnails.
+export function makeEars(type, r, coat) {
+  const b = EAR_BUILDERS[type];
+  if (!b) return [];
+  const inner = innerShade(coat);
+  return [b(-1, r, coat, inner), b(1, r, coat, inner)];
+}
+
 function addEars(head, a, ears) {
-  if (a.ears === 'none') return;
-  const r = cache.head.r, coat = a.bodyColor;
-  for (const s of [-1, 1]) {
-    let ear;
-    if (a.ears === 'upright') {            // tall pointed ears, up and slightly out
-      ear = blob(r * 0.3, coat, 0.75, 1.6, 0.75);
-      ear.position.set(s * r * 0.52, r * 0.92, 0); ear.rotation.z = s * 0.14;
-    } else if (a.ears === 'rounded') {      // small round ears on top corners
-      ear = blob(r * 0.34, coat, 0.95, 0.95, 0.9);
-      ear.position.set(s * r * 0.6, r * 0.86, 0);
-    } else {                                // floppy (default) — soft lobes draping the sides
-      ear = blob(r * 0.46, coat, 0.72, 1.45, 0.8);
-      ear.position.set(s * r * 0.74, r * 0.06, 0); ear.rotation.z = s * 0.30;
-    }
-    head.add(ear); ears.push(ear);
-  }
+  for (const ear of makeEars(a.ears, cache.head.r, a.bodyColor)) { head.add(ear); ears.push(ear); }
 }
 
 // Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape,

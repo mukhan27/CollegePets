@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { createPet } from './petFactory.js';
+import { makeEars } from './auraModel.js';
 import { FURNITURE } from './furniture.js';
 import { FOOD_MODELS } from './foodModels.js';
 import { clothesSlot } from './state.js';
@@ -52,6 +53,28 @@ export function wearablePreview(id) {
   const pet = createPet('cat', { equipped: { [slotOf(id)]: id } });
   if (pet.userData.animate) pet.userData.animate(0, false);
   const url = snapshot(pet, 0.15);
+  cache.set(k, url);
+  return url;
+}
+
+// A little head wearing the given ear style — used as the ear-picker chip icon.
+// Rendered in a neutral coat so the thumbnail reads as "shape", not colour.
+export function earPreview(type) {
+  const k = 'e:' + type;
+  if (cache.has(k)) return cache.get(k);
+  const r = 0.5, coat = 0xe9e2d6;
+  const g = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 22),
+    new THREE.MeshStandardMaterial({ color: coat, roughness: 0.85, metalness: 0 }));
+  head.castShadow = true; g.add(head);
+  // tiny face so the front is obvious and the ears read in context
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(r * 0.1, 12, 10), eyeMat);
+    e.position.set(sx * r * 0.32, r * 0.05, r * 0.92); g.add(e);
+  }
+  for (const ear of makeEars(type, r, coat)) g.add(ear);
+  const url = snapshot(g);
   cache.set(k, url);
   return url;
 }

@@ -8,6 +8,7 @@ import {
   COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES,
 } from './petFactory.js';
 import { state, save } from './state.js';
+import { earPreview } from './itemPreview.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -64,17 +65,6 @@ function loop() {
   renderer.render(scene, camera);
 }
 
-// ---- option metadata (emoji + label per value) ----
-const LABELS = {
-  build: { slim: ['🥒', 'Slim'], round: ['🔵', 'Round'], chonky: ['🟠', 'Chonky'] },
-  size: { small: ['🐁', 'Small'], medium: ['🐈', 'Medium'], tall: ['🦒', 'Tall'] },
-  fur: { velvety: ['⚪', 'Smooth'], silky: ['🪶', 'Soft'], shaggy: ['🧶', 'Fuzzy'] },
-  pattern: { none: ['⬜', 'Plain'], spots: ['🐆', 'Spots'], stripes: ['🦓', 'Stripes'], patch: ['🥚', 'Patch'], freckles: ['✨', 'Freckles'] },
-  ears: { none: ['🚫', 'None'], rounded: ['🐻', 'Rounded'], upright: ['🐰', 'Upright'], floppy: ['🐶', 'Floppy'] },
-  tail: { none: ['🚫', 'None'], fluffy: ['🐿️', 'Fluffy'], pom: ['☁️', 'Pom-Pom'] },
-  eyeStyle: { round: ['😊', 'Round'], sparkly: ['🤩', 'Sparkly'], sleepy: ['😌', 'Sleepy'] },
-};
-
 const TABS = [
   { id: 'color', label: 'Colour' },
   { id: 'muzzle', label: 'Muzzle' },
@@ -84,13 +74,6 @@ const TABS = [
 
 // ---- DOM builders ----
 function header(text) { const el = document.createElement('div'); el.className = 'cc-section'; el.textContent = text; return el; }
-function chip(emoji, label, desc, selected, onClick) {
-  const el = document.createElement('button');
-  el.className = 'cc-opt' + (selected ? ' selected' : '');
-  el.innerHTML = `<div class="cc-emoji">${emoji}</div><div class="cc-label">${label}</div>` + (desc ? `<div class="cc-desc">${desc}</div>` : '');
-  el.addEventListener('click', onClick);
-  return el;
-}
 function swatch(color, selected, onClick) {
   const el = document.createElement('button');
   el.className = 'cc-swatch' + (selected ? ' selected' : '');
@@ -112,16 +95,24 @@ function renderTabs() {
   }
 }
 
-function enumChips(box, field, header_) {
-  if (header_) box.appendChild(header(header_));
-  for (const v of CREATURE_OPTIONS[field]) {
-    const [emoji, label] = LABELS[field][v];
-    box.appendChild(chip(emoji, label, '', appearance[field] === v, () => set(field, v)));
-  }
-}
 function swatchRow(box, field, colors, header_) {
   box.appendChild(header(header_));
   for (const c of colors) box.appendChild(swatch(c, appearance[field] === c, () => set(field, c)));
+}
+// ear picker: rendered thumbnails (real 3D previews) instead of emoji
+function imgChip(src, label, selected, onClick) {
+  const el = document.createElement('button');
+  el.className = 'cc-opt' + (selected ? ' selected' : '');
+  el.innerHTML = `<img class="cc-thumb" src="${src}" alt=""><div class="cc-label">${label}</div>`;
+  el.addEventListener('click', onClick);
+  return el;
+}
+function earChips(box) {
+  box.appendChild(header('Ear shape'));
+  for (const v of CREATURE_OPTIONS.ears) {
+    const label = v[0].toUpperCase() + v.slice(1);
+    box.appendChild(imgChip(earPreview(v), label, appearance.ears === v, () => set('ears', v)));
+  }
 }
 
 function renderActiveTab() {
@@ -133,7 +124,7 @@ function renderActiveTab() {
   } else if (activeTab === 'eyes') {
     swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
   } else if (activeTab === 'ears') {
-    enumChips(box, 'ears', 'Ear shape');
+    earChips(box);
   }
 }
 
