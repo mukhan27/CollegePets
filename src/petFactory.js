@@ -695,14 +695,14 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const baseScaleY = inner.scale.y;
   let prevT = 0;
   g.userData.animate = (t, moving) => {
-    // rigged authored model: let the skeletal clip drive it, plus a soft ear flap
-    if (parts.mixer) {
-      const dt = prevT ? Math.min(0.05, t - prevT) : 0; prevT = t;
-      parts.mixer.update(dt);
-      // re-tuck the arms after the clip sets the bones (turns the A-pose into idle)
-      if (parts.arms) for (const a of parts.arms) a.b.quaternion.premultiply(a.q);
-      inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0; // gentle walk hop
-      for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.07;
+    // authored model: it's posed once into a static standing idle, so we never
+    // touch the bones here (that was causing the flailing). Life comes from a
+    // subtle whole-body breathing scale, a gentle walk hop, and the ear flap.
+    if (parts.breathe) {
+      prevT = t;
+      inner.scale.y = baseScaleY * (1 + Math.sin(t * 1.7) * 0.012);
+      inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0;
+      for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.06;
       return;
     }
     if (moving) {

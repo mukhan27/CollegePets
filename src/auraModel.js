@@ -89,16 +89,13 @@ function findSourceImage(scene) {
   return img;
 }
 
-// Per-pixel ZONE classification of the baked texture, computed once:
-//   FUR    – bright, colourless, border-reachable (the body coat)  → bodyColor
-//   MUZZLE – the baked cream snout (warm patch, dilated to its rim) → muzzleColor
-//   EYE    – ONLY the eye irises (dark blob + catchlight, on fur)   → eyeColor
-//   KEEP   – everything else: nose, brows, mouth, catchlights, edges → untouched
-// The nose/brows are deliberately KEEP so they never recolour with the eyes.
-const Z_KEEP = 0, Z_FUR = 1, Z_MUZZLE = 2, Z_EYE = 3;
-// colourises zones for verification renders (open with #zones in the URL)
-const DEBUG_ZONES = typeof location !== 'undefined' && /zones/.test(location.hash || '');
-
+// Recolour ONLY the body fur. The whole face — muzzle, eyes, nose, brows and the
+// eye catchlights — is left exactly as Meshy baked it. "Fur" = the large field of
+// bright, colourless pixels reachable from the texture border. A morphological
+// opening (erode → flood from border → dilate back) drops thin bridges and the
+// small bright catchlights inside the eyes, so the recolour can never leak onto a
+// pupil. This is the robust, artifact-free baseline; per-feature recolour (muzzle
+// / eye colour) is intentionally NOT attempted here — it needs an authored mask.
 function buildTexturePrep(scene) {
   const img = findSourceImage(scene);
   if (!img || typeof document === 'undefined') return null;
@@ -108,136 +105,65 @@ function buildTexturePrep(scene) {
   cx.drawImage(img, 0, 0, s, s);
   const orig = cx.getImageData(0, 0, s, s);
   const d = orig.data;
-  const lumA = new Float32Array(N), chrA = new Float32Array(N);
+  const lumA = new Float32Array(N);
+  const bright = new Uint8Array(N);
   for (let i = 0; i < N; i++) {
     const p = i * 4, r = d[p], g = d[p + 1], b = d[p + 2];
     lumA[i] = r * 0.299 + g * 0.587 + b * 0.114;
-    chrA[i] = Math.max(r, g, b) - Math.min(r, g, b);
-  }
-  const zone = new Uint8Array(N);
-
-  // 1) FUR — flood-fill bright + colourless pixels inward from the border.
-  const stack = [];
-  const pushFur = (idx) => { if (!zone[idx] && lumA[idx] > 150 && chrA[idx] < 16) { zone[idx] = Z_FUR; stack.push(idx); } };
-  for (let x = 0; x < s; x++) { pushFur(x); pushFur((s - 1) * s + x); }
-  for (let y = 0; y < s; y++) { pushFur(y * s); pushFur(y * s + s - 1); }
-  while (stack.length) {
-    const idx = stack.pop(), x = idx % s, y = (idx / s) | 0;
-    if (x > 0) pushFur(idx - 1); if (x < s - 1) pushFur(idx + 1);
-    if (y > 0) pushFur(idx - s); if (y < s - 1) pushFur(idx + s);
+    if (lumA[i] > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 16) bright[i] = 1;
   }
 
-  // 2) provisional: MUZZLE core (warm & bright) and a DARK mask; rest is KEEP.
-  const dark = new Uint8Array(N);
-  for (let i = 0; i < N; i++) {
-    if (zone[i] === Z_FUR) continue;
-    if (lumA[i] < 95) dark[i] = 1;
-    else if (chrA[i] >= 16 && lumA[i] > 120) zone[i] = Z_MUZZLE;
+  const E = 3;                                  // opening radius (px)
+  // erode the bright mask E times (4-neighbour) → removes thin bridges + catchlights
+  let cur = bright.slice(), nxt = new Uint8Array(N);
+  for (let it = 0; it < E; it++) {
+    for (let i = 0; i < N; i++) {
+      if (!cur[i]) { nxt[i] = 0; continue; }
+      const x = i % s, y = (i / s) | 0;   // out-of-bounds counts as bright, so the
+      nxt[i] = ((x === 0 || cur[i - 1]) && (x === s - 1 || cur[i + 1]) &&   // fur that
+               (y === 0 || cur[i - s]) && (y === s - 1 || cur[i + s])) ? 1 : 0; // reaches
+    }                                                                          // the
+    const t = cur; cur = nxt; nxt = t;                                         // border
+  }                                                                           // survives
+  // flood-fill the fur core from the border over the eroded mask
+  const fur = new Uint8Array(N), st = [];
+  const push = (i) => { if (!fur[i] && cur[i]) { fur[i] = 1; st.push(i); } };
+  for (let x = 0; x < s; x++) { push(x); push((s - 1) * s + x); }
+  for (let y = 0; y < s; y++) { push(y * s); push(y * s + s - 1); }
+  while (st.length) {
+    const i = st.pop(), x = i % s, y = (i / s) | 0;
+    if (x > 0) push(i - 1); if (x < s - 1) push(i + 1); if (y > 0) push(i - s); if (y < s - 1) push(i + s);
   }
-
-  // 3) connected dark components → keep stats to tell EYES from nose/brows/mouth.
-  const comp = new Int32Array(N).fill(-1);
-  const area = [], furN = [], muzN = [], catchN = [];
-  const isCatch = (i) => lumA[i] > 150 && !dark[i] && zone[i] !== Z_FUR && zone[i] !== Z_MUZZLE;
-  const q = [];
-  let nc = 0;
-  for (let start = 0; start < N; start++) {
-    if (!dark[start] || comp[start] >= 0) continue;
-    const id = nc++; area[id] = 0; furN[id] = 0; muzN[id] = 0; catchN[id] = 0;
-    comp[start] = id; q.length = 0; q.push(start);
-    while (q.length) {
-      const idx = q.pop(); area[id]++;
-      const x = idx % s, y = (idx / s) | 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= s || ny >= s) continue;
-        const ni = ny * s + nx;
-        if (dark[ni]) { if (comp[ni] < 0) { comp[ni] = id; q.push(ni); } }
-        else { if (zone[ni] === Z_FUR) furN[id]++; else if (zone[ni] === Z_MUZZLE) muzN[id]++; if (isCatch(ni)) catchN[id]++; }
-      }
-    }
-  }
-  // an eye = a fur-surrounded dark blob that wraps a catchlight (nose sits on the
-  // muzzle → muz-surrounded; brows/mouth have no catchlight) — so only eyes match.
-  const eyeComp = (id) => id >= 0 && area[id] > 30 && catchN[id] > 0 && furN[id] > muzN[id];
-  for (let i = 0; i < N; i++) if (dark[i] && eyeComp(comp[i])) zone[i] = Z_EYE;
-
-  // 4) MUZZLE dilation — grow only into FUR so the near-white snout rim is absorbed
-  //    (fixes white pixels at the top of the muzzle) AND so the snout's UV-split
-  //    fragments merge into one big blob. Never touches dark/eye/keep.
-  const DIL = Math.round(s * 0.014);
-  for (let it = 0; it < DIL; it++) {
+  // dilate the core back by E, but only into bright pixels — restores the fur
+  // boundary without ever crossing the dark eye ring into a catchlight
+  for (let it = 0; it < E; it++) {
     const add = [];
     for (let i = 0; i < N; i++) {
-      if (zone[i] !== Z_FUR) continue;
+      if (fur[i] || !bright[i]) continue;
       const x = i % s, y = (i / s) | 0;
-      if ((x > 0 && zone[i - 1] === Z_MUZZLE) || (x < s - 1 && zone[i + 1] === Z_MUZZLE) ||
-          (y > 0 && zone[i - s] === Z_MUZZLE) || (y < s - 1 && zone[i + s] === Z_MUZZLE)) add.push(i);
+      if ((x > 0 && fur[i - 1]) || (x < s - 1 && fur[i + 1]) || (y > 0 && fur[i - s]) || (y < s - 1 && fur[i + s])) add.push(i);
     }
     if (!add.length) break;
-    for (const i of add) zone[i] = Z_MUZZLE;
+    for (const i of add) fur[i] = 1;
   }
-
-  // 4b) NOW drop stray warm specks: after dilation the snout is one large blob,
-  //     while scattered noise patches stay small — so a size cut cleanly removes
-  //     them. Components below the cut revert to FUR.
-  {
-    const mc = new Int32Array(N).fill(-1), ma = [], mq = []; let mn = 0;
-    for (let start = 0; start < N; start++) {
-      if (zone[start] !== Z_MUZZLE || mc[start] >= 0) continue;
-      const id = mn++; ma[id] = 0; mc[start] = id; mq.length = 0; mq.push(start);
-      while (mq.length) {
-        const idx = mq.pop(); ma[id]++; const x = idx % s, y = (idx / s) | 0;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= s || ny >= s) continue;
-          const ni = ny * s + nx;
-          if (zone[ni] === Z_MUZZLE && mc[ni] < 0) { mc[ni] = id; mq.push(ni); }
-        }
-      }
-    }
-    let bestA = 0; for (let id = 0; id < mn; id++) if (ma[id] > bestA) bestA = ma[id];
-    const cut = bestA * 0.5;   // keep only blobs at least half the snout's size
-    for (let i = 0; i < N; i++) if (zone[i] === Z_MUZZLE && ma[mc[i]] < cut) zone[i] = Z_FUR;
-  }
-
-  // 5) per-zone brightest luminance, for shading-preserving recolour.
-  let furMax = 1, muzMax = 1, eyeMax = 1;
-  for (let i = 0; i < N; i++) {
-    const z = zone[i];
-    if (z === Z_FUR) { if (lumA[i] > furMax) furMax = lumA[i]; }
-    else if (z === Z_MUZZLE) { if (lumA[i] > muzMax) muzMax = lumA[i]; }
-    else if (z === Z_EYE) { if (lumA[i] > eyeMax) eyeMax = lumA[i]; }
-  }
-  return { orig, zone, furMax, muzMax, eyeMax, size: s };
+  let furMax = 1;
+  for (let i = 0; i < N; i++) if (fur[i] && lumA[i] > furMax) furMax = lumA[i];
+  return { orig, fur, furMax, size: s };
 }
 
-const texCache = new Map();  // key -> CanvasTexture (bounded; recolour is reused)
-function coatTexture(bodyHex, muzzleHex, eyeHex) {
+const texCache = new Map();  // bodyHex -> CanvasTexture (bounded; recolour is reused)
+function coatTexture(bodyHex) {
   const prep = cache.tex;
   if (!prep) return null;
-  const key = bodyHex + '|' + muzzleHex + '|' + eyeHex;
-  if (texCache.has(key)) return texCache.get(key);
-  const s = prep.size, d = prep.orig.data, zone = prep.zone;
+  if (texCache.has(bodyHex)) return texCache.get(bodyHex);
+  const s = prep.size, d = prep.orig.data, fur = prep.fur, fMax = prep.furMax;
   const out = new Uint8ClampedArray(d);                 // start from the original
-  const body = new THREE.Color(bodyHex), muz = new THREE.Color(muzzleHex), eye = new THREE.Color(eyeHex);
-  const fMax = prep.furMax, mMax = prep.muzMax, eMax = prep.eyeMax;
-  const DBG = { [Z_FUR]: null, [Z_MUZZLE]: new THREE.Color(0x00ff00), [Z_EYE]: new THREE.Color(0xff00ff) };
-  for (let i = 0; i < zone.length; i++) {
-    const z = zone[i]; if (z === Z_KEEP) continue;
+  const body = new THREE.Color(bodyHex);
+  for (let i = 0; i < fur.length; i++) {
+    if (!fur[i]) continue;                              // face: untouched (baked)
     const p = i * 4;
-    if (DEBUG_ZONES && DBG[z]) { out[p] = DBG[z].r * 255; out[p + 1] = DBG[z].g * 255; out[p + 2] = DBG[z].b * 255; continue; }
-    // each recolour zone shades its chosen colour by the baked luminance so the
-    // form (snout shading, pupil gradient) survives. Eyes get a brightness floor
-    // so the chosen iris colour actually reads instead of staying near-black.
-    const lum = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
-    const c = z === Z_EYE ? eye : z === Z_MUZZLE ? muz : body;
-    const f = z === Z_EYE
-      ? 0.5 + 0.5 * Math.min(1, lum / eMax)
-      : Math.min(1, lum / (z === Z_MUZZLE ? mMax : fMax));
-    out[p] = c.r * 255 * f; out[p + 1] = c.g * 255 * f; out[p + 2] = c.b * 255 * f;
+    const f = Math.min(1, lumA(d, p) / fMax);           // keep the baked shading
+    out[p] = body.r * 255 * f; out[p + 1] = body.g * 255 * f; out[p + 2] = body.b * 255 * f;
   }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
   cv.getContext('2d').putImageData(new ImageData(out, s, s), 0, 0);
@@ -245,9 +171,10 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
   tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   tex.needsUpdate = true;
   if (texCache.size > 12) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
-  texCache.set(key, tex);
+  texCache.set(bodyHex, tex);
   return tex;
 }
+function lumA(d, p) { return d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; }
 
 function smoothMesh(geo, hex, rough = 0.82) {
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0 }));
@@ -335,7 +262,7 @@ export function buildAura(inner, a) {
   // Repaint the coat: a freshly recoloured texture (fur / muzzle / eye zones each
   // take their chosen colour, catchlights preserved) drives both the lit base
   // colour and a soft emissive so the coat stays vivid without washing features.
-  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x1a1a1a);
+  const coat = coatTexture(a.bodyColor);
   const recolour = (m) => {
     const c = m.clone();
     if (coat) {
@@ -367,17 +294,19 @@ export function buildAura(inner, a) {
   const ears = [];
   addEars(head, a, ears);
 
-  const mixer = new THREE.AnimationMixer(model);
-  if (cache.animations[0]) mixer.clipAction(cache.animations[0]).play();
-
-  // Relax the arms out of the authored A-pose down to the sides. We compute, per
-  // arm, the world rotation that swings the upper-arm direction down to the body,
-  // then express it in the bone's parent frame so it can be pre-applied on top of
-  // the clip each frame (createPet re-applies it after every mixer update).
+  // Pose the model ONCE into a calm standing idle: freeze the authored clip at its
+  // first frame, then swing the arms down to the sides. The clip is never advanced
+  // afterwards (so nothing flails and the skinned cheek never jitters); life comes
+  // from a subtle breathing scale + ear flap applied by createPet's animate().
+  if (cache.animations[0]) {
+    const mixer = new THREE.AnimationMixer(model);
+    mixer.clipAction(cache.animations[0]).play();
+    mixer.update(0);                          // settle into the rest pose, then leave it
+  }
   inner.updateMatrixWorld(true);
-  const armSetup = (name) => {
+  const tuckArm = (name) => {
     const b = model.getObjectByName(name), child = b && b.children[0];
-    if (!b || !child) return null;
+    if (!b || !child) return;
     const a = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
     const c = new THREE.Vector3().setFromMatrixPosition(child.matrixWorld);
     const u = c.sub(a).normalize();                       // current arm direction (world)
@@ -386,10 +315,10 @@ export function buildAura(inner, a) {
     const Rw = new THREE.Quaternion().setFromUnitVectors(u, v);
     const Qp = new THREE.Quaternion(); b.parent.getWorldQuaternion(Qp);
     const q = Qp.clone().invert().multiply(Rw).multiply(Qp); // world rot → parent frame
-    return { b, q };
+    b.quaternion.premultiply(q);                            // applied once, stays put
   };
-  const arms = [armSetup('LeftArm'), armSetup('RightArm')].filter(Boolean);
+  tuckArm('LeftArm'); tuckArm('RightArm');
 
-  return { head, legs: [], tail: null, ears, arms, mixer };
+  return { head, legs: [], tail: null, ears, breathe: true };
 }
 const ARM_OUT = 0.18;   // how far the relaxed arms splay from straight-down
