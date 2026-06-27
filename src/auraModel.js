@@ -102,12 +102,19 @@ function buildTexturePrep(scene) {
   const orig = cx.getImageData(0, 0, s, s);
   const d = orig.data;
 
-  // fur = light pixels reachable from the border. Enclosed light pixels (the eye
-  // catchlights) are NOT reached, so they stay their original white.
+  // fur = bright, COLOURLESS pixels reachable from the border. "Colourless" (low
+  // chroma) is what separates the white body fur — which recolours — from the
+  // warm baked muzzle/brows, which keep their tone. Enclosed bright pixels (the
+  // eye catchlights) aren't border-reachable, so they also stay original.
   const fur = new Uint8Array(s * s);
-  const lum = (idx) => { const p = idx * 4; return d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; };
+  const isFur = (idx) => {
+    const p = idx * 4, r = d[p], gg = d[p + 1], b = d[p + 2];
+    const lum = r * 0.299 + gg * 0.587 + b * 0.114;
+    const chroma = Math.max(r, gg, b) - Math.min(r, gg, b);
+    return lum > 150 && chroma < 16;
+  };
   const stack = [];
-  const push = (idx) => { if (!fur[idx] && lum(idx) > 165) { fur[idx] = 1; stack.push(idx); } };
+  const push = (idx) => { if (!fur[idx] && isFur(idx)) { fur[idx] = 1; stack.push(idx); } };
   for (let x = 0; x < s; x++) { push(x); push((s - 1) * s + x); }
   for (let y = 0; y < s; y++) { push(y * s); push(y * s + s - 1); }
   while (stack.length) {
