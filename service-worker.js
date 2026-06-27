@@ -8,7 +8,10 @@
 //     *.glb models) are CACHE-FIRST for instant, offline-friendly loads.
 // skipWaiting + clients.claim make a new worker take over immediately.
 
-const CACHE = 'cp-cache-v1';
+// Bump this whenever a cache-first asset (vendor/** or a *.glb model) changes in
+// place — the activate handler purges every cache except the current one, so the
+// new bytes are refetched instead of served stale. (e.g. the retextured Aura body.)
+const CACHE = 'cp-cache-v2';
 const PRECACHE = ['./', './index.html', './css/style.css', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
