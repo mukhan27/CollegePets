@@ -155,18 +155,37 @@ function buildTexturePrep(scene) {
   }
   let furMax = 1;
   for (let i = 0; i < N; i++) if (fur[i] && lum[i] > furMax) furMax = lum[i];
-  // Eye interiors should be neutral (black pupil + white catchlight). Meshy baked
-  // a blue-grey tint into one catchlight, which reads as a coloured pupil. So we
-  // mark any non-dark COLOURED pixel sealed inside an eye wall to be desaturated at
-  // recolour time — this neutralises the tint while leaving the dark pupil/brows
-  // (already neutral, and below the luminance cut) untouched.
-  const hi = new Uint8Array(N);
-  for (let i = 0; i < N; i++) {
-    if (!wall[i] || lum[i] <= 95) continue;
-    const p = i * 4;
-    if (Math.max(d[p], d[p + 1], d[p + 2]) - Math.min(d[p], d[p + 1], d[p + 2]) > 12) hi[i] = 1;
+
+  // Normalise the eyes. Meshy baked one catchlight as a tinted streak rather than a
+  // clean dot. So for every eye (a wall component that has a bright interior) we
+  // keep the dark pupil as baked, render ONE clean white catchlight dot at its
+  // brightest spot, and darken any other bright pixels (the streak / second
+  // highlight). Non-eye walls (nose, brows — no bright interior) are left baked.
+  const eyeLight = new Uint8Array(N), eyeDark = new Uint8Array(N);
+  const seen = new Uint8Array(N), q2 = [];
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!wall[s0] || seen[s0]) continue;
+    const px = []; let bx = 0, by = 0, bl = -1, minx = s, miny = s, maxx = 0, maxy = 0;
+    seen[s0] = 1; q2.length = 0; q2.push(s0);
+    while (q2.length) {
+      const i = q2.pop(); px.push(i); const x = i % s, y = (i / s) | 0;
+      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+      if (lum[i] > bl) { bl = lum[i]; bx = x; by = y; }
+      if (x > 0 && wall[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; q2.push(i - 1); }
+      if (x < s - 1 && wall[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; q2.push(i + 1); }
+      if (y > 0 && wall[i - s] && !seen[i - s]) { seen[i - s] = 1; q2.push(i - s); }
+      if (y < s - 1 && wall[i + s] && !seen[i + s]) { seen[i + s] = 1; q2.push(i + s); }
+    }
+    if (bl < 135) continue;                    // no catchlight → nose/brow → baked
+    const dotR2 = Math.pow(Math.max(maxx - minx, maxy - miny) * 0.16, 2);
+    for (const i of px) {
+      if (lum[i] <= 130) continue;             // dark pupil stays baked
+      const x = i % s, y = (i / s) | 0;
+      if ((x - bx) * (x - bx) + (y - by) * (y - by) <= dotR2) eyeLight[i] = 1;
+      else eyeDark[i] = 1;
+    }
   }
-  return { orig, fur, hi, furMax, size: s };
+  return { orig, fur, eyeLight, eyeDark, furMax, size: s };
 }
 
 const texCache = new Map();  // bodyHex -> CanvasTexture (bounded; recolour is reused)
@@ -174,7 +193,8 @@ function coatTexture(bodyHex) {
   const prep = cache.tex;
   if (!prep) return null;
   if (texCache.has(bodyHex)) return texCache.get(bodyHex);
-  const s = prep.size, d = prep.orig.data, fur = prep.fur, hi = prep.hi, fMax = prep.furMax;
+  const s = prep.size, d = prep.orig.data, fur = prep.fur, fMax = prep.furMax;
+  const eyeLight = prep.eyeLight, eyeDark = prep.eyeDark;
   const out = new Uint8ClampedArray(d);                 // start from the original
   const body = new THREE.Color(bodyHex);
   for (let i = 0; i < fur.length; i++) {
@@ -182,8 +202,10 @@ function coatTexture(bodyHex) {
     if (fur[i]) {                                       // body fur → coat colour
       const f = Math.min(1, lumA(d, p) / fMax);         // keep the baked shading
       out[p] = body.r * 255 * f; out[p + 1] = body.g * 255 * f; out[p + 2] = body.b * 255 * f;
-    } else if (hi[i]) {                                 // eye highlight → neutral white
-      const L = lumA(d, p); out[p] = L; out[p + 1] = L; out[p + 2] = L;
+    } else if (eyeLight[i]) {                           // clean white catchlight
+      out[p] = 246; out[p + 1] = 246; out[p + 2] = 246;
+    } else if (eyeDark[i]) {                            // streak/secondary highlight → pupil
+      out[p] = 26; out[p + 1] = 22; out[p + 2] = 20;
     }                                                   // else: baked face, untouched
   }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
