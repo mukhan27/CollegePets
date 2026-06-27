@@ -25,7 +25,7 @@ function initStage() {
   scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8a78, 0.65));
   const key = new THREE.DirectionalLight(0xffffff, 0.85); key.position.set(3, 6, 4); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xcfe0ff, 0.35); fill.position.set(-3, 2, 4); scene.add(fill);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-3, 2, 4); scene.add(fill);
   camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
   canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; });
   window.addEventListener('pointermove', (e) => { if (dragging) { spin += (e.clientX - lastX) * 0.012; lastX = e.clientX; } });

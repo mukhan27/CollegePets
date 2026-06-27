@@ -110,30 +110,43 @@ function buildTexturePrep(scene) {
   for (let i = 0; i < N; i++) {
     const p = i * 4, r = d[p], g = d[p + 1], b = d[p + 2];
     lum[i] = r * 0.299 + g * 0.587 + b * 0.114;
-    if (lum[i] < 95) dark[i] = 1;
+    if (lum[i] < 120) dark[i] = 1;     // include the eye's anti-aliased rim
     else if (lum[i] > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 16) bright[i] = 1;
   }
 
-  // Local dark-fraction via a summed-area table: a bright pixel deep inside a dark
-  // region (an eye catchlight) has a high surrounding dark-fraction, while open
-  // body fur — and even fur right at a feature's edge — has a low one. So we can
-  // exclude catchlights without haloing the feature edges, regardless of how wide
-  // the bright "bridge" through the eye ring is.
-  const W = s + 1, integ = new Float64Array(W * W);
-  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++)
-    integ[(y + 1) * W + (x + 1)] = dark[y * s + x] + integ[y * W + (x + 1)] + integ[(y + 1) * W + x] - integ[y * W + x];
-  const R = 11, MAXDARK = 0.4;
-  const passable = new Uint8Array(N);
-  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
-    const i = y * s + x; if (!bright[i]) continue;
-    const x0 = Math.max(0, x - R), y0 = Math.max(0, y - R), x1 = Math.min(s - 1, x + R), y1 = Math.min(s - 1, y + R);
-    const cnt = integ[(y1 + 1) * W + (x1 + 1)] - integ[y0 * W + (x1 + 1)] - integ[(y1 + 1) * W + x0] + integ[y0 * W + x0];
-    if (cnt / ((x1 - x0 + 1) * (y1 - y0 + 1)) < MAXDARK) passable[i] = 1;
+  // Build a "wall" the fur flood-fill cannot cross, so it can never reach an eye's
+  // interior (and its catchlight). Two steps: (1) morphologically CLOSE the dark
+  // mask (dilate then erode) to seal any notch in the eye ring; (2) FILL HOLES so
+  // the sealed ring becomes a solid disc. The wall's outer boundary is ~unchanged,
+  // so the body fur still recolours right up to each feature edge with no halo.
+  const wall = dark.slice(), tmp = new Uint8Array(N);
+  const morph = (src, want) => {                 // want=1 dilate, want=0 erode
+    for (let i = 0; i < N; i++) {
+      const x = i % s, y = (i / s) | 0;
+      const nb = (x > 0 && src[i - 1] === want) || (x < s - 1 && src[i + 1] === want) ||
+                 (y > 0 && src[i - s] === want) || (y < s - 1 && src[i + s] === want);
+      tmp[i] = nb ? want : src[i];
+    }
+    src.set(tmp);
+  };
+  const C = 12;
+  for (let it = 0; it < C; it++) morph(wall, 1);  // dilate
+  for (let it = 0; it < C; it++) morph(wall, 0);  // erode → closed
+  // hole-fill: non-wall pixels unreachable from the border are enclosed (a sealed
+  // eye's catchlight/pupil) → make them wall, turning each eye into a solid disc.
+  const outside = new Uint8Array(N), os = [];
+  const po = (i) => { if (!outside[i] && !wall[i]) { outside[i] = 1; os.push(i); } };
+  for (let x = 0; x < s; x++) { po(x); po((s - 1) * s + x); }
+  for (let y = 0; y < s; y++) { po(y * s); po(y * s + s - 1); }
+  while (os.length) {
+    const i = os.pop(), x = i % s, y = (i / s) | 0;
+    if (x > 0) po(i - 1); if (x < s - 1) po(i + 1); if (y > 0) po(i - s); if (y < s - 1) po(i + s);
   }
-  // fur = passable bright pixels reachable from the border (so any enclosed bright
-  // region — e.g. a catchlight — that isn't open to the border is never recoloured)
+  for (let i = 0; i < N; i++) if (!wall[i] && !outside[i]) wall[i] = 1;
+
+  // fur = bright pixels reachable from the border WITHOUT crossing a wall.
   const fur = new Uint8Array(N), st = [];
-  const push = (i) => { if (!fur[i] && passable[i]) { fur[i] = 1; st.push(i); } };
+  const push = (i) => { if (!fur[i] && bright[i] && !wall[i]) { fur[i] = 1; st.push(i); } };
   for (let x = 0; x < s; x++) { push(x); push((s - 1) * s + x); }
   for (let y = 0; y < s; y++) { push(y * s); push(y * s + s - 1); }
   while (st.length) {
@@ -142,7 +155,18 @@ function buildTexturePrep(scene) {
   }
   let furMax = 1;
   for (let i = 0; i < N; i++) if (fur[i] && lum[i] > furMax) furMax = lum[i];
-  return { orig, fur, furMax, size: s };
+  // Eye interiors should be neutral (black pupil + white catchlight). Meshy baked
+  // a blue-grey tint into one catchlight, which reads as a coloured pupil. So we
+  // mark any non-dark COLOURED pixel sealed inside an eye wall to be desaturated at
+  // recolour time — this neutralises the tint while leaving the dark pupil/brows
+  // (already neutral, and below the luminance cut) untouched.
+  const hi = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    if (!wall[i] || lum[i] <= 95) continue;
+    const p = i * 4;
+    if (Math.max(d[p], d[p + 1], d[p + 2]) - Math.min(d[p], d[p + 1], d[p + 2]) > 12) hi[i] = 1;
+  }
+  return { orig, fur, hi, furMax, size: s };
 }
 
 const texCache = new Map();  // bodyHex -> CanvasTexture (bounded; recolour is reused)
@@ -150,19 +174,26 @@ function coatTexture(bodyHex) {
   const prep = cache.tex;
   if (!prep) return null;
   if (texCache.has(bodyHex)) return texCache.get(bodyHex);
-  const s = prep.size, d = prep.orig.data, fur = prep.fur, fMax = prep.furMax;
+  const s = prep.size, d = prep.orig.data, fur = prep.fur, hi = prep.hi, fMax = prep.furMax;
   const out = new Uint8ClampedArray(d);                 // start from the original
   const body = new THREE.Color(bodyHex);
   for (let i = 0; i < fur.length; i++) {
-    if (!fur[i]) continue;                              // face: untouched (baked)
     const p = i * 4;
-    const f = Math.min(1, lumA(d, p) / fMax);           // keep the baked shading
-    out[p] = body.r * 255 * f; out[p + 1] = body.g * 255 * f; out[p + 2] = body.b * 255 * f;
+    if (fur[i]) {                                       // body fur → coat colour
+      const f = Math.min(1, lumA(d, p) / fMax);         // keep the baked shading
+      out[p] = body.r * 255 * f; out[p + 1] = body.g * 255 * f; out[p + 2] = body.b * 255 * f;
+    } else if (hi[i]) {                                 // eye highlight → neutral white
+      const L = lumA(d, p); out[p] = L; out[p + 1] = L; out[p + 2] = L;
+    }                                                   // else: baked face, untouched
   }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
   cv.getContext('2d').putImageData(new ImageData(out, s, s), 0, 0);
   const tex = new THREE.CanvasTexture(cv);
-  tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
+  // No mipmaps: at this on-screen size a mip level would average the catchlight
+  // edge with the adjacent recoloured fur and tint the white highlight. Sampling
+  // the full-res texture keeps the black eye-ring crisp between them.
+  tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   if (texCache.size > 12) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
   texCache.set(bodyHex, tex);
