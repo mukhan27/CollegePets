@@ -111,11 +111,15 @@ function buildTexturePrep(scene) {
   for (let i = 0; i < N; i++) {
     const p = i * 4, r = d[p], g = d[p + 1], b = d[p + 2];
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    let z = Z_KEEP;
-    if (mx < 70 || mn > 175 || mx - mn < 28) z = Z_KEEP;   // black / white / grey → baked
-    else if (r === mx) z = Z_FUR;                          // red  → body
-    else if (g === mx) z = Z_MUZZLE;                       // green→ muzzle
-    else z = Z_EYE;                                        // blue → eye iris
+    let z;
+    // Keep the truly neutral pixels baked: near-white catchlights, near-black
+    // pupils/nose, and low-chroma greys. Everything else is a zone classified by
+    // its dominant channel — including the DARK navy iris (chroma ~25), which must
+    // recolour, so the cut is low (14) but guarded by the black/white tests.
+    if (mn > 200 || mx < 38 || mx - mn < 14) z = Z_KEEP;
+    else if (r === mx) z = Z_FUR;        // red   → body
+    else if (g === mx) z = Z_MUZZLE;     // green → muzzle
+    else z = Z_EYE;                      // blue  → eye iris
     zone[i] = z;
     if (z && mx > zMax[z]) zMax[z] = mx;
   }
@@ -134,7 +138,10 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
   for (let i = 0; i < zone.length; i++) {
     const z = zone[i]; if (z === Z_KEEP) continue;       // black/white/grey baked
     const p = i * 4;
-    const f = Math.max(d[p], d[p + 1], d[p + 2]) / zMax[z];  // baked value → shading
+    const f0 = Math.min(1, Math.max(d[p], d[p + 1], d[p + 2]) / zMax[z]);  // baked value
+    // the iris is baked dark; give the eye a brightness floor so the chosen colour
+    // actually reads instead of staying near-black. Body/muzzle keep full shading.
+    const f = z === Z_EYE ? 0.55 + 0.45 * f0 : f0;
     const c = cols[z];
     out[p] = c.r * 255 * f; out[p + 1] = c.g * 255 * f; out[p + 2] = c.b * 255 * f;
   }
