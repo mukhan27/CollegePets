@@ -168,8 +168,9 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
 // below the neck) — measured from the GLB. The neck cut also trims anomalous
 // RightShoulder-weighted verts that bleed up into the head (poor Meshy rigging).
 const SHIRT = {
-  Y_HEM_FRAC: 0.18, Y_NECK_FRAC: 0.47, INFLATE_FRAC: 0.017, TRIM_DARKEN: 0.82,
+  Y_HEM_FRAC: 0.18, Y_NECK_FRAC: 0.47, INFLATE_FRAC: 0.032, TRIM_DARKEN: 0.82,
   SMOOTH_PASSES: 3, SMOOTH_EDGE: 0.6, SMOOTH_BODY: 0.25,
+  ERODE_PASSES: 3, ERODE_THRESH: 0.42,
   TORSO: new Set([0, 9, 10, 11, 12, 16]),   // Hips, Spine02/01/Spine, L/R Shoulder
   SLEEVE: new Set([13, 17]),                 // L/R Arm (upper arm)
   EXCLUDE: new Set([1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 18, 19, 20, 21, 22, 23]),
@@ -212,13 +213,13 @@ function buildShirtGeometry(scene) {
     // unselected (thin single-triangle wisps), so the shirt edge reads cleaner.
     const triCount = new Uint16Array(V);
     for (let t = 0; t < idx.count; t += 3) { triCount[idx.getX(t)]++; triCount[idx.getX(t + 1)]++; triCount[idx.getX(t + 2)]++; }
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < SHIRT.ERODE_PASSES; pass++) {
       const nb = new Float32Array(V);
       for (let t = 0; t < idx.count; t += 3) {
         const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
         nb[a] += sel[b] + sel[c]; nb[b] += sel[a] + sel[c]; nb[c] += sel[a] + sel[b];
       }
-      for (let i = 0; i < V; i++) if (sel[i] && triCount[i] && nb[i] / (2 * triCount[i]) < 0.35) sel[i] = 0;
+      for (let i = 0; i < V; i++) if (sel[i] && triCount[i] && nb[i] / (2 * triCount[i]) < SHIRT.ERODE_THRESH) sel[i] = 0;
     }
 
     // keep triangles fully inside the selection; re-index compactly
@@ -246,14 +247,13 @@ function buildShirtGeometry(scene) {
       for (const o of [o0, o1, o2]) if (remap[o] >= 0) trimV[remap[o]] = 1; // kept vert on a boundary tri
     }
 
-    // build attributes from RAW bind-pose data, inflated along the normal
+    // build attributes from RAW bind-pose data (NO inflate yet — we offset last)
     const n = keepV.length, inflate = SHIRT.INFLATE_FRAC * H;
     const P = new Float32Array(n * 3), U = new Float32Array(n * 2);
     const SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
     for (let k = 0; k < n; k++) {
       const o = keepV[k];
-      const nx = nor ? nor.getX(o) : 0, ny = nor ? nor.getY(o) : 1, nz = nor ? nor.getZ(o) : 0;
-      P[k * 3] = pos.getX(o) + nx * inflate; P[k * 3 + 1] = pos.getY(o) + ny * inflate; P[k * 3 + 2] = pos.getZ(o) + nz * inflate;
+      P[k * 3] = pos.getX(o); P[k * 3 + 1] = pos.getY(o); P[k * 3 + 2] = pos.getZ(o);
       if (uv) { U[k * 2] = uv.getX(o); U[k * 2 + 1] = uv.getY(o); }
       SI[k * 4] = si.getX(o); SI[k * 4 + 1] = si.getY(o); SI[k * 4 + 2] = si.getZ(o); SI[k * 4 + 3] = si.getW(o);
       SW[k * 4] = sw.getX(o); SW[k * 4 + 1] = sw.getY(o); SW[k * 4 + 2] = sw.getZ(o); SW[k * 4 + 3] = sw.getW(o);
@@ -299,6 +299,17 @@ function buildShirtGeometry(scene) {
     // smooth shading normals from the relaxed shape — the body's baked per-vertex
     // normals are noisy (fur detail) and read as a scratchy speckled surface.
     out.computeVertexNormals();
+    // offset LAST, along the smoothed normals, by a uniform amount: this guarantees
+    // the shirt sits a fixed distance ABOVE the fur everywhere. Inflating before the
+    // Laplacian let the relax eat the offset, so the fur poked through as white cracks.
+    const nrm = out.attributes.normal;
+    for (let k = 0; k < n; k++) {
+      P[k * 3] += nrm.getX(k) * inflate;
+      P[k * 3 + 1] += nrm.getY(k) * inflate;
+      P[k * 3 + 2] += nrm.getZ(k) * inflate;
+    }
+    out.attributes.position.needsUpdate = true;
+    out.computeBoundingSphere();
     out.addGroup(0, body.length, 0);
     out.addGroup(body.length, trim.length, 1);
     console.log('[aura] shirt verts', n, 'tris', tris.length / 3, 'trim', trim.length / 3);
