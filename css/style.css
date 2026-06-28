@@ -55,6 +55,11 @@ html, body {
 .cc-opt.selected { border-color: #ff9f43; background: #fff; }
 .cc-opt .cc-emoji { font-size: clamp(26px, 4.5vw, 40px); line-height: 1; }
 .cc-opt .cc-thumb { width: 100%; aspect-ratio: 1 / 1; object-fit: contain; display: block; }
+/* "None" placeholder: a soft dashed ring with a diagonal slash (no emoji) */
+.cc-opt .cc-none { width: 60%; aspect-ratio: 1 / 1; margin: 6% auto; border-radius: 50%;
+  border: 2px dashed #b9c4cf; position: relative; }
+.cc-opt .cc-none::after { content: ''; position: absolute; left: 8%; right: 8%; top: 48%;
+  height: 2px; background: #b9c4cf; transform: rotate(-45deg); }
 .cc-opt .cc-label { font-weight: bold; color: #2c3e50; margin-top: 4px; font-size: 12px; }
 .cc-opt .cc-desc { font-size: 10px; color: #7a8aa0; margin-top: 1px; }
 .cc-swatch { width: clamp(46px, 8vw, 62px); height: clamp(46px, 8vw, 62px); border-radius: 50%;

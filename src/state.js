@@ -27,6 +27,17 @@ export const CATALOG = {
     { id: 'glasses',    icon: '👓', name: 'Smart Glasses', price: 80,  slot: 'face' },
     { id: 'sunglasses', icon: '🕶️', name: 'Shades',        price: 90,  slot: 'face' },
     { id: 'scarf',      icon: '🧣', name: 'Team Scarf',    price: 70,  slot: 'neck' },
+    // free starter accessories (offered in the character creator)
+    { id: 'shirt_white', icon: '👕', name: 'White Tee',    price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_blue',  icon: '👕', name: 'Blue Tee',     price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_red',   icon: '👕', name: 'Red Tee',      price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_green', icon: '👕', name: 'Green Tee',    price: 0, slot: 'top',    starter: true },
+    { id: 'pants_blue',  icon: '👖', name: 'Blue Jeans',   price: 0, slot: 'bottom', starter: true },
+    { id: 'pants_khaki', icon: '👖', name: 'Khakis',       price: 0, slot: 'bottom', starter: true },
+    { id: 'pants_grey',  icon: '👖', name: 'Grey Joggers', price: 0, slot: 'bottom', starter: true },
+    { id: 'bag_navy',    icon: '🎒', name: 'Navy Backpack',price: 0, slot: 'back',   starter: true },
+    { id: 'bag_red',     icon: '🎒', name: 'Red Backpack', price: 0, slot: 'back',   starter: true },
+    { id: 'bag_green',   icon: '🎒', name: 'Green Backpack',price: 0,slot: 'back',   starter: true },
   ],
   decor: [
     { id: 'rug_blue',    icon: '🟦', name: 'Blue Rug',     price: 40,  slot: 'rug' },
@@ -92,7 +103,7 @@ function defaults() {
     creature: defaultCreature(), // custom "Birchling" appearance (used when petType === 'creature')
     coins: 100,
     owned: [],                 // item ids
-    equipped: { hat: null, face: null, neck: null },
+    equipped: { hat: null, face: null, neck: null, top: null, bottom: null, back: null },
     room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red', layout: null },
     furniture: { bed: 1, desk: 1, nightstand: 1, bookshelf: 1, rug: 1, plant: 1, lamp: 1, beanbag: 1 }, // owned counts
     stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1, fishCaught: 0 },

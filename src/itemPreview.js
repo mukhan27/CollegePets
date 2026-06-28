@@ -3,7 +3,7 @@
 // can show a real preview instead of an emoji. One small WebGL context, reused.
 
 import * as THREE from 'three';
-import { createPet } from './petFactory.js';
+import { createPet, buildWearable } from './petFactory.js';
 import { makeEars } from './auraModel.js';
 import { FURNITURE } from './furniture.js';
 import { FOOD_MODELS } from './foodModels.js';
@@ -29,7 +29,7 @@ function init() {
 }
 
 // auto-frame a group from a friendly 3/4 angle and capture a PNG
-function snapshot(group, lift = 0) {
+function snapshot(group, lift = 0, dir = new THREE.Vector3(0.55, 0.42, 1)) {
   init();
   scene.add(group);
   const box = new THREE.Box3().setFromObject(group);
@@ -37,9 +37,8 @@ function snapshot(group, lift = 0) {
   const size = box.getSize(new THREE.Vector3());
   const radius = Math.max(size.x, size.y, size.z, 0.6) * 0.5;
   const dist = radius / Math.tan((camera.fov * Math.PI / 180) / 2) * 1.45;
-  const dir = new THREE.Vector3(0.55, 0.42, 1).normalize();
   c.y += lift;
-  camera.position.copy(c).add(dir.multiplyScalar(dist));
+  camera.position.copy(c).add(dir.clone().normalize().multiplyScalar(dist));
   camera.lookAt(c);
   renderer.render(scene, camera);
   const url = renderer.domElement.toDataURL('image/png');
@@ -48,11 +47,23 @@ function snapshot(group, lift = 0) {
 }
 
 export function wearablePreview(id) {
+  const slot = slotOf(id);
+  if (slot === 'top' || slot === 'bottom' || slot === 'back') return accessoryPreview(id);
   const k = 'w:' + id;
   if (cache.has(k)) return cache.get(k);
-  const pet = createPet('cat', { equipped: { [slotOf(id)]: id } });
+  const pet = createPet('cat', { equipped: { [slot]: id } });
   if (pet.userData.animate) pet.userData.animate(0, false);
   const url = snapshot(pet, 0.15);
+  cache.set(k, url);
+  return url;
+}
+
+// A standalone thumbnail of a worn accessory (shirt / pants / backpack), framed
+// straight on so the garment shape + colour read clearly in the picker chip.
+export function accessoryPreview(id) {
+  const k = 'acc:' + id;
+  if (cache.has(k)) return cache.get(k);
+  const url = snapshot(buildWearable(id), 0, new THREE.Vector3(0.25, 0.18, 1));
   cache.set(k, url);
   return url;
 }

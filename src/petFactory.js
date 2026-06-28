@@ -285,22 +285,23 @@ const BUILDERS = {
 // shape so createPet's animation loop is reused. Head radius stays 0.52 so all
 // existing wearables fit.
 
-// curated coat palette for the creator: natural animal coats (white→cream→fawn→
-// golden→brown→cocoa, greys→charcoal) followed by a row of playful candy tones —
-// saturated and cheerful, but soft enough that they never glow neon.
+// Coat palette: a coherent run of natural fur tones (snow → cream → fawn →
+// caramel → brown → cocoa, then a cool grey→charcoal column) followed by soft,
+// cheerful candy colours. Ordered light→dark within each family.
 export const COAT_SWATCHES = [
-  0xf7f3ea, 0xf0dcb4, 0xe3b878, 0xd99a3e, 0xb06b30, 0x6b4226,
-  0xbac0c6, 0x808d9b, 0x444b54,
-  0xf2785c, 0xf7a23b, 0xf3cf52, 0x7ecb6e, 0x3fc0b0, 0x57a8e6,
-  0x7d8fe0, 0xb27cd6, 0xf48fb1,
+  0xf7f1e6, 0xefdcc0, 0xe3c39a, 0xcaa472, 0xb07b46, 0x8a5a32, 0x5e3d22,
+  0xcfd2d6, 0x9aa0a6, 0x6b7178, 0x3c4047,
+  0xef8d6a, 0xf0b84e, 0x7ec98a, 0x4bb3a6, 0x5f9fe0, 0xc98fd0, 0xee9ac2,
 ];
 export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
 export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks
 export const SPOT_SWATCHES = [0xcfcfcf, 0xbfbfbf, 0xe0d6c8, 0xd6c0c0, 0xc8d2dc, 0xbcbcc6]; // soft markings
-// muzzle / snout patch: creams & tans → browns → pinks → greys → charcoal
+// Muzzle / snout tones, curated to pair with the coat palette: ivory & creams
+// for light coats, fawn/tan/brown for warm coats, blush/rose accents, and a
+// grey→charcoal run for the cool coats. Ordered light→dark.
 export const MUZZLE_SWATCHES = [
-  0xe8dcc6, 0xdcc7a4, 0xc9a87e, 0xb0895e, 0x8a6a48,
-  0xf4cdc4, 0xe79aa2, 0xcfd3d6, 0x9aa0a6, 0x46484c,
+  0xf6ecdc, 0xe9d6b8, 0xf0cdb0, 0xd9b48c, 0xc09a6e, 0x9a7350,
+  0xf3c9cf, 0xe39aa6, 0xd7dade, 0xa6abb0, 0x6f747a, 0x3f4248,
 ];
 // eye / iris colours — vivid but believable: rich browns, amber/hazel, then a
 // clear blue / green / grey / violet, plus a deep near-black for a classic look.
@@ -656,7 +657,60 @@ const WEARABLES = {
     const center = ball(0.06, 0xffd166); g.add(center);
     g.position.set(0.26, 0.45, 0.12); head.add(g); return g;
   },
+  // ---- body-worn accessories (attached to the torso anchor) ----
+  shirt_white: (b) => shirtMesh(b, 0xf2f1ee),
+  shirt_blue:  (b) => shirtMesh(b, 0x4a78c8),
+  shirt_red:   (b) => shirtMesh(b, 0xd6584f),
+  shirt_green: (b) => shirtMesh(b, 0x4f9e6a),
+  pants_blue:  (b) => pantsMesh(b, 0x3f567f),
+  pants_khaki: (b) => pantsMesh(b, 0xc2a172),
+  pants_grey:  (b) => pantsMesh(b, 0x5b6068),
+  bag_navy:    (b) => backpackMesh(b, 0x2f3a66),
+  bag_red:     (b) => backpackMesh(b, 0xbe3b32),
+  bag_green:   (b) => backpackMesh(b, 0x3c7a4e),
 };
+
+// tint a hex toward white (t>0) or black (t<0) by |t|
+const tintHex = (c, t) => new THREE.Color(c).lerp(new THREE.Color(t < 0 ? 0x000000 : 0xffffff), Math.abs(t)).getHex();
+
+// Body accessories sit in the Aura's normalised space (feet y=0, ~1.7 tall). The
+// big chibi head spans y≈0.81–1.70, so the torso is ~0.45–0.81 and the legs below.
+// Positions/sizes are tuned to that; the constants below make them easy to nudge.
+const TORSO_Y = 0.60, TORSO_R = 0.37, HIPS_Y = 0.33, BACK_Z = -0.34;
+function shirtMesh(body, color) {
+  const g = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(TORSO_R, 18, 14), toonMat(color));
+  torso.scale.set(1.06, 0.86, 1.02); torso.castShadow = true; g.add(torso);
+  for (const s of [-1, 1]) { const sl = ball(0.145, color, 1, 0.85, 1); sl.position.set(s * 0.35, 0.02, 0); g.add(sl); }
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(tintHex(color, 0.35)));
+  collar.rotation.x = Math.PI / 2; collar.position.y = 0.27; g.add(collar);
+  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(tintHex(color, 0.22)));
+  hem.rotation.x = Math.PI / 2; hem.position.y = -0.27; g.add(hem);
+  g.position.set(0, TORSO_Y, 0); body.add(g); return g;
+}
+function pantsMesh(body, color) {
+  const g = new THREE.Group();
+  const hips = new THREE.Mesh(new THREE.SphereGeometry(0.33, 16, 12), toonMat(color));
+  hips.scale.set(1.06, 0.74, 1.02); hips.castShadow = true; g.add(hips);
+  for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.2, 4, 10), toonMat(color)); leg.position.set(s * 0.14, -0.26, 0.02); leg.castShadow = true; g.add(leg); }
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.03, 8, 18), toonMat(tintHex(color, -0.3)));
+  belt.rotation.x = Math.PI / 2; belt.position.y = 0.13; g.add(belt);
+  g.position.set(0, HIPS_Y, 0); body.add(g); return g;
+}
+function backpackMesh(body, color) {
+  const g = new THREE.Group();
+  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.46, 0.2), toonMat(color));
+  bag.castShadow = true; bag.position.z = BACK_Z; g.add(bag);
+  const flap = box(0.4, 0.16, 0.22, tintHex(color, 0.12)); flap.position.set(0, 0.16, BACK_Z + 0.01); g.add(flap);
+  const pocket = box(0.26, 0.18, 0.1, tintHex(color, -0.12)); pocket.position.set(0, -0.08, BACK_Z + 0.11); g.add(pocket);
+  const loop = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.016, 6, 12), toonMat(tintHex(color, 0.2)));
+  loop.position.set(0, 0.27, BACK_Z - 0.05); g.add(loop);
+  for (const s of [-1, 1]) {               // shoulder straps across the chest
+    const strap = box(0.06, 0.52, 0.05, tintHex(color, -0.2));
+    strap.position.set(s * 0.15, -0.02, 0.3); strap.rotation.x = -0.1; g.add(strap);
+  }
+  g.position.set(0, TORSO_Y, 0); body.add(g); return g;
+}
 
 function capMesh(head, color) {
   const g = new THREE.Group();
@@ -685,6 +739,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
       : buildCreature(inner, appearance || defaultCreature()))     // primitive fallback
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
+  g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
   g.userData.petType = type;
   g.userData.wearables = [];
 
@@ -728,11 +783,21 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   return g;
 }
 
+// Build a wearable on a fresh anchor group (for standalone preview thumbnails).
+export function buildWearable(id) {
+  const anchor = new THREE.Group();
+  if (WEARABLES[id]) WEARABLES[id](anchor);
+  return anchor;
+}
+
+// Body-worn slots attach to the torso anchor; everything else to the head.
+const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
 export function setWearables(pet, equipped) {
-  const head = pet.userData.head;
-  for (const w of pet.userData.wearables) head.remove(w);
+  const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
+  for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];
-  for (const id of Object.values(equipped)) {
-    if (id && WEARABLES[id]) pet.userData.wearables.push(WEARABLES[id](head));
+  for (const [slot, id] of Object.entries(equipped)) {
+    if (!id || !WEARABLES[id]) continue;
+    pet.userData.wearables.push(WEARABLES[id](BODY_SLOTS[slot] ? body : head));
   }
 }

@@ -7,15 +7,16 @@ import {
   createPet, defaultCreature, randomCreature, CREATURE_OPTIONS,
   COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES,
 } from './petFactory.js';
-import { state, save } from './state.js';
-import { earPreview } from './itemPreview.js';
+import { state, save, CATALOG } from './state.js';
+import { earPreview, accessoryPreview } from './itemPreview.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ---- preview stage (own renderer; same setup as tryon.js) ----
 let renderer, scene, camera, pet, raf = null, spin = 0.5, dragging = false, lastX = 0;
 // ---- working selection ----
-let appearance = defaultCreature(), activeTab = 'body';
+let appearance = defaultCreature(), activeTab = 'color';
+let equipped = { top: null, bottom: null, back: null };   // starter accessories
 let onDone = null, bound = false;
 
 function initStage() {
@@ -51,7 +52,7 @@ function resize() {
 
 function rebuildPet() {
   if (pet) scene.remove(pet);
-  pet = createPet('creature', { equipped: {}, appearance });
+  pet = createPet('creature', { equipped, appearance });
   scene.add(pet);
 }
 
@@ -70,6 +71,9 @@ const TABS = [
   { id: 'muzzle', label: 'Muzzle' },
   { id: 'eyes', label: 'Eyes' },
   { id: 'ears', label: 'Ears' },
+  { id: 'shirt', label: 'Shirt' },
+  { id: 'pants', label: 'Pants' },
+  { id: 'bag', label: 'Backpack' },
 ];
 
 // ---- DOM builders ----
@@ -114,6 +118,23 @@ function earChips(box) {
     box.appendChild(imgChip(earPreview(v), label, appearance.ears === v, () => set('ears', v)));
   }
 }
+// a "none" option chip (no item to preview) — a clean placeholder, not an emoji
+function noneChip(selected, onClick) {
+  const el = document.createElement('button');
+  el.className = 'cc-opt' + (selected ? ' selected' : '');
+  el.innerHTML = '<div class="cc-none"></div><div class="cc-label">None</div>';
+  el.addEventListener('click', onClick);
+  return el;
+}
+function setEquip(slot, id) { equipped[slot] = id; rebuildPet(); renderActiveTab(); }
+// accessory picker for a body slot: a None option plus rendered item thumbnails
+function accessoryChips(box, slot, header_) {
+  box.appendChild(header(header_));
+  box.appendChild(noneChip(!equipped[slot], () => setEquip(slot, null)));
+  for (const item of CATALOG.clothes.filter((c) => c.slot === slot && c.starter)) {
+    box.appendChild(imgChip(accessoryPreview(item.id), item.name, equipped[slot] === item.id, () => setEquip(slot, item.id)));
+  }
+}
 
 function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
@@ -125,6 +146,12 @@ function renderActiveTab() {
     swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
   } else if (activeTab === 'ears') {
     earChips(box);
+  } else if (activeTab === 'shirt') {
+    accessoryChips(box, 'top', 'Shirt');
+  } else if (activeTab === 'pants') {
+    accessoryChips(box, 'bottom', 'Pants');
+  } else if (activeTab === 'bag') {
+    accessoryChips(box, 'back', 'Backpack');
   }
 }
 
@@ -136,6 +163,12 @@ function start() {
   state.creature = appearance;
   state.petType = 'creature';
   state.petName = nm;
+  // apply the chosen starter accessories (free) and mark them owned so they
+  // persist and show up in the fitting room too
+  for (const slot of ['top', 'bottom', 'back']) {
+    state.equipped[slot] = equipped[slot] || null;
+    if (equipped[slot] && !state.owned.includes(equipped[slot])) state.owned.push(equipped[slot]);
+  }
   save();
   close();
   if (onDone) onDone();
@@ -157,6 +190,7 @@ export function openCreator(done, { editing = false } = {}) {
   initStage();
   bindOnce();
   appearance = JSON.parse(JSON.stringify(state.creature || defaultCreature()));
+  equipped = { top: state.equipped.top || null, bottom: state.equipped.bottom || null, back: state.equipped.back || null };
   activeTab = 'color';
   $('creator-name').value = editing ? (state.petName || '') : '';
   $('creator-start').textContent = editing ? 'Save ✓' : 'Start College! 🎒';
