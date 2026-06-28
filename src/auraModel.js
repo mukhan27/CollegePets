@@ -168,7 +168,8 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
 // below the neck) — measured from the GLB. The neck cut also trims anomalous
 // RightShoulder-weighted verts that bleed up into the head (poor Meshy rigging).
 const SHIRT = {
-  Y_HEM_FRAC: 0.18, Y_NECK_FRAC: 0.47, INFLATE_FRAC: 0.013, TRIM_DARKEN: 0.72,
+  Y_HEM_FRAC: 0.18, Y_NECK_FRAC: 0.47, INFLATE_FRAC: 0.017, TRIM_DARKEN: 0.82,
+  SMOOTH_PASSES: 3, SMOOTH_EDGE: 0.6, SMOOTH_BODY: 0.25,
   TORSO: new Set([0, 9, 10, 11, 12, 16]),   // Hips, Spine02/01/Spine, L/R Shoulder
   SLEEVE: new Set([13, 17]),                 // L/R Arm (upper arm)
   EXCLUDE: new Set([1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 18, 19, 20, 21, 22, 23]),
@@ -207,6 +208,19 @@ function buildShirtGeometry(scene) {
       else if (SHIRT.TORSO.has(dom) && pos.getY(i) >= yHem && pos.getY(i) <= yNeck) sel[i] = 1;
     }
 
+    // erode the ragged boundary: drop verts whose triangle-neighbourhood is mostly
+    // unselected (thin single-triangle wisps), so the shirt edge reads cleaner.
+    const triCount = new Uint16Array(V);
+    for (let t = 0; t < idx.count; t += 3) { triCount[idx.getX(t)]++; triCount[idx.getX(t + 1)]++; triCount[idx.getX(t + 2)]++; }
+    for (let pass = 0; pass < 2; pass++) {
+      const nb = new Float32Array(V);
+      for (let t = 0; t < idx.count; t += 3) {
+        const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
+        nb[a] += sel[b] + sel[c]; nb[b] += sel[a] + sel[c]; nb[c] += sel[a] + sel[b];
+      }
+      for (let i = 0; i < V; i++) if (sel[i] && triCount[i] && nb[i] / (2 * triCount[i]) < 0.35) sel[i] = 0;
+    }
+
     // keep triangles fully inside the selection; re-index compactly
     const remap = new Int32Array(V).fill(-1);
     const keepV = [], tris = [];
@@ -234,16 +248,40 @@ function buildShirtGeometry(scene) {
 
     // build attributes from RAW bind-pose data, inflated along the normal
     const n = keepV.length, inflate = SHIRT.INFLATE_FRAC * H;
-    const P = new Float32Array(n * 3), Nr = new Float32Array(n * 3), U = new Float32Array(n * 2);
+    const P = new Float32Array(n * 3), U = new Float32Array(n * 2);
     const SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
     for (let k = 0; k < n; k++) {
       const o = keepV[k];
       const nx = nor ? nor.getX(o) : 0, ny = nor ? nor.getY(o) : 1, nz = nor ? nor.getZ(o) : 0;
       P[k * 3] = pos.getX(o) + nx * inflate; P[k * 3 + 1] = pos.getY(o) + ny * inflate; P[k * 3 + 2] = pos.getZ(o) + nz * inflate;
-      Nr[k * 3] = nx; Nr[k * 3 + 1] = ny; Nr[k * 3 + 2] = nz;
       if (uv) { U[k * 2] = uv.getX(o); U[k * 2 + 1] = uv.getY(o); }
       SI[k * 4] = si.getX(o); SI[k * 4 + 1] = si.getY(o); SI[k * 4 + 2] = si.getZ(o); SI[k * 4 + 3] = si.getW(o);
       SW[k * 4] = sw.getX(o); SW[k * 4 + 1] = sw.getY(o); SW[k * 4 + 2] = sw.getZ(o); SW[k * 4 + 3] = sw.getW(o);
+    }
+
+    // Laplacian relax: the cut edge follows the body's triangle topology, so the
+    // raw boundary is a sawtooth. Average each vertex toward its neighbours —
+    // harder on boundary verts (de-jag the silhouette), gentle inside (smooth the
+    // fabric without losing the body shape). Skin weights stay per-vertex, so the
+    // garment still deforms correctly after relaxation.
+    const adj = Array.from({ length: n }, () => new Set());
+    for (let t = 0; t < tris.length; t += 3) {
+      const a = tris[t], b = tris[t + 1], c = tris[t + 2];
+      adj[a].add(b); adj[a].add(c); adj[b].add(a); adj[b].add(c); adj[c].add(a); adj[c].add(b);
+    }
+    for (let pass = 0; pass < SHIRT.SMOOTH_PASSES; pass++) {
+      const np = new Float32Array(P);
+      for (let k = 0; k < n; k++) {
+        const nb = adj[k]; if (!nb.size) continue;
+        let ax = 0, ay = 0, az = 0;
+        for (const j of nb) { ax += P[j * 3]; ay += P[j * 3 + 1]; az += P[j * 3 + 2]; }
+        ax /= nb.size; ay /= nb.size; az /= nb.size;
+        const w = trimV[k] ? SHIRT.SMOOTH_EDGE : SHIRT.SMOOTH_BODY;
+        np[k * 3] = P[k * 3] + (ax - P[k * 3]) * w;
+        np[k * 3 + 1] = P[k * 3 + 1] + (ay - P[k * 3 + 1]) * w;
+        np[k * 3 + 2] = P[k * 3 + 2] + (az - P[k * 3 + 2]) * w;
+      }
+      P.set(np);
     }
 
     // split index into 2 groups: body triangles (0) and trim triangles (1)
@@ -254,11 +292,13 @@ function buildShirtGeometry(scene) {
     const order = body.concat(trim);
     const out = new THREE.BufferGeometry();
     out.setAttribute('position', new THREE.BufferAttribute(P, 3));
-    out.setAttribute('normal', new THREE.BufferAttribute(Nr, 3));
     out.setAttribute('uv', new THREE.BufferAttribute(U, 2));
     out.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4));
     out.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
     out.setIndex(order);
+    // smooth shading normals from the relaxed shape — the body's baked per-vertex
+    // normals are noisy (fur detail) and read as a scratchy speckled surface.
+    out.computeVertexNormals();
     out.addGroup(0, body.length, 0);
     out.addGroup(body.length, trim.length, 1);
     console.log('[aura] shirt verts', n, 'tris', tris.length / 3, 'trim', trim.length / 3);
@@ -270,8 +310,10 @@ function buildShirtGeometry(scene) {
 // given skeleton. Returns null if the geometry could not be derived.
 export function buildShirtMesh(skeleton, bindMatrix, colorHex) {
   if (!cache || !cache.shirt) return null;
-  const body = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.92, metalness: 0 });
-  const trim = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex).multiplyScalar(SHIRT.TRIM_DARKEN), roughness: 0.92, metalness: 0 });
+  // polygonOffset biases the shirt forward in the depth buffer so it always wins
+  // over the fur it sits on — no z-fight speckle even where the inflate is thin.
+  const body = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const trim = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex).multiplyScalar(SHIRT.TRIM_DARKEN), roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const m = new THREE.SkinnedMesh(cache.shirt, [body, trim]);
   m.castShadow = true;
   m.frustumCulled = false;        // skinned bounds drift; never let it cull out
