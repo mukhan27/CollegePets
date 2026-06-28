@@ -139,9 +139,10 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
     const z = zone[i]; if (z === Z_KEEP) continue;       // black/white/grey baked
     const p = i * 4;
     const f0 = Math.min(1, Math.max(d[p], d[p + 1], d[p + 2]) / zMax[z]);  // baked value
-    // the iris is baked dark; give the eye a brightness floor so the chosen colour
-    // actually reads instead of staying near-black. Body/muzzle keep full shading.
-    const f = z === Z_EYE ? 0.55 + 0.45 * f0 : f0;
+    // the iris is baked dark, so show it at nearly full brightness (slight gradient
+    // only) — otherwise a dark baked iris swallows the chosen colour. Body/muzzle
+    // keep their full baked shading.
+    const f = z === Z_EYE ? 0.86 + 0.14 * f0 : f0;
     const c = cols[z];
     out[p] = c.r * 255 * f; out[p + 1] = c.g * 255 * f; out[p + 2] = c.b * 255 * f;
   }
@@ -242,7 +243,7 @@ export function buildAura(inner, a) {
   // Repaint the coat: a freshly recoloured texture (fur / muzzle / eye zones each
   // take their chosen colour, catchlights preserved) drives both the lit base
   // colour and a soft emissive so the coat stays vivid without washing features.
-  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x2a2018);
+  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x6b4324);
   const recolour = (m) => {
     const c = m.clone();
     if (coat) {
