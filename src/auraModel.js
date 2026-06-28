@@ -62,6 +62,7 @@ export function preloadAura() {
       scene, animations: g.animations || [],
       head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR },
       tex: buildTexturePrep(scene),
+      shirt: buildShirtGeometry(scene),
     };
     ready = true;
     return true;
@@ -155,6 +156,130 @@ function coatTexture(bodyHex, muzzleHex, eyeHex) {
   if (texCache.size > 12) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
   texCache.set(key, tex);
   return tex;
+}
+
+// ---- skinned shirt --------------------------------------------------------
+// The shirt is cut out of the body's own skin (the torso + upper-arm region),
+// inflated slightly along its normals, and bound to the SAME skeleton — so it
+// matches the body exactly and deforms with the rig (sleeves follow the arms).
+// Derived once here; per pet we just make a SkinnedMesh from this geometry and
+// bind it to that instance's cloned skeleton.
+// Y-band fractions of model height: hem ~y0.31 (hip-length), neck ~y0.80 (just
+// below the neck) — measured from the GLB. The neck cut also trims anomalous
+// RightShoulder-weighted verts that bleed up into the head (poor Meshy rigging).
+const SHIRT = {
+  Y_HEM_FRAC: 0.18, Y_NECK_FRAC: 0.47, INFLATE_FRAC: 0.013, TRIM_DARKEN: 0.72,
+  TORSO: new Set([0, 9, 10, 11, 12, 16]),   // Hips, Spine02/01/Spine, L/R Shoulder
+  SLEEVE: new Set([13, 17]),                 // L/R Arm (upper arm)
+  EXCLUDE: new Set([1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 18, 19, 20, 21, 22, 23]),
+};
+
+function buildShirtGeometry(scene) {
+  if (typeof document === 'undefined') return null;
+  try {
+    let char = null;
+    scene.traverse((o) => { if (!char && o.isSkinnedMesh) char = o; });
+    if (!char) return null;
+    const geo = char.geometry, idx = geo.index;
+    const pos = geo.attributes.position, nor = geo.attributes.normal;
+    const uv = geo.attributes.uv, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    if (!idx || !pos || !si || !sw) return null;
+    const V = pos.count;
+
+    // posed Y per vertex (local GLB units) → torso Y-band as a fraction of height
+    const v = new THREE.Vector3();
+    const posedY = new Float32Array(V);
+    let minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < V; i++) {
+      char.applyBoneTransform(i, v.set(pos.getX(i), pos.getY(i), pos.getZ(i)));
+      posedY[i] = v.y; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
+    }
+    const H = maxY - minY || 1;
+    const yHem = minY + SHIRT.Y_HEM_FRAC * H, yNeck = minY + SHIRT.Y_NECK_FRAC * H;
+
+    // dominant bone per vertex → select shirt verts
+    const sel = new Uint8Array(V);
+    for (let i = 0; i < V; i++) {
+      const w = [sw.getX(i), sw.getY(i), sw.getZ(i), sw.getW(i)];
+      const b = [si.getX(i), si.getY(i), si.getZ(i), si.getW(i)];
+      let bi = 0; for (let k = 1; k < 4; k++) if (w[k] > w[bi]) bi = k;
+      if (w[bi] <= 0) continue;
+      const dom = b[bi];
+      if (SHIRT.EXCLUDE.has(dom)) continue;
+      if (SHIRT.SLEEVE.has(dom)) sel[i] = 1;
+      else if (SHIRT.TORSO.has(dom) && posedY[i] >= yHem && posedY[i] <= yNeck) sel[i] = 1;
+    }
+
+    // keep triangles fully inside the selection; re-index compactly
+    const remap = new Int32Array(V).fill(-1);
+    const keepV = [], tris = [];
+    const a3 = [0, 0, 0];
+    for (let t = 0; t < idx.count; t += 3) {
+      a3[0] = idx.getX(t); a3[1] = idx.getX(t + 1); a3[2] = idx.getX(t + 2);
+      if (!sel[a3[0]] || !sel[a3[1]] || !sel[a3[2]]) continue;
+      const tri = [];
+      for (const orig of a3) {
+        if (remap[orig] < 0) { remap[orig] = keepV.length; keepV.push(orig); }
+        tri.push(remap[orig]);
+      }
+      tris.push(tri[0], tri[1], tri[2]);
+    }
+    if (!keepV.length || !tris.length) return null;
+
+    // trim = kept vertex adjacent (via a kept triangle) to a non-selected vertex
+    const trimV = new Uint8Array(keepV.length);
+    for (let t = 0; t < idx.count; t += 3) {
+      const o0 = idx.getX(t), o1 = idx.getX(t + 1), o2 = idx.getX(t + 2);
+      const inq = [sel[o0], sel[o1], sel[o2]];
+      if (inq[0] && inq[1] && inq[2]) continue;          // fully inside, not a boundary
+      for (const o of [o0, o1, o2]) if (remap[o] >= 0) trimV[remap[o]] = 1; // kept vert on a boundary tri
+    }
+
+    // build attributes from RAW bind-pose data, inflated along the normal
+    const n = keepV.length, inflate = SHIRT.INFLATE_FRAC * H;
+    const P = new Float32Array(n * 3), Nr = new Float32Array(n * 3), U = new Float32Array(n * 2);
+    const SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
+    for (let k = 0; k < n; k++) {
+      const o = keepV[k];
+      const nx = nor ? nor.getX(o) : 0, ny = nor ? nor.getY(o) : 1, nz = nor ? nor.getZ(o) : 0;
+      P[k * 3] = pos.getX(o) + nx * inflate; P[k * 3 + 1] = pos.getY(o) + ny * inflate; P[k * 3 + 2] = pos.getZ(o) + nz * inflate;
+      Nr[k * 3] = nx; Nr[k * 3 + 1] = ny; Nr[k * 3 + 2] = nz;
+      if (uv) { U[k * 2] = uv.getX(o); U[k * 2 + 1] = uv.getY(o); }
+      SI[k * 4] = si.getX(o); SI[k * 4 + 1] = si.getY(o); SI[k * 4 + 2] = si.getZ(o); SI[k * 4 + 3] = si.getW(o);
+      SW[k * 4] = sw.getX(o); SW[k * 4 + 1] = sw.getY(o); SW[k * 4 + 2] = sw.getZ(o); SW[k * 4 + 3] = sw.getW(o);
+    }
+
+    // split index into 2 groups: body triangles (0) and trim triangles (1)
+    const body = [], trim = [];
+    for (let t = 0; t < tris.length; t += 3) {
+      (trimV[tris[t]] || trimV[tris[t + 1]] || trimV[tris[t + 2]] ? trim : body).push(tris[t], tris[t + 1], tris[t + 2]);
+    }
+    const order = body.concat(trim);
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(Nr, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    out.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4));
+    out.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
+    out.setIndex(order);
+    out.addGroup(0, body.length, 0);
+    out.addGroup(body.length, trim.length, 1);
+    console.log('[aura] shirt verts', n, 'tris', tris.length / 3, 'trim', trim.length / 3);
+    return out;
+  } catch (e) { console.warn('[aura] shirt geom error', e && e.message); return null; }
+}
+
+// Make a per-instance shirt SkinnedMesh from the cached geometry, bound to the
+// given skeleton. Returns null if the geometry could not be derived.
+export function buildShirtMesh(skeleton, bindMatrix, colorHex) {
+  if (!cache || !cache.shirt) return null;
+  const body = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.92, metalness: 0 });
+  const trim = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex).multiplyScalar(SHIRT.TRIM_DARKEN), roughness: 0.92, metalness: 0 });
+  const m = new THREE.SkinnedMesh(cache.shirt, [body, trim]);
+  m.castShadow = true;
+  m.frustumCulled = false;        // skinned bounds drift; never let it cull out
+  m.bind(skeleton, bindMatrix);
+  return m;
 }
 
 function smoothMesh(geo, hex, rough = 0.82) {
@@ -300,6 +425,11 @@ export function buildAura(inner, a) {
   };
   tuckArm('LeftArm'); tuckArm('RightArm');
 
-  return { head, legs: [], tail: null, ears, breathe: true };
+  // expose the cloned skeleton so skinned clothing (shirt) can bind to it and a
+  // sibling root to add it under (same parent/space as the body mesh)
+  const bodyMesh = model.getObjectByName('char1');
+  const skin = bodyMesh ? { skeleton: bodyMesh.skeleton, bindMatrix: bodyMesh.bindMatrix, root: bodyMesh.parent || model } : null;
+
+  return { head, legs: [], tail: null, ears, breathe: true, skin };
 }
 const ARM_OUT = 0.18;   // how far the relaxed arms splay from straight-down

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
-import { isAuraReady, buildAura } from './auraModel.js';
+import { isAuraReady, buildAura, buildShirtMesh } from './auraModel.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -740,6 +740,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
+  g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
   g.userData.petType = type;
   g.userData.wearables = [];
 
@@ -792,12 +793,20 @@ export function buildWearable(id) {
 
 // Body-worn slots attach to the torso anchor; everything else to the head.
 const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
+// Shirt colours (also drive the skinned shirt; mirror the static shirtMesh ids).
+const SHIRT_COLOURS = { shirt_white: 0xf2f1ee, shirt_blue: 0x4a78c8, shirt_red: 0xd6584f, shirt_green: 0x4f9e6a };
 export function setWearables(pet, equipped) {
-  const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
+  const head = pet.userData.head, body = pet.userData.body || pet.userData.head, skin = pet.userData.skin;
   for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];
   for (const [slot, id] of Object.entries(equipped)) {
-    if (!id || !WEARABLES[id]) continue;
+    if (!id) continue;
+    // shirt: a real skinned garment bound to the body skeleton (deforms with the rig)
+    if (slot === 'top' && skin && SHIRT_COLOURS[id] != null) {
+      const shirt = buildShirtMesh(skin.skeleton, skin.bindMatrix, SHIRT_COLOURS[id]);
+      if (shirt) { skin.root.add(shirt); pet.userData.wearables.push(shirt); continue; }
+    }
+    if (!WEARABLES[id]) continue;
     pet.userData.wearables.push(WEARABLES[id](BODY_SLOTS[slot] ? body : head));
   }
 }
