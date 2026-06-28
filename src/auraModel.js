@@ -186,14 +186,11 @@ function buildShirtGeometry(scene) {
     if (!idx || !pos || !si || !sw) return null;
     const V = pos.count;
 
-    // posed Y per vertex (local GLB units) → torso Y-band as a fraction of height
-    const v = new THREE.Vector3();
-    const posedY = new Float32Array(V);
+    // bind-pose Y directly: the rest pose is upright (feet 0 → head top), so the
+    // raw position Y is the true vertical layout — and this avoids any reliance on
+    // bone matrices (a bad H here would blow the normal-inflate into a spike-star).
     let minY = Infinity, maxY = -Infinity;
-    for (let i = 0; i < V; i++) {
-      char.applyBoneTransform(i, v.set(pos.getX(i), pos.getY(i), pos.getZ(i)));
-      posedY[i] = v.y; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
-    }
+    for (let i = 0; i < V; i++) { const y = pos.getY(i); if (y < minY) minY = y; if (y > maxY) maxY = y; }
     const H = maxY - minY || 1;
     const yHem = minY + SHIRT.Y_HEM_FRAC * H, yNeck = minY + SHIRT.Y_NECK_FRAC * H;
 
@@ -207,7 +204,7 @@ function buildShirtGeometry(scene) {
       const dom = b[bi];
       if (SHIRT.EXCLUDE.has(dom)) continue;
       if (SHIRT.SLEEVE.has(dom)) sel[i] = 1;
-      else if (SHIRT.TORSO.has(dom) && posedY[i] >= yHem && posedY[i] <= yNeck) sel[i] = 1;
+      else if (SHIRT.TORSO.has(dom) && pos.getY(i) >= yHem && pos.getY(i) <= yNeck) sel[i] = 1;
     }
 
     // keep triangles fully inside the selection; re-index compactly
@@ -425,10 +422,11 @@ export function buildAura(inner, a) {
   };
   tuckArm('LeftArm'); tuckArm('RightArm');
 
-  // expose the cloned skeleton so skinned clothing (shirt) can bind to it and a
-  // sibling root to add it under (same parent/space as the body mesh)
+  // expose the cloned skeleton so skinned clothing (shirt) can bind to it. Add the
+  // shirt as a CHILD of the body mesh so it inherits char1's exact world transform
+  // (a sibling would miss char1's own local transform and blow the skinning up).
   const bodyMesh = model.getObjectByName('char1');
-  const skin = bodyMesh ? { skeleton: bodyMesh.skeleton, bindMatrix: bodyMesh.bindMatrix, root: bodyMesh.parent || model } : null;
+  const skin = bodyMesh ? { skeleton: bodyMesh.skeleton, bindMatrix: bodyMesh.bindMatrix, root: bodyMesh } : null;
 
   return { head, legs: [], tail: null, ears, breathe: true, skin };
 }
