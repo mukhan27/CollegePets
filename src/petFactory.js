@@ -945,7 +945,9 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const inner = new THREE.Group();
   g.add(inner);
   const parts = type === 'creature'
-    ? buildDuck(inner, appearance || defaultCreature())
+    ? (isAuraReady()
+      ? buildAura(inner, appearance || defaultCreature())          // rigged duck GLB
+      : buildDuck(inner, appearance || defaultCreature()))         // procedural fallback
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
@@ -954,6 +956,9 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   g.userData.wearables = [];
 
   setWearables(g, equipped);
+
+  // a builder may supply its own animator (e.g. the rigged duck's bone-driven walk)
+  if (parts.animate) { g.userData.animate = parts.animate; return g; }
 
   // hop + squash walk, idle breathing/tail-wag — driven from the main loop
   const baseHeadY = parts.head.position.y;

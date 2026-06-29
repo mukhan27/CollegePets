@@ -255,77 +255,48 @@ function addEars(head, a, ears) {
   for (const ear of makeEars(a.ears, cache.head.r, a.bodyColor)) { head.add(ear); ears.push(ear); }
 }
 
-// Synchronous assembler — assumes isAuraReady(). Mirrors a builder's return shape,
-// plus a `mixer` that createPet drives each frame.
+// Synchronous assembler — assumes isAuraReady(). Clones the rigged duck, keeps its
+// baked texture (yellow body / green shirt / orange beak / black eyes), and returns
+// a custom `animate` that drives a walk cycle on the leg bones so the rig is visible.
+const WALK = { LEG_BONES: ['Bone_010', 'Bone_015'], SPEED: 7, AMP: 0.5, BOB: 0.03 };
+const X_AXIS = new THREE.Vector3(1, 0, 0);
 export function buildAura(inner, a) {
   const model = skeletonClone(cache.scene);
-  // Repaint the coat: a freshly recoloured texture (fur / muzzle / eye zones each
-  // take their chosen colour, catchlights preserved) drives both the lit base
-  // colour and a soft emissive so the coat stays vivid without washing features.
-  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x6b4324,
-    a.shirtColor ?? 0xf2c200, a.pantsColor ?? 0xf06c00);
-  const recolour = (m) => {
-    const c = m.clone();
-    if (coat) {
-      c.map = coat; if (c.color) c.color.setRGB(1, 1, 1);
-      c.emissiveMap = coat; if (c.emissive) c.emissive.setRGB(1, 1, 1);
-      c.emissiveIntensity = 0.35;
-    } else if (c.color) {                 // mask unavailable: fall back to a tint
-      c.color.setHex(a.bodyColor);
-      if (c.emissive) { c.emissive.setHex(a.bodyColor); c.emissiveIntensity = 0.5; }
-    }
-    if ('specularIntensity' in c) c.specularIntensity = 0.15;
-    if (c.specularColor) c.specularColor.setRGB(1, 1, 1);
-    c.metalness = 0; c.roughness = 0.9;
-    return c;
-  };
   model.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     o.castShadow = true; o.receiveShadow = true;
-    o.material = Array.isArray(o.material) ? o.material.map(recolour) : recolour(o.material);
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) { m.metalness = 0; if (m.roughness !== undefined) m.roughness = 0.6; }
   });
   inner.add(model);
+  inner.updateMatrixWorld(true);
 
-  // head anchor (world-aligned, near the crown) for ears + wearables. Keep it
-  // centred over the head (no forward push) so ears sit on top, not in front.
+  // head anchor near the crown (for hats / wearables)
   const head = new THREE.Group();
   head.position.set(0, cache.head.y, 0);
   inner.add(head);
 
-  const ears = [];
-  addEars(head, a, ears);
-
-  // Pose the model ONCE into a calm standing idle: freeze the authored clip at its
-  // first frame, then swing the arms down to the sides. The clip is never advanced
-  // afterwards (so nothing flails and the skinned cheek never jitters); life comes
-  // from a subtle breathing scale + ear flap applied by createPet's animate().
-  if (cache.animations[0]) {
-    const mixer = new THREE.AnimationMixer(model);
-    mixer.clipAction(cache.animations[0]).play();
-    mixer.update(0);                          // settle into the rest pose, then leave it
+  // Capture each leg's hip bone + its parent world orientation so we can swing it
+  // around the WORLD x-axis (forward/back) regardless of the bone's local frame.
+  const legs = [];
+  for (const name of WALK.LEG_BONES) {
+    const hip = model.getObjectByName(name);
+    if (!hip || !hip.parent) continue;
+    const Qp = new THREE.Quaternion(); hip.parent.getWorldQuaternion(Qp);
+    legs.push({ hip, rest: hip.quaternion.clone(), Qp, QpInv: Qp.clone().invert() });
   }
-  inner.updateMatrixWorld(true);
-  const tuckArm = (name) => {
-    const b = model.getObjectByName(name), child = b && b.children[0];
-    if (!b || !child) return;
-    const a = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
-    const c = new THREE.Vector3().setFromMatrixPosition(child.matrixWorld);
-    const u = c.sub(a).normalize();                       // current arm direction (world)
-    const out = Math.sign(u.x) || 1;                      // which side this arm is on
-    const v = new THREE.Vector3(out * ARM_OUT, -1, 0).normalize(); // target: mostly down
-    const Rw = new THREE.Quaternion().setFromUnitVectors(u, v);
-    const Qp = new THREE.Quaternion(); b.parent.getWorldQuaternion(Qp);
-    const q = Qp.clone().invert().multiply(Rw).multiply(Qp); // world rot → parent frame
-    b.quaternion.premultiply(q);                            // applied once, stays put
+
+  const tmp = new THREE.Quaternion();
+  // Walk cycle: legs swing antiphase; the body bobs. (Always walks for now so the
+  // rig is visible on the customization screen.)
+  const animate = (t) => {
+    legs.forEach((L, i) => {
+      const ang = Math.sin(t * WALK.SPEED + i * Math.PI) * WALK.AMP;
+      tmp.setFromAxisAngle(X_AXIS, ang);                     // world-space swing
+      L.hip.quaternion.copy(L.QpInv).multiply(tmp).multiply(L.Qp).multiply(L.rest);
+    });
+    inner.position.y = Math.abs(Math.sin(t * WALK.SPEED)) * WALK.BOB;
   };
-  tuckArm('LeftArm'); tuckArm('RightArm');
 
-  // expose the cloned skeleton so skinned clothing (shirt) can bind to it. Add the
-  // shirt as a CHILD of the body mesh so it inherits char1's exact world transform
-  // (a sibling would miss char1's own local transform and blow the skinning up).
-  const bodyMesh = model.getObjectByName('char1');
-  const skin = bodyMesh ? { skeleton: bodyMesh.skeleton, bindMatrix: bodyMesh.bindMatrix, root: bodyMesh } : null;
-
-  return { head, legs: [], tail: null, ears, breathe: true, skin };
+  return { head, legs: [], tail: null, ears: [], breathe: false, animate };
 }
-const ARM_OUT = 0.18;   // how far the relaxed arms splay from straight-down
