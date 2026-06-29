@@ -336,7 +336,7 @@ export function defaultCreature() {
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
     eyeColor: 0x232020, eyeStyle: 'round', blush: false,               // dark duck eyes
-    shirtColor: 0xffd21e, pantsColor: 0xff7e1a,   // recoloured texture zones (bright yellow/orange)
+    shirtColor: 0x5a9e44, pantsColor: 0xff7e1a,   // duck torso "sweater" (green) / legacy
   };
 }
 
@@ -875,67 +875,69 @@ function duckBill(hw, len, color) {
   return m;
 }
 
+// A leg: a slim shin pivoted at the hip with a small webbed foot (so it can step).
+function duckLeg(color) {
+  const g = new THREE.Group();
+  const shin = capsule(0.045, 0.2, color); shin.position.y = -0.15; g.add(shin);
+  const foot = duckFoot(color); foot.scale.setScalar(0.55); foot.position.set(0, -0.32, 0.05); g.add(foot);
+  return g;
+}
+
+// A standing duckling (illustration style): a chunky two-tone body — feathers take the
+// coat colour, the torso a contrasting "sweater" colour — a round head up front with a
+// small bill and dot eye, a wing patch, an upturned tail, and two orange legs.
 function buildDuck(inner, a) {
   const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
   inner.scale.setScalar(sizeScale);
-  const coat = a.bodyColor ?? 0xffd23e, bill = a.muzzleColor ?? 0xff9e2c, eye = a.eyeColor ?? 0x1b1916;
+  const coat = a.bodyColor ?? 0xf6d33b;          // feathers: head, wings, tail
+  const torso = a.shirtColor ?? 0x5a9e44;        // body "sweater"
+  const bill = a.muzzleColor ?? 0xf0922f;        // bill + legs + feet
+  const eye = a.eyeColor ?? 0x1a1714;
 
-  // ---- body: a single smooth lofted egg (full forward chest, high rounded back,
-  // closing to a rounded shoulder where the head sits) ----
-  // y,    z(fwd), rx,    rz   (taper to a near-closed rounded bottom — no flat rim)
-  const KEYS = [
-    [-0.02, 0.00, 0.09, 0.10],
-    [0.08, 0.03, 0.40, 0.46],
-    [0.24, 0.08, 0.60, 0.70],
-    [0.38, 0.10, 0.64, 0.74],   // widest chest
-    [0.56, 0.06, 0.61, 0.65],
-    [0.76, 0.02, 0.53, 0.55],
-    [0.93, -0.03, 0.40, 0.42],  // shoulders
-    [1.05, -0.05, 0.20, 0.22],  // neck top
-  ];
-  const body = new THREE.Mesh(loftBody(KEYS, 56, 96), toonMat(coat));
-  body.castShadow = true; body.receiveShadow = true; inner.add(body);
-
-  // ---- head: a clean round ball set forward over the shoulder (reference structure:
-  // a head sphere joined to the body with a soft neck) ----
-  const head = new THREE.Group(); head.position.set(0, 1.2, 0.12); inner.add(head);
-  head.add(ball(0.45, coat, 1.0, 1.02, 1.0));
-
-  // bill — one flat orange scoop on the head front, tipped down; a slim underbill
-  const billG = new THREE.Group(); billG.position.set(0, -0.12, 0.42); billG.rotation.x = 0.16; head.add(billG);
-  billG.add(duckBill(0.2, 0.26, bill));
-  const under = duckBill(0.17, 0.2, tintHex(bill, -0.16)); under.scale.set(1, 0.5, 0.92); under.position.y = -0.035; billG.add(under);
-
-  // small shiny dot eyes with a tiny catchlight
-  for (const s of [-1, 1]) {
-    const e = ball(0.07, eye, 1, 1.05, 1); e.position.set(s * 0.23, 0.07, 0.39); head.add(e);
-    const hi = ball(0.023, 0xffffff); hi.position.set(s * 0.23 + 0.02, 0.11, 0.46); head.add(hi);
+  // legs first (behind the body), pivoted at the hips
+  const legs = [];
+  for (const [s, dz] of [[-1, 0.03], [1, -0.03]]) {
+    const leg = duckLeg(bill); leg.position.set(s * 0.15, 0.4, dz); inner.add(leg); legs.push(leg);
   }
 
-  // wings — subtle molded teardrops, mostly embedded in the body sides and swept
-  // back so only a soft raised ridge shows (not a stuck-on pad)
+  // torso — a plump egg held slightly head-up
+  const body = ball(0.46, torso, 1.0, 0.95, 1.18); body.position.set(0, 0.66, -0.02); body.rotation.x = -0.16; inner.add(body);
+
+  // yellow wing patches on the sides, swept back
   for (const s of [-1, 1]) {
-    const wing = ball(0.3, coat, 0.12, 0.58, 0.9);
-    wing.position.set(s * 0.49, 0.6, 0.04); wing.rotation.z = s * 0.12; wing.rotation.y = s * 0.32;
+    const wing = ball(0.27, coat, 0.2, 0.6, 0.92);
+    wing.position.set(s * 0.4, 0.6, -0.06); wing.rotation.z = s * 0.16; wing.rotation.y = s * 0.3;
     inner.add(wing);
   }
+  // upturned tail tuft at the back
+  const tail = new THREE.Group(); tail.position.set(0, 0.82, -0.48); tail.rotation.x = -0.5; inner.add(tail);
+  tail.add(ball(0.15, coat, 0.7, 0.6, 1.0));
 
-  // upturned tail — a smooth pointed flip at the lower back
-  const tail = ball(0.2, coat, 0.62, 0.6, 1.1);
-  tail.position.set(0, 0.5, -0.62); tail.rotation.x = -1.05; inner.add(tail);
+  // head up front, joined by a short neck
+  const head = new THREE.Group(); head.position.set(0, 1.04, 0.34); inner.add(head);
+  head.add(ball(0.32, coat, 1.0, 1.02, 1.0));
+  const neck = ball(0.21, coat, 0.92, 1.0, 0.92); neck.position.set(0, -0.34, -0.12); head.add(neck);  // bridges to body
+  // small bill, tipped down a touch
+  const billG = new THREE.Group(); billG.position.set(0, -0.07, 0.27); billG.rotation.x = 0.14; head.add(billG);
+  billG.add(duckBill(0.13, 0.18, bill));
+  // small dot eyes with a tiny catchlight
+  for (const s of [-1, 1]) {
+    const e = ball(0.052, eye, 1, 1.05, 1); e.position.set(s * 0.15, 0.07, 0.26); head.add(e);
+    const hi = ball(0.018, 0xffffff); hi.position.set(s * 0.15 + 0.015, 0.1, 0.31); head.add(hi);
+  }
 
-  // glossy toy pass: the rubber-duck sheen is a low-roughness specular; dark parts
-  // stay glossy, the coloured body gets a small emissive lift to read cheerful.
+  // matte illustrated pass: soft-matte colours with a gentle emissive lift; the eye
+  // stays a touch glossier so the dot catches a highlight.
   inner.traverse((o) => {
     if (!o.isMesh) return;
     const hex = o.material.color.getHex();
     const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
-    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.16 : 0.36, metalness: 0 });
-    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.13; }
+    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.4 : 0.82, metalness: 0 });
+    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.12; }
     o.material = m; o.castShadow = true;
   });
 
-  return { head, legs: [], tail: null, ears: [], breathe: true };
+  return { head, legs, tail, ears: [], breathe: false };
 }
 
 export function createPet(type, { equipped = {}, appearance = null } = {}) {
