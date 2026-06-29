@@ -820,87 +820,122 @@ function duckFoot(color) {
   m.castShadow = true;
   return m;
 }
-// A wing as a layered paddle hung from a shoulder pivot (so it can flutter): a main
-// feather plus a smaller darker tip, lying along the body side and sweeping back.
-function duckWing(color, side) {
-  const g = new THREE.Group();
-  const main = ball(0.3, color, 0.32, 1.06, 0.74);
-  main.position.set(0, -0.24, -0.03);
-  main.rotation.z = side * 0.08; main.rotation.x = -0.12;
-  g.add(main);
-  const tip = ball(0.2, tintHex(color, -0.1), 0.3, 0.72, 0.6);
-  tip.position.set(0, -0.46, -0.12);
-  tip.rotation.z = side * 0.08; tip.rotation.x = -0.12;
-  g.add(tip);
+// Loft a single smooth surface from a stack of horizontal cross-sections. `keys` are
+// [y, z, rx, rz] control points (bottom→top); each level is an ellipse of half-width
+// rx / half-depth rz, centred at (0, y, z). Catmull-Rom-smoothed and capped top+bottom
+// → one continuous watertight body (no stuck-together spheres).
+function loftBody(keys, SEG, RES) {
+  const ch = (i) => new THREE.CatmullRomCurve3(keys.map((k, n) => new THREE.Vector3(n, k[i], 0)), false, 'catmullrom', 0.5);
+  const yS = ch(0), zS = ch(1), xrS = ch(2), zrS = ch(3);
+  const at = (sp, u) => sp.getPoint(u).y;        // u in [0,1] spans the whole spline
+  const pos = [], idx = [], rings = [];
+  for (let r = 0; r <= RES; r++) {
+    const u = r / RES, y = at(yS, u), zc = at(zS, u), rx = Math.max(1e-3, at(xrS, u)), rz = Math.max(1e-3, at(zrS, u));
+    const ring = [];
+    for (let s = 0; s < SEG; s++) {
+      const ang = (s / SEG) * Math.PI * 2;
+      ring.push(pos.length / 3);
+      pos.push(Math.cos(ang) * rx, y, zc + Math.sin(ang) * rz);
+    }
+    rings.push(ring);
+  }
+  for (let r = 0; r < RES; r++) for (let s = 0; s < SEG; s++) {
+    const s2 = (s + 1) % SEG, a = rings[r][s], b = rings[r][s2], c = rings[r + 1][s2], d = rings[r + 1][s];
+    idx.push(a, b, c, a, c, d);
+  }
+  const botC = pos.length / 3; pos.push(0, at(yS, 0) - 0.03, at(zS, 0));
+  for (let s = 0; s < SEG; s++) idx.push(botC, rings[0][(s + 1) % SEG], rings[0][s]);
+  const topC = pos.length / 3; pos.push(0, at(yS, 1) + 0.03, at(zS, 1));
+  for (let s = 0; s < SEG; s++) idx.push(topC, rings[RES][s], rings[RES][(s + 1) % SEG]);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals();
   return g;
+}
+
+// Flat duck-bill outline (top view): a rounded scoop, a touch wider at the front.
+function duckBillShape(hw, len) {
+  const s = new THREE.Shape();
+  s.moveTo(-hw * 0.66, 0);
+  s.lineTo(-hw, len * 0.5);
+  s.quadraticCurveTo(-hw, len, -hw * 0.45, len);
+  s.quadraticCurveTo(0, len * 1.08, hw * 0.45, len);
+  s.quadraticCurveTo(hw, len, hw, len * 0.5);
+  s.lineTo(hw * 0.66, 0);
+  s.quadraticCurveTo(0, -len * 0.16, -hw * 0.66, 0);
+  return s;
+}
+function duckBill(hw, len, color) {
+  const geo = new THREE.ExtrudeGeometry(duckBillShape(hw, len), {
+    depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 3, steps: 1, curveSegments: 20,
+  });
+  geo.rotateX(-Math.PI / 2);          // lay flat, scoop points +z
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, toonMat(color)); m.castShadow = true;
+  return m;
 }
 
 function buildDuck(inner, a) {
   const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
   inner.scale.setScalar(sizeScale);
-  const coat = a.bodyColor ?? 0xffd23e, bill = a.muzzleColor ?? 0xff9e2c, eye = a.eyeColor ?? 0x232020;
+  const coat = a.bodyColor ?? 0xffd23e, bill = a.muzzleColor ?? 0xff9e2c, eye = a.eyeColor ?? 0x1b1916;
 
-  // plump egg body
-  const torso = ball(0.5, coat, 1.04, 1.16, 1.0);
-  torso.position.y = 0.56; inner.add(torso);
+  // ---- body: a single smooth lofted egg (full forward chest, high rounded back,
+  // closing to a rounded shoulder where the head sits) ----
+  // y,    z(fwd), rx,    rz   (taper to a near-closed rounded bottom — no flat rim)
+  const KEYS = [
+    [-0.02, 0.00, 0.09, 0.10],
+    [0.08, 0.03, 0.40, 0.46],
+    [0.24, 0.08, 0.60, 0.70],
+    [0.38, 0.10, 0.64, 0.74],   // widest chest
+    [0.56, 0.06, 0.61, 0.65],
+    [0.76, 0.02, 0.53, 0.55],
+    [0.93, -0.03, 0.40, 0.42],  // shoulders
+    [1.05, -0.05, 0.20, 0.22],  // neck top
+  ];
+  const body = new THREE.Mesh(loftBody(KEYS, 56, 96), toonMat(coat));
+  body.castShadow = true; body.receiveShadow = true; inner.add(body);
 
-  // big round head, slightly forward
-  const head = new THREE.Group();
-  head.position.set(0, 1.17, 0.06);
-  head.add(ball(0.47, coat, 1.04, 1.0, 1.0));
-  for (const s of [-1, 1]) {            // cheeks
-    const bl = ball(0.082, 0xffb3a3, 1, 0.62, 0.34); bl.position.set(s * 0.28, -0.04, 0.40); head.add(bl);
-  }
-  for (const s of [-1, 1]) {            // big glossy eyes + catchlights
-    const e = ball(0.12, eye, 1, 1.1, 0.9); e.position.set(s * 0.18, 0.13, 0.40); head.add(e);
-    const hi = ball(0.038, 0xffffff); hi.position.set(s * 0.18 + 0.038, 0.18, 0.49); head.add(hi);
-  }
-  // broad bill — a neat rounded upper with a slim lower lip tucked under
-  const billG = new THREE.Group(); billG.position.set(0, -0.04, 0.45); head.add(billG);
-  const upper = ball(0.21, bill, 1.04, 0.42, 1.0); upper.position.set(0, 0.0, 0); billG.add(upper);
-  const lower = ball(0.16, tintHex(bill, -0.12), 0.9, 0.26, 0.78); lower.position.set(0, -0.055, -0.04); billG.add(lower);
-  for (const s of [-1, 1]) { const n = ball(0.013, 0x5e3f24); n.position.set(s * 0.05, 0.07, 0.16); billG.add(n); }
-  // cheeky head feather (cowlick)
-  const tuft = new THREE.Group(); tuft.position.set(0, 0.45, -0.04); head.add(tuft);
-  for (const [dx, rot, len] of [[-0.045, 0.34, 0.17], [0.0, 0.04, 0.22], [0.05, -0.36, 0.16]]) {
-    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, len, 4, 8), toonMat(coat));
-    f.position.set(dx, len * 0.5, 0); f.rotation.z = rot; tuft.add(f);
-  }
-  inner.add(head);
+  // ---- head: a clean round ball set forward over the shoulder (reference structure:
+  // a head sphere joined to the body with a soft neck) ----
+  const head = new THREE.Group(); head.position.set(0, 1.2, 0.12); inner.add(head);
+  head.add(ball(0.45, coat, 1.0, 1.02, 1.0));
 
-  // wings (use the "ears" slot so the idle loop flutters them): sit on the body
-  // sides, splayed out and swept back a touch so they read from every angle.
-  const ears = [];
+  // bill — one flat orange scoop on the head front, tipped down; a slim underbill
+  const billG = new THREE.Group(); billG.position.set(0, -0.12, 0.42); billG.rotation.x = 0.16; head.add(billG);
+  billG.add(duckBill(0.2, 0.26, bill));
+  const under = duckBill(0.17, 0.2, tintHex(bill, -0.16)); under.scale.set(1, 0.5, 0.92); under.position.y = -0.035; billG.add(under);
+
+  // small shiny dot eyes with a tiny catchlight
   for (const s of [-1, 1]) {
-    const wing = duckWing(coat, s);
-    wing.position.set(s * 0.5, 0.68, -0.02);
-    wing.rotation.y = s * 0.4; wing.rotation.z = s * 0.16; wing.userData.flapX = 0;
-    inner.add(wing); ears.push(wing);
-  }
-  // upturned tail tuft — a fuller fan of feathers
-  const tail = new THREE.Group(); tail.position.set(0, 0.66, -0.47); tail.rotation.x = -0.6;
-  for (const [dx, rot, sc] of [[-0.11, 0.4, 0.9], [-0.04, 0.14, 1.05], [0.04, -0.14, 1.05], [0.11, -0.4, 0.9]]) {
-    const t = ball(0.12 * sc, coat, 0.55, 0.8, 0.7); t.position.set(dx, 0.06, 0); t.rotation.z = rot; tail.add(t);
-  }
-  inner.add(tail);
-  // webbed feet (forward so they peek out under the belly)
-  const legs = [];
-  for (const s of [-1, 1]) {
-    const foot = duckFoot(bill); foot.position.set(s * 0.17, 0.02, 0.12); inner.add(foot); legs.push(foot);
+    const e = ball(0.07, eye, 1, 1.05, 1); e.position.set(s * 0.23, 0.07, 0.39); head.add(e);
+    const hi = ball(0.023, 0xffffff); hi.position.set(s * 0.23 + 0.02, 0.11, 0.46); head.add(hi);
   }
 
-  // soft-vinyl pass: dark parts glossy; coloured parts soft-matte with a gentle
-  // emissive lift so the cheerful yellow/orange doesn't go muddy under the lights.
+  // wings — subtle molded teardrops, mostly embedded in the body sides and swept
+  // back so only a soft raised ridge shows (not a stuck-on pad)
+  for (const s of [-1, 1]) {
+    const wing = ball(0.3, coat, 0.12, 0.58, 0.9);
+    wing.position.set(s * 0.49, 0.6, 0.04); wing.rotation.z = s * 0.12; wing.rotation.y = s * 0.32;
+    inner.add(wing);
+  }
+
+  // upturned tail — a smooth pointed flip at the lower back
+  const tail = ball(0.2, coat, 0.62, 0.6, 1.1);
+  tail.position.set(0, 0.5, -0.62); tail.rotation.x = -1.05; inner.add(tail);
+
+  // glossy toy pass: the rubber-duck sheen is a low-roughness specular; dark parts
+  // stay glossy, the coloured body gets a small emissive lift to read cheerful.
   inner.traverse((o) => {
     if (!o.isMesh) return;
     const hex = o.material.color.getHex();
     const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
-    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.28 : 0.78, metalness: 0 });
-    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.18; }
+    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.16 : 0.36, metalness: 0 });
+    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.13; }
     o.material = m; o.castShadow = true;
   });
 
-  return { head, legs, tail, ears, breathe: false };
+  return { head, legs: [], tail: null, ears: [], breathe: true };
 }
 
 export function createPet(type, { equipped = {}, appearance = null } = {}) {
