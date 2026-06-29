@@ -331,11 +331,11 @@ export function defaultCreature() {
   // black eyes, soft floppy ears, little nose, no tail.
   return {
     build: 'round', size: 'medium',
-    bodyColor: 0xf7f3ea, bellyColor: 0xf3f3f3, accentColor: 0xf0b8c0,
-    muzzleColor: 0xe8dcc6,
+    bodyColor: 0xffd23e, bellyColor: 0xfff3cf, accentColor: 0xffb3a3,   // duckling yellow
+    muzzleColor: 0xff9e2c,                                              // orange bill / feet
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
-    eyeColor: 0x6b4324, eyeStyle: 'round', blush: false,
+    eyeColor: 0x232020, eyeStyle: 'round', blush: false,               // dark duck eyes
     shirtColor: 0xffd21e, pantsColor: 0xff7e1a,   // recoloured texture zones (bright yellow/orange)
   };
 }
@@ -793,14 +793,122 @@ function capMesh(head, color) {
   return g;
 }
 
+// ---- College Ducks: the player character, modelled natively (no GLB). A plump egg
+// body, big round head, broad two-part bill, webbed feet, little wings, an upturned
+// tail tuft and a cheeky head feather. Anchors kept clean for accessories: the `head`
+// group (hats/glasses) and the torso `inner` (shirt / backpack). Body + head take the
+// coat colour; bill + feet take the "muzzle" colour; eyes take the eye colour. ----
+
+// A webbed-foot outline: a heel that fans into three soft lobes at the front.
+function duckFootShape(w, len) {
+  const s = new THREE.Shape();
+  s.moveTo(0, -0.02);
+  s.lineTo(-w, len * 0.5);
+  s.quadraticCurveTo(-w * 1.06, len, -w * 0.5, len * 0.9);
+  s.quadraticCurveTo(0, len * 1.08, w * 0.5, len * 0.9);
+  s.quadraticCurveTo(w * 1.06, len, w, len * 0.5);
+  s.lineTo(0, -0.02);
+  return s;
+}
+function duckFoot(color) {
+  const geo = new THREE.ExtrudeGeometry(duckFootShape(0.12, 0.24), {
+    depth: 0.045, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, steps: 1, curveSegments: 16,
+  });
+  geo.rotateX(-Math.PI / 2);          // lie flat, toes point +z
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, toonMat(color));
+  m.castShadow = true;
+  return m;
+}
+// A wing as a layered paddle hung from a shoulder pivot (so it can flutter): a main
+// feather plus a smaller darker tip, lying along the body side and sweeping back.
+function duckWing(color, side) {
+  const g = new THREE.Group();
+  const main = ball(0.3, color, 0.32, 1.06, 0.74);
+  main.position.set(0, -0.24, -0.03);
+  main.rotation.z = side * 0.08; main.rotation.x = -0.12;
+  g.add(main);
+  const tip = ball(0.2, tintHex(color, -0.1), 0.3, 0.72, 0.6);
+  tip.position.set(0, -0.46, -0.12);
+  tip.rotation.z = side * 0.08; tip.rotation.x = -0.12;
+  g.add(tip);
+  return g;
+}
+
+function buildDuck(inner, a) {
+  const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
+  inner.scale.setScalar(sizeScale);
+  const coat = a.bodyColor ?? 0xffd23e, bill = a.muzzleColor ?? 0xff9e2c, eye = a.eyeColor ?? 0x232020;
+
+  // plump egg body
+  const torso = ball(0.5, coat, 1.04, 1.16, 1.0);
+  torso.position.y = 0.56; inner.add(torso);
+
+  // big round head, slightly forward
+  const head = new THREE.Group();
+  head.position.set(0, 1.17, 0.06);
+  head.add(ball(0.47, coat, 1.04, 1.0, 1.0));
+  for (const s of [-1, 1]) {            // cheeks
+    const bl = ball(0.082, 0xffb3a3, 1, 0.62, 0.34); bl.position.set(s * 0.28, -0.04, 0.40); head.add(bl);
+  }
+  for (const s of [-1, 1]) {            // big glossy eyes + catchlights
+    const e = ball(0.12, eye, 1, 1.1, 0.9); e.position.set(s * 0.18, 0.13, 0.40); head.add(e);
+    const hi = ball(0.038, 0xffffff); hi.position.set(s * 0.18 + 0.038, 0.18, 0.49); head.add(hi);
+  }
+  // broad bill — a neat rounded upper with a slim lower lip tucked under
+  const billG = new THREE.Group(); billG.position.set(0, -0.04, 0.45); head.add(billG);
+  const upper = ball(0.21, bill, 1.04, 0.42, 1.0); upper.position.set(0, 0.0, 0); billG.add(upper);
+  const lower = ball(0.16, tintHex(bill, -0.12), 0.9, 0.26, 0.78); lower.position.set(0, -0.055, -0.04); billG.add(lower);
+  for (const s of [-1, 1]) { const n = ball(0.013, 0x5e3f24); n.position.set(s * 0.05, 0.07, 0.16); billG.add(n); }
+  // cheeky head feather (cowlick)
+  const tuft = new THREE.Group(); tuft.position.set(0, 0.45, -0.04); head.add(tuft);
+  for (const [dx, rot, len] of [[-0.045, 0.34, 0.17], [0.0, 0.04, 0.22], [0.05, -0.36, 0.16]]) {
+    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, len, 4, 8), toonMat(coat));
+    f.position.set(dx, len * 0.5, 0); f.rotation.z = rot; tuft.add(f);
+  }
+  inner.add(head);
+
+  // wings (use the "ears" slot so the idle loop flutters them): sit on the body
+  // sides, splayed out and swept back a touch so they read from every angle.
+  const ears = [];
+  for (const s of [-1, 1]) {
+    const wing = duckWing(coat, s);
+    wing.position.set(s * 0.5, 0.68, -0.02);
+    wing.rotation.y = s * 0.4; wing.rotation.z = s * 0.16; wing.userData.flapX = 0;
+    inner.add(wing); ears.push(wing);
+  }
+  // upturned tail tuft — a fuller fan of feathers
+  const tail = new THREE.Group(); tail.position.set(0, 0.66, -0.47); tail.rotation.x = -0.6;
+  for (const [dx, rot, sc] of [[-0.11, 0.4, 0.9], [-0.04, 0.14, 1.05], [0.04, -0.14, 1.05], [0.11, -0.4, 0.9]]) {
+    const t = ball(0.12 * sc, coat, 0.55, 0.8, 0.7); t.position.set(dx, 0.06, 0); t.rotation.z = rot; tail.add(t);
+  }
+  inner.add(tail);
+  // webbed feet (forward so they peek out under the belly)
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const foot = duckFoot(bill); foot.position.set(s * 0.17, 0.02, 0.12); inner.add(foot); legs.push(foot);
+  }
+
+  // soft-vinyl pass: dark parts glossy; coloured parts soft-matte with a gentle
+  // emissive lift so the cheerful yellow/orange doesn't go muddy under the lights.
+  inner.traverse((o) => {
+    if (!o.isMesh) return;
+    const hex = o.material.color.getHex();
+    const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
+    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.28 : 0.78, metalness: 0 });
+    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.18; }
+    o.material = m; o.castShadow = true;
+  });
+
+  return { head, legs, tail, ears, breathe: false };
+}
+
 export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const g = new THREE.Group();
   const inner = new THREE.Group();
   g.add(inner);
   const parts = type === 'creature'
-    ? (isAuraReady()
-      ? buildAura(inner, appearance || defaultCreature())          // authored .glb
-      : buildCreature(inner, appearance || defaultCreature()))     // primitive fallback
+    ? buildDuck(inner, appearance || defaultCreature())
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
