@@ -173,11 +173,83 @@ const SHIRT = {
   INFLATE_FRAC: 0.006,      // tiny extra normal lift
   RAD_SMOOTH: 2,            // circular passes to smooth per-ring radii (kill spikes)
   COLLAR_RINGS: 4, COLLAR_TAPER: 0.62,   // narrow the top rings into a collar
+  SLEEVE_RINGS: 6, SLEEVE_SEG: 14,       // short cap sleeves over the upper arms
+  SLEEVE_LEN_FRAC: 1.15,    // sleeve length as a multiple of the arm-cloud span
+  SLEEVE_OUT: 1.0, SLEEVE_DOWN: 0.5,     // axis: how far the sleeve drapes out vs down
+  SLEEVE_EASE: 1.25,        // sleeve radius vs arm radius (roomy, covers the fur)
+  SLEEVE_PAD_FRAC: 0.010,   // outward clearance over the arm fur
   TRIM_DARKEN: 0.82,
   TORSO: new Set([0, 9, 10, 11, 12, 16]),   // Hips, Spine02/01/Spine, L/R Shoulder
   SLEEVE_BONES: [13, 17],                    // L/R Arm (upper arm) — for sleeves
   WEIGHT_BONES: new Set([0, 9, 10, 11, 12, 13, 16, 17]), // weight-transfer candidates
 };
+
+// Append a short cap sleeve (ring-tube around the upper arm) to the shell buffers.
+function addSleeve(armBone, pos, dom, V, verts, tris, trimSet, H) {
+  const ax = []; // arm vert positions
+  let ox = 0, oy = 0, oz = 0;
+  for (let i = 0; i < V; i++) {
+    if (dom[i] !== armBone) continue;
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    ax.push(x, y, z); ox += x; oy += y; oz += z;
+  }
+  const cnt = ax.length / 3; if (cnt < 8) return;
+  ox /= cnt; oy /= cnt; oz /= cnt;
+  // The upper-arm (deltoid) cloud on this chibi rig is a compact stub — PCA on it
+  // returns a near-vertical axis, useless for a sleeve. Derive the axis from
+  // anatomy instead: the arm drapes OUT (away from the body midline) and slightly
+  // DOWN. That points the sleeve along the real upper arm.
+  const hl = Math.hypot(ox, oz) || 1;
+  let dirx = (ox / hl) * SHIRT.SLEEVE_OUT, diry = -SHIRT.SLEEVE_DOWN, dirz = (oz / hl) * SHIRT.SLEEVE_OUT;
+  const dl = Math.hypot(dirx, diry, dirz) || 1;
+  const dir = [dirx / dl, diry / dl, dirz / dl];
+  let tmin = Infinity, tmax = -Infinity;
+  for (let k = 0; k < ax.length; k += 3) {
+    const t = (ax[k] - ox) * dir[0] + (ax[k + 1] - oy) * dir[1] + (ax[k + 2] - oz) * dir[2];
+    if (t < tmin) tmin = t; if (t > tmax) tmax = t;
+  }
+  const span = (tmax - tmin) || 0.1;
+  const tStart = tmin - span * 0.12;                       // start a touch inside the armhole
+  const len = span * SHIRT.SLEEVE_LEN_FRAC;
+  // ring basis perpendicular to the axis
+  let ux = -dir[1], uy = dir[0], uz = 0;
+  if (Math.hypot(ux, uy, uz) < 1e-3) { ux = 0; uy = -dir[2]; uz = dir[1]; }
+  const ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+  const wx = dir[1] * uz - dir[2] * uy, wy = dir[2] * ux - dir[0] * uz, wz = dir[0] * uy - dir[1] * ux;
+  const RINGS = SHIRT.SLEEVE_RINGS, SEG = SHIRT.SLEEVE_SEG, pad = SHIRT.SLEEVE_PAD_FRAC * H;
+  const slab = span / (RINGS - 1) * 1.6;
+  const rings = [];
+  let lastR = 0.05 * H;
+  for (let r = 0; r < RINGS; r++) {
+    const t = tStart + len * (r / (RINGS - 1));
+    const cx = ox + dir[0] * t, cy = oy + dir[1] * t, cz = oz + dir[2] * t;
+    let rr = 0, rn = 0;
+    for (let k = 0; k < ax.length; k += 3) {
+      const tt = (ax[k] - ox) * dir[0] + (ax[k + 1] - oy) * dir[1] + (ax[k + 2] - oz) * dir[2];
+      if (Math.abs(tt - t) > slab) continue;
+      const px = ax[k] - cx, py = ax[k + 1] - cy, pz = ax[k + 2] - cz;
+      const proj = px * dir[0] + py * dir[1] + pz * dir[2];
+      const radial = Math.hypot(px - dir[0] * proj, py - dir[1] * proj, pz - dir[2] * proj);
+      rr += radial; rn++;
+    }
+    rr = rn ? rr / rn : lastR; lastR = rr;
+    rr = rr * SHIRT.SLEEVE_EASE + pad;                      // mean radius + ease
+    const idxs = [];
+    for (let s = 0; s < SEG; s++) {
+      const ang = (s / SEG) * Math.PI * 2, ca = Math.cos(ang) * rr, sa = Math.sin(ang) * rr;
+      idxs.push(verts.length / 3);
+      verts.push(cx + ux * ca + wx * sa, cy + uy * ca + wy * sa, cz + uz * ca + wz * sa);
+    }
+    rings.push(idxs);
+  }
+  for (let r = 0; r < RINGS - 1; r++)
+    for (let s = 0; s < SEG; s++) {
+      const s2 = (s + 1) % SEG;
+      const a = rings[r][s], b = rings[r][s2], c = rings[r + 1][s2], d = rings[r + 1][s];
+      tris.push(a, c, b, a, d, c);
+    }
+  for (const i of rings[RINGS - 1]) trimSet.add(i);   // cuff = trim
+}
 
 function fillEmptyRadii(rad, has, SEG) {
   // circularly fill empty angular bins from the nearest filled neighbours
@@ -282,6 +354,9 @@ function buildShirtGeometry(scene) {
       }
     }
     const trimV = new Set([...ringIdx[0], ...ringIdx[RINGS - 1]]);  // collar + hem rings
+
+    // short cap sleeves over each upper arm
+    for (const armBone of SHIRT.SLEEVE_BONES) addSleeve(armBone, pos, dom, V, verts, tris, trimV, H);
 
     const n = verts.length / 3;
     const P = new Float32Array(verts);
