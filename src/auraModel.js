@@ -156,12 +156,12 @@ function coatTexture(bodyHex, muzzleHex, eyeHex, shirtHex, pantsHex) {
     const z = zone[i]; if (z === Z_KEEP) continue;       // black/white/grey baked
     const p = i * 4;
     const f0 = Math.min(1, Math.max(d[p], d[p + 1], d[p + 2]) / zMax[z]);  // baked value
-    // the iris is baked dark, so show it at nearly full brightness. Clothing (yellow
-    // /orange) is perceptually sensitive to darkening — shaded areas read as muddy
-    // amber/brown — so lift its shadows with a floor too. Fur/muzzle keep full shading.
-    const f = z === Z_EYE ? 0.86 + 0.14 * f0
-      : (z === Z_SHIRT || z === Z_PANTS) ? 0.74 + 0.26 * f0
-      : f0;
+    // Eyes: keep the full baked value so the DARK iris centre stays dark and reads as a
+    // pupil — an over-aggressive floor flattens the iris into a blob and erases the
+    // pupil. Clothing (yellow/orange) is perceptually sensitive to darkening — shaded
+    // areas read as muddy amber — so lift its shadows with a floor. Fur/muzzle/eye keep
+    // their full baked shading.
+    const f = (z === Z_SHIRT || z === Z_PANTS) ? 0.74 + 0.26 * f0 : f0;
     const c = cols[z];
     out[p] = c[0] * f; out[p + 1] = c[1] * f; out[p + 2] = c[2] * f;
   }

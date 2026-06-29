@@ -706,19 +706,31 @@ function pantsMesh(body, color) {
   belt.rotation.x = Math.PI / 2; belt.position.y = 0.13; g.add(belt);
   g.position.set(0, HIPS_Y, 0); body.add(g); return g;
 }
+// Backpack fitted to the rigged Aura model. All positions are in the model's own
+// space (height ~1.7, torso from hips y0.41 to shoulders y0.75, centre z~0.02, back
+// surface near z-0.25): the bag sits flat on the upper back, two short straps hug the
+// upper chest. Parented to the torso anchor so it rides with the body.
+const BAG = {
+  cy: 0.60, cz: -0.27, w: 0.46, h: 0.46, d: 0.19,   // bag centre + size
+  backZ: -0.25,                                      // back-facing pocket plane
+  strapX: 0.15, strapY: 0.62, strapZ: 0.20, strapLen: 0.30, strapW: 0.07, strapT: 0.045, strapTilt: 0.34,
+};
 function backpackMesh(body, color) {
   const g = new THREE.Group();
-  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.46, 0.2), toonMat(color));
-  bag.castShadow = true; bag.position.z = BACK_Z; g.add(bag);
-  const flap = box(0.4, 0.16, 0.22, tintHex(color, 0.12)); flap.position.set(0, 0.16, BACK_Z + 0.01); g.add(flap);
-  const pocket = box(0.26, 0.18, 0.1, tintHex(color, -0.12)); pocket.position.set(0, -0.08, BACK_Z + 0.11); g.add(pocket);
-  const loop = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.016, 6, 12), toonMat(tintHex(color, 0.2)));
-  loop.position.set(0, 0.27, BACK_Z - 0.05); g.add(loop);
-  for (const s of [-1, 1]) {               // shoulder straps across the chest
-    const strap = box(0.06, 0.52, 0.05, tintHex(color, -0.2));
-    strap.position.set(s * 0.15, -0.02, 0.3); strap.rotation.x = -0.1; g.add(strap);
+  const bag = box(BAG.w, BAG.h, BAG.d, color);
+  bag.position.set(0, BAG.cy, BAG.cz); g.add(bag);
+  const flap = box(BAG.w * 1.04, 0.13, BAG.d * 1.06, tintHex(color, 0.12));
+  flap.position.set(0, BAG.cy + BAG.h * 0.40, BAG.cz); g.add(flap);
+  const pocket = box(BAG.w * 0.56, 0.18, 0.07, tintHex(color, -0.14));
+  pocket.position.set(0, BAG.cy - 0.07, BAG.cz - BAG.d * 0.5 - 0.025); g.add(pocket);
+  const buckle = box(BAG.w * 0.56, 0.035, 0.085, tintHex(color, 0.22));
+  buckle.position.set(0, BAG.cy + 0.05, BAG.cz - BAG.d * 0.5 - 0.025); g.add(buckle);
+  for (const s of [-1, 1]) {               // short shoulder straps on the upper chest
+    const strap = box(BAG.strapW, BAG.strapLen, BAG.strapT, tintHex(color, -0.18));
+    strap.position.set(s * BAG.strapX, BAG.strapY, BAG.strapZ);
+    strap.rotation.x = BAG.strapTilt; g.add(strap);
   }
-  g.position.set(0, TORSO_Y, 0); body.add(g); return g;
+  body.add(g); return g;
 }
 
 function capMesh(head, color) {
