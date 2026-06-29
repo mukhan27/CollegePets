@@ -11,7 +11,7 @@
 // Bump this whenever a cache-first asset (vendor/** or a *.glb model) changes in
 // place — the activate handler purges every cache except the current one, so the
 // new bytes are refetched instead of served stale. (e.g. the retextured Aura body.)
-const CACHE = 'cp-cache-v3';
+const CACHE = 'cp-cache-v4';
 const PRECACHE = ['./', './index.html', './css/style.css', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

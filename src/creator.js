@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import {
   createPet, defaultCreature, randomCreature, CREATURE_OPTIONS,
-  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES,
+  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES, SHIRT_SWATCHES, PANTS_SWATCHES,
 } from './petFactory.js';
 import { state, save, CATALOG } from './state.js';
 import { earPreview, accessoryPreview } from './itemPreview.js';
@@ -147,9 +147,9 @@ function renderActiveTab() {
   } else if (activeTab === 'ears') {
     earChips(box);
   } else if (activeTab === 'shirt') {
-    accessoryChips(box, 'top', 'Shirt');
+    swatchRow(box, 'shirtColor', SHIRT_SWATCHES, 'Shirt colour');
   } else if (activeTab === 'pants') {
-    accessoryChips(box, 'bottom', 'Pants');
+    swatchRow(box, 'pantsColor', PANTS_SWATCHES, 'Pants colour');
   } else if (activeTab === 'bag') {
     accessoryChips(box, 'back', 'Backpack');
   }

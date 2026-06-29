@@ -62,7 +62,6 @@ export function preloadAura() {
       scene, animations: g.animations || [],
       head: { y: headTop - headR * 0.9, z: box.max.z * 0.45, r: headR },
       tex: buildTexturePrep(scene),
-      shirt: buildShirtGeometry(scene),
     };
     ready = true;
     return true;
@@ -90,13 +89,29 @@ function findSourceImage(scene) {
   return img;
 }
 
-// Colour-keyed ZONE mask. The base texture is an authored mask painted in flat tag
-// colours — RED = body fur, GREEN = muzzle, BLUE = eye iris — with black pupils/
-// nose and white catchlights left as-is. We classify every pixel by its dominant
-// channel (no heuristics, no flood-fill, no guessing) and recolour each zone to the
-// chosen swatch, preserving the baked value as shading. Black/white stay baked, so
-// pupils, nose and catchlights are always clean.
-const Z_KEEP = 0, Z_FUR = 1, Z_MUZZLE = 2, Z_EYE = 3;
+// Colour-keyed ZONE mask. The base texture is authored in distinct hues — RED = body
+// fur, ORANGE = pants, YELLOW = shirt, GREEN = muzzle, BLUE = eye iris — with black
+// pupils/nose and white catchlights left as-is. We classify every pixel by its HUE
+// (the regions are deliberately different hues) and recolour each zone to the chosen
+// swatch, preserving the baked value as shading. Black/white/grey stay baked, so
+// pupils, nose, brows and catchlights are always clean.
+const Z_KEEP = 0, Z_FUR = 1, Z_MUZZLE = 2, Z_EYE = 3, Z_SHIRT = 4, Z_PANTS = 5;
+const NZONES = 6;
+
+// classify one pixel into a zone by hue; neutral (dark/light/grey) pixels are kept.
+function classifyZone(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn;
+  if (mx < 45 || mn > 200 || c < 22) return Z_KEEP;     // black / white / grey
+  let h;
+  if (mx === r) h = ((g - b) / c) % 6; else if (mx === g) h = (b - r) / c + 2; else h = (r - g) / c + 4;
+  h *= 60; if (h < 0) h += 360;
+  if (h >= 345 || h < 14) return Z_FUR;     // red    → fur (~355°)
+  if (h < 40) return Z_PANTS;               // orange → pants (~24°)
+  if (h < 75) return Z_SHIRT;               // yellow → shirt (~47°)
+  if (h < 180) return Z_MUZZLE;             // green  → muzzle (~105°)
+  if (h < 300) return Z_EYE;                // blue   → eye iris (~215°)
+  return Z_KEEP;                            // magenta/pink (unused) → leave baked
+}
 
 function buildTexturePrep(scene) {
   const img = findSourceImage(scene);
@@ -108,44 +123,47 @@ function buildTexturePrep(scene) {
   const orig = cx.getImageData(0, 0, s, s);
   const d = orig.data;
   const zone = new Uint8Array(N);
-  const zMax = [1, 1, 1, 1];   // brightest "value" per zone, for shading
+  const zMax = new Array(NZONES).fill(1);   // brightest "value" per zone, for shading
   for (let i = 0; i < N; i++) {
     const p = i * 4, r = d[p], g = d[p + 1], b = d[p + 2];
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    let z;
-    // Keep the truly neutral pixels baked: near-white catchlights, near-black
-    // pupils/nose, and low-chroma greys. Everything else is a zone classified by
-    // its dominant channel — including the DARK navy iris (chroma ~25), which must
-    // recolour, so the cut is low (14) but guarded by the black/white tests.
-    if (mn > 200 || mx < 38 || mx - mn < 14) z = Z_KEEP;
-    else if (r === mx) z = Z_FUR;        // red   → body
-    else if (g === mx) z = Z_MUZZLE;     // green → muzzle
-    else z = Z_EYE;                      // blue  → eye iris
+    const z = classifyZone(r, g, b);
     zone[i] = z;
+    const mx = Math.max(r, g, b);
     if (z && mx > zMax[z]) zMax[z] = mx;
   }
   return { orig, zone, zMax, size: s };
 }
 
 const texCache = new Map();  // key -> CanvasTexture (bounded; recolour is reused)
-function coatTexture(bodyHex, muzzleHex, eyeHex) {
+function coatTexture(bodyHex, muzzleHex, eyeHex, shirtHex, pantsHex) {
   const prep = cache.tex;
   if (!prep) return null;
-  const key = bodyHex + '|' + muzzleHex + '|' + eyeHex;
+  const key = [bodyHex, muzzleHex, eyeHex, shirtHex, pantsHex].join('|');
   if (texCache.has(key)) return texCache.get(key);
   const s = prep.size, d = prep.orig.data, zone = prep.zone, zMax = prep.zMax;
   const out = new Uint8ClampedArray(d);                 // start from the original
-  const cols = [null, new THREE.Color(bodyHex), new THREE.Color(muzzleHex), new THREE.Color(eyeHex)];
+  // Write RAW sRGB bytes straight from the hex. NB: THREE.Color(hex) converts to
+  // LINEAR light internally, and the texture is tagged sRGB — writing linear values
+  // into it would gamma-darken green twice and skew yellow→amber / orange→red.
+  const hexRGB = (h) => [(h >> 16) & 255, (h >> 8) & 255, h & 255];
+  const cols = [];
+  cols[Z_FUR] = hexRGB(bodyHex);
+  cols[Z_MUZZLE] = hexRGB(muzzleHex);
+  cols[Z_EYE] = hexRGB(eyeHex);
+  cols[Z_SHIRT] = hexRGB(shirtHex);
+  cols[Z_PANTS] = hexRGB(pantsHex);
   for (let i = 0; i < zone.length; i++) {
     const z = zone[i]; if (z === Z_KEEP) continue;       // black/white/grey baked
     const p = i * 4;
     const f0 = Math.min(1, Math.max(d[p], d[p + 1], d[p + 2]) / zMax[z]);  // baked value
-    // the iris is baked dark, so show it at nearly full brightness (slight gradient
-    // only) — otherwise a dark baked iris swallows the chosen colour. Body/muzzle
-    // keep their full baked shading.
-    const f = z === Z_EYE ? 0.86 + 0.14 * f0 : f0;
+    // the iris is baked dark, so show it at nearly full brightness. Clothing (yellow
+    // /orange) is perceptually sensitive to darkening — shaded areas read as muddy
+    // amber/brown — so lift its shadows with a floor too. Fur/muzzle keep full shading.
+    const f = z === Z_EYE ? 0.86 + 0.14 * f0
+      : (z === Z_SHIRT || z === Z_PANTS) ? 0.74 + 0.26 * f0
+      : f0;
     const c = cols[z];
-    out[p] = c.r * 255 * f; out[p + 1] = c.g * 255 * f; out[p + 2] = c.b * 255 * f;
+    out[p] = c[0] * f; out[p + 1] = c[1] * f; out[p + 2] = c[2] * f;
   }
   const cv = document.createElement('canvas'); cv.width = s; cv.height = s;
   cv.getContext('2d').putImageData(new ImageData(out, s, s), 0, 0);
@@ -498,7 +516,8 @@ export function buildAura(inner, a) {
   // Repaint the coat: a freshly recoloured texture (fur / muzzle / eye zones each
   // take their chosen colour, catchlights preserved) drives both the lit base
   // colour and a soft emissive so the coat stays vivid without washing features.
-  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x6b4324);
+  const coat = coatTexture(a.bodyColor, a.muzzleColor ?? 0xe8dcc6, a.eyeColor ?? 0x6b4324,
+    a.shirtColor ?? 0xf2c200, a.pantsColor ?? 0xf06c00);
   const recolour = (m) => {
     const c = m.clone();
     if (coat) {

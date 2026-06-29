@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
-import { isAuraReady, buildAura, buildShirtMesh } from './auraModel.js';
+import { isAuraReady, buildAura } from './auraModel.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -308,6 +308,13 @@ export const MUZZLE_SWATCHES = [
 export const EYE_SWATCHES = [
   0x6b4324, 0x9c6a30, 0xc28a3a, 0x3f7bbf, 0x3f9e6a, 0x8a6a3e, 0x6f6086, 0x2a241e,
 ];
+// shirt / pants colours — playful, saturated wardrobe palette (recoloured texture zones)
+export const SHIRT_SWATCHES = [
+  0xffd21e, 0xff7e1a, 0xee3b34, 0xf76fa0, 0x9b5de5, 0x4a86e8, 0x1fc4b0, 0x55b76a, 0x3a3f4a, 0xf4f2ec,
+];
+export const PANTS_SWATCHES = [
+  0xff7e1a, 0xffd21e, 0x2f50b0, 0x4a86e8, 0x1fc4b0, 0x55b76a, 0x9a5a30, 0x707680, 0x3a3f4a, 0xe6e2d8,
+];
 
 export const CREATURE_OPTIONS = {
   build: ['slim', 'round', 'chonky'],
@@ -329,6 +336,7 @@ export function defaultCreature() {
     pattern: 'none', patternColor: 0xcfcfcf, fur: 'velvety',
     ears: 'floppy', tail: 'none',
     eyeColor: 0x6b4324, eyeStyle: 'round', blush: false,
+    shirtColor: 0xffd21e, pantsColor: 0xff7e1a,   // recoloured texture zones (bright yellow/orange)
   };
 }
 
@@ -342,6 +350,7 @@ export function randomCreature() {
     ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail),
     eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle),
     blush: false,
+    shirtColor: pick(SHIRT_SWATCHES), pantsColor: pick(PANTS_SWATCHES),
   };
 }
 
@@ -793,20 +802,15 @@ export function buildWearable(id) {
 
 // Body-worn slots attach to the torso anchor; everything else to the head.
 const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
-// Shirt colours (also drive the skinned shirt; mirror the static shirtMesh ids).
-const SHIRT_COLOURS = { shirt_white: 0xf2f1ee, shirt_blue: 0x4a78c8, shirt_red: 0xd6584f, shirt_green: 0x4f9e6a };
 export function setWearables(pet, equipped) {
-  const head = pet.userData.head, body = pet.userData.body || pet.userData.head, skin = pet.userData.skin;
+  // Shirt and pants are no longer geometry — they are recoloured zones baked into the
+  // body texture (handled in buildAura via appearance.shirtColor/pantsColor). Only
+  // genuine add-on accessories (e.g. backpack) are built here.
+  const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
   for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];
   for (const [slot, id] of Object.entries(equipped)) {
-    if (!id) continue;
-    // shirt: a real skinned garment bound to the body skeleton (deforms with the rig)
-    if (slot === 'top' && skin && SHIRT_COLOURS[id] != null) {
-      const shirt = buildShirtMesh(skin.skeleton, skin.bindMatrix, SHIRT_COLOURS[id]);
-      if (shirt) { skin.root.add(shirt); pet.userData.wearables.push(shirt); continue; }
-    }
-    if (!WEARABLES[id]) continue;
+    if (!id || !WEARABLES[id]) continue;
     pet.userData.wearables.push(WEARABLES[id](BODY_SLOTS[slot] ? body : head));
   }
 }
