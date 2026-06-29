@@ -706,29 +706,72 @@ function pantsMesh(body, color) {
   belt.rotation.x = Math.PI / 2; belt.position.y = 0.13; g.add(belt);
   g.position.set(0, HIPS_Y, 0); body.add(g); return g;
 }
-// Backpack fitted to the rigged Aura model. All positions are in the model's own
-// space (height ~1.7, torso from hips y0.41 to shoulders y0.75, centre z~0.02, back
-// surface near z-0.25): the bag sits flat on the upper back, two short straps hug the
-// upper chest. Parented to the torso anchor so it rides with the body.
-const BAG = {
-  cy: 0.60, cz: -0.27, w: 0.46, h: 0.46, d: 0.19,   // bag centre + size
-  backZ: -0.25,                                      // back-facing pocket plane
-  strapX: 0.15, strapY: 0.62, strapZ: 0.20, strapLen: 0.30, strapW: 0.07, strapT: 0.045, strapTilt: 0.34,
-};
+// A rounded 2D arch outline (flat-front backpack silhouette): rounded dome top,
+// gently rounded bottom corners. Used as an extrude profile.
+function archShape(w, h, rTop, rBot) {
+  const s = new THREE.Shape();
+  const hw = w / 2, hh = h / 2;
+  s.moveTo(-hw, -hh + rBot);
+  s.lineTo(-hw, hh - rTop);
+  s.quadraticCurveTo(-hw, hh, -hw + rTop, hh);
+  s.lineTo(hw - rTop, hh);
+  s.quadraticCurveTo(hw, hh, hw, hh - rTop);
+  s.lineTo(hw, -hh + rBot);
+  s.quadraticCurveTo(hw, -hh, hw - rBot, -hh);
+  s.lineTo(-hw + rBot, -hh);
+  s.quadraticCurveTo(-hw, -hh, -hw, -hh + rBot);
+  return s;
+}
+// Extrude an arch profile into a soft, bevelled slab (rounded front + edges).
+function archSlab(w, h, depth, rTop, rBot, color, bevel = 0.03) {
+  const geo = new THREE.ExtrudeGeometry(archShape(w, h, rTop, rBot), {
+    depth: depth - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel,
+    bevelSegments: 3, steps: 1, curveSegments: 24,
+  });
+  geo.translate(0, 0, -(depth - bevel * 2) / 2);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, toonMat(color));
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+
+// School backpack modelled after a real one: rounded dome body, contrasting leather
+// base, front zip pocket, top carry loop, and padded straps that arc over the
+// shoulders to the chest. Built in the model's own space (height ~1.7; torso hips
+// y0.41 -> shoulders y0.75; back surface near z-0.25) and parented to the torso.
+const BAG = { cy: 0.60, cz: -0.30, w: 0.46, h: 0.54, d: 0.24 };
+const BAG_LEATHER = 0x6f4a2c, BAG_DARK = 0x2b2b30;
 function backpackMesh(body, color) {
   const g = new THREE.Group();
-  const bag = box(BAG.w, BAG.h, BAG.d, color);
-  bag.position.set(0, BAG.cy, BAG.cz); g.add(bag);
-  const flap = box(BAG.w * 1.04, 0.13, BAG.d * 1.06, tintHex(color, 0.12));
-  flap.position.set(0, BAG.cy + BAG.h * 0.40, BAG.cz); g.add(flap);
-  const pocket = box(BAG.w * 0.56, 0.18, 0.07, tintHex(color, -0.14));
-  pocket.position.set(0, BAG.cy - 0.07, BAG.cz - BAG.d * 0.5 - 0.025); g.add(pocket);
-  const buckle = box(BAG.w * 0.56, 0.035, 0.085, tintHex(color, 0.22));
-  buckle.position.set(0, BAG.cy + 0.05, BAG.cz - BAG.d * 0.5 - 0.025); g.add(buckle);
-  for (const s of [-1, 1]) {               // short shoulder straps on the upper chest
-    const strap = box(BAG.strapW, BAG.strapLen, BAG.strapT, tintHex(color, -0.18));
-    strap.position.set(s * BAG.strapX, BAG.strapY, BAG.strapZ);
-    strap.rotation.x = BAG.strapTilt; g.add(strap);
+  const frontZ = BAG.cz - BAG.d / 2;                 // outward-facing plane (away from back)
+  // main body
+  const main = archSlab(BAG.w, BAG.h, BAG.d, BAG.w * 0.48, 0.07, color);
+  main.position.set(0, BAG.cy, BAG.cz); g.add(main);
+  // leather base wrapping the bottom
+  const baseH = 0.17;
+  const base = archSlab(BAG.w * 1.01, baseH, BAG.d * 1.04, 0.03, 0.07, BAG_LEATHER, 0.025);
+  base.position.set(0, BAG.cy - BAG.h / 2 + baseH / 2, BAG.cz); g.add(base);
+  // front pocket (slightly proud of the face) with a zip line
+  const pocket = archSlab(BAG.w * 0.66, 0.24, 0.06, 0.05, 0.05, color, 0.02);
+  pocket.position.set(0, BAG.cy - 0.05, frontZ - 0.02); g.add(pocket);
+  const zip = box(BAG.w * 0.6, 0.018, 0.025, BAG_DARK);
+  zip.position.set(0, BAG.cy + 0.06, frontZ - 0.05); g.add(zip);
+  const pull = box(0.03, 0.05, 0.03, BAG_DARK);
+  pull.position.set(BAG.w * 0.22, BAG.cy + 0.05, frontZ - 0.05); g.add(pull);
+  // top carry loop
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.018, 8, 18, Math.PI), toonMat(BAG_DARK));
+  handle.position.set(0, BAG.cy + BAG.h / 2 - 0.01, BAG.cz + 0.03); handle.castShadow = true; g.add(handle);
+  // padded shoulder straps: a flattened tube arcing from the bag top, over each
+  // shoulder, down to the chest — so the straps actually wrap the body.
+  for (const sx of [-1, 1]) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sx * 0.12, BAG.cy + BAG.h * 0.34, BAG.cz + BAG.d * 0.35),
+      new THREE.Vector3(sx * 0.17, 0.83, -0.02),
+      new THREE.Vector3(sx * 0.16, 0.66, 0.17),
+      new THREE.Vector3(sx * 0.13, 0.49, 0.21),
+    ]);
+    const strap = new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.032, 10, false), toonMat(BAG_DARK));
+    strap.scale.x = 1.5; strap.castShadow = true; g.add(strap);
   }
   body.add(g); return g;
 }
