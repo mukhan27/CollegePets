@@ -6,7 +6,6 @@
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
-import { isAuraReady, buildAura } from './auraModel.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -195,49 +194,8 @@ const BUILDERS = {
   },
 
   duck(inner) {
-    const body = ball(0.46, P.duckCoat, 0.95, 0.9, 1.15);
-    body.position.y = 0.55;
-    inner.add(body);
-    addOutline(body);
-
-    const head = new THREE.Group();
-    head.position.set(0, 1.22, 0.16);
-    const skull = ball(0.5, P.duckCoat, 1, 0.95, 0.92);
-    head.add(skull);
-    addOutlineLater(head, skull);
-    const beakTop = ball(0.14, P.duckBeak, 1.7, 0.5, 1.3);
-    beakTop.position.set(0, -0.1, 0.46);
-    head.add(beakTop);
-    const tuft = ball(0.1, P.duckCoat, 1, 1.2, 1);
-    tuft.position.set(0, 0.48, 0.05);
-    head.add(tuft);
-    addFace(head, { eyeY: 0.12, blushY: -0.06 });
-    inner.add(head);
-
-    const wings = [];
-    for (const s of [-1, 1]) {
-      const wing = ball(0.2, 0xeae2cc, 0.5, 0.85, 1.15);
-      wing.position.set(s * 0.42, 0.6, -0.05);
-      wing.rotation.z = s * -0.2;
-      inner.add(wing);
-      wings.push(wing);
-    }
-    const tail = ball(0.16, 0xeae2cc, 1, 0.7, 1.1);
-    tail.position.set(0, 0.62, -0.5);
-    tail.rotation.x = 0.6;
-    inner.add(tail);
-
-    const legs = [];
-    for (const s of [-1, 1]) {
-      const leg = capsule(0.07, 0.14, P.duckBeak);
-      leg.position.set(s * 0.16, 0.14, 0);
-      inner.add(leg);
-      legs.push(leg);
-      const foot = ball(0.1, P.duckBeak, 1.4, 0.35, 1.8);
-      foot.position.set(s * 0.16, 0.04, 0.08);
-      inner.add(foot);
-    }
-    return { head, legs, tail, ears: wings };
+    // NPC ducks share the player's duck model (fixed palette) so they match.
+    return duckModel(inner, { coat: 0xf6d33b, saddle: 0x5a9e44, beak: 0xf0922f, eye: 0x1a1714 });
   },
 
   hamster(inner) {
@@ -883,61 +841,68 @@ function duckLeg(color) {
   return g;
 }
 
-// A standing duckling (illustration style): a chunky two-tone body — feathers take the
-// coat colour, the torso a contrasting "sweater" colour — a round head up front with a
-// small bill and dot eye, a wing patch, an upturned tail, and two orange legs.
-function buildDuck(inner, a) {
-  const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
+// The shared duck model — a chunky cozy duckling in the game's toon style (toonMat +
+// inverted-hull outlines, same as the NPC animals). Two-tone: `coat` (yellow feathers:
+// head, belly, wings, tail), `saddle` (green back), `beak` (orange beak + legs + feet),
+// `eye` (dot). Both the player's customizable duck and the NPC duck build from this so
+// they match. Returns {head, legs, tail, ears} for the generic waddle animator in
+// createPet (walk = leg swing + hop, idle = breathe + tail wag). NO material override.
+function duckModel(inner, { coat, saddle, beak, eye, sizeScale = 1 }) {
   inner.scale.setScalar(sizeScale);
-  const coat = a.bodyColor ?? 0xf6d33b;          // feathers: head, wings, tail
-  const torso = a.shirtColor ?? 0x5a9e44;        // body "sweater"
-  const bill = a.muzzleColor ?? 0xf0922f;        // bill + legs + feet
-  const eye = a.eyeColor ?? 0x1a1714;
 
-  // legs first (behind the body), pivoted at the hips
+  // legs first (behind the body), hip-pivoted so rotation.x swings the whole leg
   const legs = [];
   for (const [s, dz] of [[-1, 0.03], [1, -0.03]]) {
-    const leg = duckLeg(bill); leg.position.set(s * 0.15, 0.4, dz); inner.add(leg); legs.push(leg);
+    const leg = duckLeg(beak); leg.position.set(s * 0.15, 0.4, dz); inner.add(leg); legs.push(leg);
   }
 
-  // torso — a plump egg held slightly head-up
-  const body = ball(0.46, torso, 1.0, 0.95, 1.18); body.position.set(0, 0.66, -0.02); body.rotation.x = -0.16; inner.add(body);
+  // body egg (yellow belly / lower body), held slightly head-up
+  const body = ball(0.46, coat, 1.0, 0.95, 1.18); body.position.set(0, 0.66, -0.02); body.rotation.x = -0.16;
+  inner.add(body); addOutline(body);
 
-  // yellow wing patches on the sides, swept back
+  // green saddle over the back / upper body — a flatter shell sitting on top. NO own
+  // outline (the body's outline carries the silhouette; outlining the saddle would
+  // draw a ragged dark ring where green meets yellow).
+  const sad = ball(0.45, saddle, 1.04, 0.74, 1.1); sad.position.set(0, 0.83, -0.05); sad.rotation.x = -0.16;
+  inner.add(sad);
+
+  // yellow wing patches on the lower flanks (resting over the green)
   for (const s of [-1, 1]) {
-    const wing = ball(0.27, coat, 0.2, 0.6, 0.92);
-    wing.position.set(s * 0.4, 0.6, -0.06); wing.rotation.z = s * 0.16; wing.rotation.y = s * 0.3;
+    const wing = ball(0.22, coat, 0.14, 0.6, 0.82);
+    wing.position.set(s * 0.46, 0.56, 0.04); wing.rotation.z = s * 0.12; wing.rotation.y = s * 0.1;
     inner.add(wing);
   }
-  // upturned tail tuft at the back
-  const tail = new THREE.Group(); tail.position.set(0, 0.82, -0.48); tail.rotation.x = -0.5; inner.add(tail);
-  tail.add(ball(0.15, coat, 0.7, 0.6, 1.0));
 
-  // head up front, joined by a short neck
-  const head = new THREE.Group(); head.position.set(0, 1.04, 0.34); inner.add(head);
-  head.add(ball(0.32, coat, 1.0, 1.02, 1.0));
-  const neck = ball(0.21, coat, 0.92, 1.0, 0.92); neck.position.set(0, -0.34, -0.12); head.add(neck);  // bridges to body
-  // small bill, tipped down a touch
+  // upturned tail tuft (Group so the idle wag rotates around its base)
+  const tail = new THREE.Group(); tail.position.set(0, 0.86, -0.46); tail.rotation.x = -0.5; inner.add(tail);
+  const tball = ball(0.14, coat, 0.7, 0.6, 1.0); tail.add(tball); addOutlineLater(tail, tball);
+
+  // round head up front, joined by a short neck — sat a touch higher so it reads as a
+  // distinct head rather than merging into the body
+  const head = new THREE.Group(); head.position.set(0, 1.13, 0.34); inner.add(head);
+  const skull = ball(0.33, coat, 1.0, 1.02, 1.0); head.add(skull); addOutlineLater(head, skull);
+  const neck = ball(0.2, coat, 0.9, 1.0, 0.9); neck.position.set(0, -0.34, -0.12); head.add(neck);
+  // small beak, tipped down a touch
   const billG = new THREE.Group(); billG.position.set(0, -0.07, 0.27); billG.rotation.x = 0.14; head.add(billG);
-  billG.add(duckBill(0.13, 0.18, bill));
-  // small dot eyes with a tiny catchlight
+  billG.add(duckBill(0.13, 0.18, beak));
+  // dot eyes with a tiny catchlight
   for (const s of [-1, 1]) {
-    const e = ball(0.052, eye, 1, 1.05, 1); e.position.set(s * 0.15, 0.07, 0.26); head.add(e);
-    const hi = ball(0.018, 0xffffff); hi.position.set(s * 0.15 + 0.015, 0.1, 0.31); head.add(hi);
+    const e = ball(0.05, eye, 1, 1.05, 1); e.position.set(s * 0.15, 0.08, 0.27); head.add(e);
+    const hi = ball(0.016, 0xffffff); hi.position.set(s * 0.15 + 0.015, 0.11, 0.31); head.add(hi);
   }
 
-  // matte illustrated pass: soft-matte colours with a gentle emissive lift; the eye
-  // stays a touch glossier so the dot catches a highlight.
-  inner.traverse((o) => {
-    if (!o.isMesh) return;
-    const hex = o.material.color.getHex();
-    const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
-    const m = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.4 : 0.82, metalness: 0 });
-    if (lum >= 60 && lum < 245) { m.emissive.setHex(hex); m.emissiveIntensity = 0.12; }
-    o.material = m; o.castShadow = true;
-  });
+  return { head, legs, tail, ears: [] };
+}
 
-  return { head, legs, tail, ears: [], breathe: false };
+// The player's customizable duck — drives the shared model from the appearance fields.
+function buildDuck(inner, a) {
+  return duckModel(inner, {
+    coat: a.bodyColor ?? 0xf6d33b,        // feathers
+    saddle: a.shirtColor ?? 0x5a9e44,     // green back (edited by the "Back" tab)
+    beak: a.muzzleColor ?? 0xf0922f,      // beak + legs + feet
+    eye: a.eyeColor ?? 0x1a1714,
+    sizeScale: a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0,
+  });
 }
 
 export function createPet(type, { equipped = {}, appearance = null } = {}) {
@@ -945,9 +910,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const inner = new THREE.Group();
   g.add(inner);
   const parts = type === 'creature'
-    ? (isAuraReady()
-      ? buildAura(inner, appearance || defaultCreature())          // rigged duck GLB
-      : buildDuck(inner, appearance || defaultCreature()))         // procedural fallback
+    ? buildDuck(inner, appearance || defaultCreature())            // native toon duck
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
@@ -1008,9 +971,8 @@ export function buildWearable(id) {
 // Body-worn slots attach to the torso anchor; everything else to the head.
 const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
 export function setWearables(pet, equipped) {
-  // Shirt and pants are no longer geometry — they are recoloured zones baked into the
-  // body texture (handled in buildAura via appearance.shirtColor/pantsColor). Only
-  // genuine add-on accessories (e.g. backpack) are built here.
+  // The duck's feather/back/beak colours come from its appearance, not wearables.
+  // Only genuine add-on accessories (e.g. backpack) are built here.
   const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
   for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];

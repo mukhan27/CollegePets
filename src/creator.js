@@ -4,11 +4,11 @@
 
 import * as THREE from 'three';
 import {
-  createPet, defaultCreature, randomCreature, CREATURE_OPTIONS,
-  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES, SHIRT_SWATCHES, PANTS_SWATCHES,
+  createPet, defaultCreature, randomCreature,
+  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES, SHIRT_SWATCHES,
 } from './petFactory.js';
 import { state, save, CATALOG } from './state.js';
-import { earPreview, accessoryPreview } from './itemPreview.js';
+import { accessoryPreview } from './itemPreview.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,12 +67,10 @@ function loop() {
 }
 
 const TABS = [
-  { id: 'color', label: 'Colour' },
-  { id: 'muzzle', label: 'Muzzle' },
+  { id: 'color', label: 'Feathers' },
+  { id: 'shirt', label: 'Back' },
+  { id: 'muzzle', label: 'Beak' },
   { id: 'eyes', label: 'Eyes' },
-  { id: 'ears', label: 'Ears' },
-  { id: 'shirt', label: 'Shirt' },
-  { id: 'pants', label: 'Pants' },
   { id: 'bag', label: 'Backpack' },
 ];
 
@@ -111,13 +109,6 @@ function imgChip(src, label, selected, onClick) {
   el.addEventListener('click', onClick);
   return el;
 }
-function earChips(box) {
-  box.appendChild(header('Ear shape'));
-  for (const v of CREATURE_OPTIONS.ears) {
-    const label = v[0].toUpperCase() + v.slice(1);
-    box.appendChild(imgChip(earPreview(v), label, appearance.ears === v, () => set('ears', v)));
-  }
-}
 // a "none" option chip (no item to preview) — a clean placeholder, not an emoji
 function noneChip(selected, onClick) {
   const el = document.createElement('button');
@@ -139,17 +130,13 @@ function accessoryChips(box, slot, header_) {
 function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
   if (activeTab === 'color') {
-    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Coat colour');
+    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Feather colour');
   } else if (activeTab === 'muzzle') {
-    swatchRow(box, 'muzzleColor', MUZZLE_SWATCHES, 'Muzzle colour');
+    swatchRow(box, 'muzzleColor', MUZZLE_SWATCHES, 'Beak & feet');
   } else if (activeTab === 'eyes') {
     swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
-  } else if (activeTab === 'ears') {
-    earChips(box);
   } else if (activeTab === 'shirt') {
-    swatchRow(box, 'shirtColor', SHIRT_SWATCHES, 'Shirt colour');
-  } else if (activeTab === 'pants') {
-    swatchRow(box, 'pantsColor', PANTS_SWATCHES, 'Pants colour');
+    swatchRow(box, 'shirtColor', SHIRT_SWATCHES, 'Back colour');
   } else if (activeTab === 'bag') {
     accessoryChips(box, 'back', 'Backpack');
   }

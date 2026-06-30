@@ -6,7 +6,6 @@ import { state, save, furnitureCount, takeFromPantry } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { openCreator } from './creator.js';
-import { preloadAura } from './auraModel.js';
 import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
 import { openFoodMenu, initDiningUI } from './dining.js';
@@ -582,9 +581,8 @@ function showBootLoading() {
   return el;
 }
 
-async function bootOrCreate() {
+function bootOrCreate() {
   const loading = showBootLoading();
-  await preloadAura(); // load the authored Aura model (no-op fallback if absent)
   loading.remove();
   if (state.petType) {
     $('creator-screen').style.display = 'none';
