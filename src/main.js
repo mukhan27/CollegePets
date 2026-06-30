@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { state, save, furnitureCount, takeFromPantry } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
+import { preloadDuck } from './glbDuck.js';
 import { openCreator } from './creator.js';
 import { buildCampus } from './world.js';
 import { buildLibrary, buildDormCommon, buildBedroom, buildLectureRoom, buildLectureLobby, buildShop, buildDiningHall, buildStudentUnion } from './interiors.js';
@@ -581,8 +582,9 @@ function showBootLoading() {
   return el;
 }
 
-function bootOrCreate() {
+async function bootOrCreate() {
   const loading = showBootLoading();
+  await preloadDuck();   // load the authored low-poly duck (procedural fallback if absent)
   loading.remove();
   if (state.petType) {
     $('creator-screen').style.display = 'none';

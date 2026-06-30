@@ -71,7 +71,6 @@ const TABS = [
   { id: 'shirt', label: 'Back' },
   { id: 'muzzle', label: 'Beak' },
   { id: 'eyes', label: 'Eyes' },
-  { id: 'bag', label: 'Backpack' },
 ];
 
 // ---- DOM builders ----
