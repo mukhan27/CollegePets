@@ -118,7 +118,8 @@ function classifyFaces(geo, map) {
   const inHeadFront = (y, z) => y > 0.70 * H && z > 0.20 * H;
 
   const counts = new Array(NZ);
-  const faces = n / 3, tally = new Array(NZ).fill(0);
+  const faces = n / 3;
+  const fzone = new Uint8Array(faces);          // per-face zone (before smoothing)
   for (let f = 0; f < faces; f++) {
     const a = f * 3, b = a + 1, c = a + 2;
     const ua = uv.getX(a), va = uv.getY(a);
@@ -136,12 +137,82 @@ function classifyFaces(geo, map) {
     if (best === Z_BEAK && !(inBeak(yc, zc) || inFeet(yc))) best = Z_BODY;   // strip stray orange
     if (best === Z_EYE && !inHeadFront(yc, zc)) best = Z_BODY;               // strip stray dark
     if (best === Z_KEEP) best = Z_BODY;                                      // no real grey/white zone
-    zone[a] = zone[b] = zone[c] = best;
-    tally[best]++;
+    fzone[f] = best;
+  }
+
+  // The texture's shirt seam is ragged and broken up by yellow "wing" patches, which reads
+  // as choppy. Replace it with a clean solid torso band: every torso face between a flat hem
+  // and the neck becomes shirt, so the green is one continuous sweater with a near-horizontal
+  // hem instead of a jagged diagonal seam. Heights are taken from where the texture actually
+  // put the shirt (robust to model scale) and clamped to sane fractions of the height.
+  {
+    const ys = [];
+    for (let f = 0; f < faces; f++) if (fzone[f] === Z_SHIRT) ys.push((pos.getY(f * 3) + pos.getY(f * 3 + 1) + pos.getY(f * 3 + 2)) / 3);
+    ys.sort((p, q) => p - q);
+    const pct = (q) => ys.length ? ys[Math.min(ys.length - 1, Math.floor(q * ys.length))] : 0;
+    const hemY = ys.length ? Math.max(0.34 * H, pct(0.10)) : 0.40 * H;   // flat lower hem
+    const topY = ys.length ? Math.min(0.80 * H, pct(0.96)) : 0.78 * H;   // collar, just below head
+    for (let f = 0; f < faces; f++) {
+      if (fzone[f] !== Z_BODY && fzone[f] !== Z_SHIRT) continue;          // never touch beak/eye
+      const yc = (pos.getY(f * 3) + pos.getY(f * 3 + 1) + pos.getY(f * 3 + 2)) / 3;
+      fzone[f] = (yc >= hemY && yc <= topY) ? Z_SHIRT : Z_BODY;
+    }
+  }
+  // Tidy the hem: an edge-adjacency majority filter that shaves jagged single-face spurs and
+  // fills lone notches, leaving beak/eye faces untouched. Adjacency is built by welding the
+  // (non-indexed) vertices back together and keying shared edges.
+  smoothBoundary(geo, fzone, [Z_BODY, Z_SHIRT]);
+
+  const tally = new Array(NZ).fill(0);
+  for (let f = 0; f < faces; f++) {
+    const z = fzone[f]; tally[z]++;
+    zone[f * 3] = zone[f * 3 + 1] = zone[f * 3 + 2] = z;
   }
   console.log('[duck] face zones — body:%d shirt:%d beak:%d eye:%d',
     tally[Z_BODY], tally[Z_SHIRT], tally[Z_BEAK], tally[Z_EYE]);
   return zone;
+}
+
+// Morphological majority filter over edge-adjacent faces, restricted to the two zones in
+// `pair` (so e.g. body/shirt smooth against each other but never repaint beak or eyes). For
+// each pass, a face flips to the zone held by the majority of its edge neighbours — closing
+// lone notches and trimming jagged single-face spurs along the seam.
+function smoothBoundary(geo, fzone, pair, passes = 2) {
+  const pos = geo.attributes.position, faces = fzone.length;
+  const vkey = (i) => `${Math.round(pos.getX(i) * 1000)},${Math.round(pos.getY(i) * 1000)},${Math.round(pos.getZ(i) * 1000)}`;
+  // map each shared edge → the faces that touch it
+  const edgeFaces = new Map();
+  const addEdge = (k1, k2, f) => { const k = k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1; (edgeFaces.get(k) || edgeFaces.set(k, []).get(k)).push(f); };
+  const fk = new Array(faces);
+  for (let f = 0; f < faces; f++) {
+    const a = f * 3, ka = vkey(a), kb = vkey(a + 1), kc = vkey(a + 2);
+    fk[f] = [ka, kb, kc];
+    addEdge(ka, kb, f); addEdge(kb, kc, f); addEdge(kc, ka, f);
+  }
+  // neighbour list per face
+  const nbr = new Array(faces);
+  for (let f = 0; f < faces; f++) nbr[f] = [];
+  for (const arr of edgeFaces.values()) {
+    if (arr.length < 2) continue;
+    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) { nbr[arr[i]].push(arr[j]); nbr[arr[j]].push(arr[i]); }
+  }
+  const [A, B] = pair;
+  for (let p = 0; p < passes; p++) {
+    const next = fzone.slice();
+    for (let f = 0; f < faces; f++) {
+      if (fzone[f] !== A && fzone[f] !== B) continue;       // only smooth the chosen pair
+      let same = 0, a = 0, b = 0;
+      for (const g of nbr[f]) {
+        if (fzone[g] === A) a++; else if (fzone[g] === B) b++; else continue;
+        if (fzone[g] === fzone[f]) same++;
+      }
+      const total = a + b;
+      if (total < 2) continue;
+      const major = a > b ? A : B;
+      if (major !== fzone[f] && same * 2 < total) next[f] = major;   // clear majority disagrees
+    }
+    fzone.set(next);
+  }
 }
 
 // Build a flat per-vertex colour buffer from the chosen colours (THREE.Color holds linear
