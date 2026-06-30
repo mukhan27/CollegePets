@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import {
   createPet, defaultCreature, randomCreature,
-  COAT_SWATCHES, MUZZLE_SWATCHES, EYE_SWATCHES, SHIRT_SWATCHES,
+  DUCK_BODY_SWATCHES, BEAK_SWATCHES, EYE_SWATCHES, SHIRT_SWATCHES,
 } from './petFactory.js';
 import { state, save, CATALOG } from './state.js';
 import { accessoryPreview } from './itemPreview.js';
@@ -69,7 +69,7 @@ function loop() {
 
 const TABS = [
   { id: 'color', label: 'Feathers' },
-  { id: 'shirt', label: 'Back' },
+  { id: 'shirt', label: 'Shirt' },
   { id: 'muzzle', label: 'Beak' },
   { id: 'eyes', label: 'Eyes' },
 ];
@@ -130,13 +130,13 @@ function accessoryChips(box, slot, header_) {
 function renderActiveTab() {
   const box = $('creator-options'); box.innerHTML = '';
   if (activeTab === 'color') {
-    swatchRow(box, 'bodyColor', COAT_SWATCHES, 'Feather colour');
+    swatchRow(box, 'bodyColor', DUCK_BODY_SWATCHES, 'Feather colour');
   } else if (activeTab === 'muzzle') {
-    swatchRow(box, 'muzzleColor', MUZZLE_SWATCHES, 'Beak & feet');
+    swatchRow(box, 'muzzleColor', BEAK_SWATCHES, 'Beak & feet');
   } else if (activeTab === 'eyes') {
     swatchRow(box, 'eyeColor', EYE_SWATCHES, 'Eye colour');
   } else if (activeTab === 'shirt') {
-    swatchRow(box, 'shirtColor', SHIRT_SWATCHES, 'Back colour');
+    swatchRow(box, 'shirtColor', SHIRT_SWATCHES, 'Shirt colour');
   } else if (activeTab === 'bag') {
     accessoryChips(box, 'back', 'Backpack');
   }

@@ -271,6 +271,18 @@ export const EYE_SWATCHES = [
 export const SHIRT_SWATCHES = [
   0xffd21e, 0xff7e1a, 0xee3b34, 0xf76fa0, 0x9b5de5, 0x4a86e8, 0x1fc4b0, 0x55b76a, 0x3a3f4a, 0xf4f2ec,
 ];
+// Duck feather colours — believable plumage first (duckling yellow, white, cream,
+// golden, tan, mallard brown, charcoal) then a few playful pastels. Ordered so the
+// natural tones lead.
+export const DUCK_BODY_SWATCHES = [
+  0xffd23e, 0xf7e7a8, 0xf7f1e6, 0xf0c060, 0xe3a857, 0xc98a4b, 0x8a5a32, 0x3c4047,
+  0xef8d6a, 0x7ec98a, 0x5f9fe0, 0xc98fd0,
+];
+// Beak & feet colours — warm bill tones: classic orange, amber, yellow-orange,
+// deep orange, coral, tan, brown, and a slate for a darker bill. Ordered light→dark.
+export const BEAK_SWATCHES = [
+  0xff9e2c, 0xf2a93b, 0xffc04d, 0xe07b2e, 0xd6584f, 0xb07b46, 0x8a5a32, 0x4a4f57,
+];
 export const PANTS_SWATCHES = [
   0xff7e1a, 0xffd21e, 0x2f50b0, 0x4a86e8, 0x1fc4b0, 0x55b76a, 0x9a5a30, 0x707680, 0x3a3f4a, 0xe6e2d8,
 ];
