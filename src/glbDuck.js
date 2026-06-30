@@ -1,11 +1,15 @@
 // Loads the authored low-poly Duck.glb (a single static mesh — no skeleton) and styles it
 // to match the game. The model already ships with clean colour zones baked into its texture
 // — orange bill, black eyes, yellow feathers, green shirt — so all we do is RE-PAINT those
-// four colours to the player's chosen colours, pixel-for-pixel, at the texture's native
-// resolution. This follows the model's own boundaries exactly (no invented geometry), so
-// the wings stay yellow, the shirt seam stays crisp, and recolouring is instant. The mesh is
-// left rigid (no skinning) and "walks" with a non-deforming waddle (bob + roll). If the asset
-// is missing, isDuckReady() stays false and createPet falls back to the procedural duck.
+// four colours to the player's chosen colours, pixel-for-pixel. This follows the model's own
+// boundaries exactly (no invented geometry).
+//
+// Rigging: the mesh has no skeleton, and blended skinning smears the body, so instead we
+// SEGMENT the two legs (the orange region below the hips) into their own pieces and pivot
+// each at its hip. The body stays a single rigid mesh — it can never deform — while the legs
+// actually swing, giving a real step cycle. If the legs can't be found, we fall back to a
+// non-deforming bob/waddle. If the asset is missing, isDuckReady() stays false and createPet
+// falls back to the procedural duck.
 
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
@@ -15,7 +19,7 @@ const loader = new GLTFLoader();
 const URL = 'assets/duckmodel.glb';
 const TARGET_H = 1.55;
 
-let cache = null;      // { geometry, tex:{ mask, W, H, flipY } }
+let cache = null;      // { tex:{mask,W,H,flipY}, rig:{bodyGeo, legLGeo, legRGeo, hipL, hipR} | {fullGeo} }
 let ready = false;
 let loadingPromise = null;
 
@@ -62,8 +66,10 @@ export function preloadDuck() {
         geo.computeBoundingBox(); bb = geo.boundingBox;
         const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
         geo.translate(-cx, -bb.min.y, -cz);
+        if (!geo.attributes.normal) geo.computeVertexNormals();
 
-        cache = { geometry: geo, tex: buildMask(firstMap(mesh.material)) };
+        const tex = buildMask(firstMap(mesh.material));
+        cache = { tex, rig: buildRig(geo, tex) || { fullGeo: geo } };
         ready = true;
         resolve(true);
       } catch (e) { console.warn('[duck] preprocess error', e && e.message); ready = false; resolve(false); }
@@ -100,6 +106,76 @@ function buildMask(map) {
   return { mask, W, H, flipY: map.flipY };
 }
 
+function sampleZone(prep, u, v) {
+  const { mask, W, H, flipY } = prep;
+  u = u - Math.floor(u); v = v - Math.floor(v);
+  const yy = flipY ? (1 - v) : v;
+  const px = Math.min(W - 1, Math.max(0, Math.round(u * (W - 1))));
+  const py = Math.min(H - 1, Math.max(0, Math.round(yy * (H - 1))));
+  return mask[py * W + px];
+}
+
+// ---- leg segmentation -------------------------------------------------------------------
+// Find the two legs (orange texture zone below the hip line), split each into its own
+// non-indexed geometry, and record a hip pivot (top-centre of the leg) so it can swing.
+function buildRig(geo, prep) {
+  if (!prep || !geo.attributes.uv) return null;
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  const index = geo.index ? geo.index.array : null;
+  const n = pos.count;
+  geo.computeBoundingBox();
+  const H = geo.boundingBox.max.y - geo.boundingBox.min.y;
+  const HIP_Y = 0.42 * H;                          // legs live below this; bill (also orange) is far above
+
+  const side = new Uint8Array(n);                  // 0 body, 1 left leg, 2 right leg
+  for (let i = 0; i < n; i++) {
+    if (pos.getY(i) > HIP_Y) continue;
+    if (sampleZone(prep, uv.getX(i), uv.getY(i)) !== Z_BILL) continue;   // legs/feet are orange
+    side[i] = pos.getX(i) < 0 ? 1 : 2;
+  }
+
+  const faceCount = index ? index.length / 3 : n / 3;
+  const bodyF = [], lF = [], rF = [];
+  for (let f = 0; f < faceCount; f++) {
+    const a = index ? index[f * 3] : f * 3, b = index ? index[f * 3 + 1] : f * 3 + 1, c = index ? index[f * 3 + 2] : f * 3 + 2;
+    const l = (side[a] === 1) + (side[b] === 1) + (side[c] === 1);
+    const r = (side[a] === 2) + (side[b] === 2) + (side[c] === 2);
+    if (l >= 2) lF.push(a, b, c); else if (r >= 2) rF.push(a, b, c); else bodyF.push(a, b, c);
+  }
+  if (lF.length < 12 || rF.length < 12) { console.log('[duck] no legs found — waddle fallback'); return null; }
+
+  // hip = centroid x/z of the leg's upper verts, at the top (y) of the leg
+  const hipOf = (faces) => {
+    let top = -9; for (const vi of faces) top = Math.max(top, pos.getY(vi));
+    let sx = 0, sz = 0, c = 0; const seen = new Set();
+    for (const vi of faces) {
+      if (seen.has(vi) || pos.getY(vi) < top - 0.18 * H) continue; seen.add(vi);
+      sx += pos.getX(vi); sz += pos.getZ(vi); c++;
+    }
+    return { x: c ? sx / c : 0, y: top, z: c ? sz / c : 0 };
+  };
+  console.log('[duck] leg faces L:%d R:%d body:%d', lF.length / 3, rF.length / 3, bodyF.length / 3);
+  return { bodyGeo: subGeo(geo, bodyF), legLGeo: subGeo(geo, lF), legRGeo: subGeo(geo, rF), hipL: hipOf(lF), hipR: hipOf(rF) };
+}
+
+// Build a non-indexed geometry from a flat list of source vertex indices (3 per face).
+function subGeo(src, verts) {
+  const sp = src.attributes.position, sn = src.attributes.normal, su = src.attributes.uv;
+  const m = verts.length;
+  const P = new Float32Array(m * 3), U = new Float32Array(m * 2), N = sn ? new Float32Array(m * 3) : null;
+  for (let k = 0; k < m; k++) {
+    const vi = verts[k];
+    P[k * 3] = sp.getX(vi); P[k * 3 + 1] = sp.getY(vi); P[k * 3 + 2] = sp.getZ(vi);
+    U[k * 2] = su.getX(vi); U[k * 2 + 1] = su.getY(vi);
+    if (N) { N[k * 3] = sn.getX(vi); N[k * 3 + 1] = sn.getY(vi); N[k * 3 + 2] = sn.getZ(vi); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  if (N) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+  return g;
+}
+
 // Re-paint the four zones to the chosen colours and return a fresh sRGB texture. Output is a
 // flat colour per zone (the toon material adds the shading), so the result is crisp.
 const texCache = new Map();
@@ -130,24 +206,46 @@ function recolour(featherHex, shirtHex, billHex, eyeHex) {
 export function buildGlbDuck(inner, a) {
   const tex = recolour(a.bodyColor ?? 0xffd23e, a.shirtColor ?? 0x5a9e44, a.muzzleColor ?? 0xff9e2c, a.eyeColor ?? 0x232020);
   const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toonGradient() });
-  const body = new THREE.Mesh(cache.geometry, mat);
+  const rig = cache.rig;
+  const head = new THREE.Group(); head.position.set(0, TARGET_H * 0.82, 0); inner.add(head);
+  const baseY = inner.position.y;
+
+  if (rig.fullGeo) {
+    // no legs were found — keep the body rigid and waddle (bob + roll), never deforming.
+    const body = new THREE.Mesh(rig.fullGeo, mat);
+    body.castShadow = true; body.receiveShadow = true; body.frustumCulled = false;
+    inner.add(body);
+    const animate = (t, moving) => {
+      if (moving) { inner.position.y = baseY + Math.abs(Math.sin(t * 7)) * 0.05; inner.rotation.z = Math.sin(t * 7) * 0.10; }
+      else { inner.position.y = baseY + Math.sin(t * 2) * 0.012; inner.rotation.z = 0; }
+    };
+    return { head, legs: [], tail: null, ears: [], animate };
+  }
+
+  // segmented rig: rigid body + two legs that pivot at the hips.
+  const body = new THREE.Mesh(rig.bodyGeo, mat);
   body.castShadow = true; body.receiveShadow = true; body.frustumCulled = false;
   inner.add(body);
+  const mkLeg = (geo, hip) => {
+    const pivot = new THREE.Group(); pivot.position.set(hip.x, hip.y, hip.z);
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.frustumCulled = false;
+    m.position.set(-hip.x, -hip.y, -hip.z);   // cancel the pivot offset → leg renders in place, rotates about the hip
+    pivot.add(m); inner.add(pivot); return pivot;
+  };
+  const legL = mkLeg(rig.legLGeo, rig.hipL), legR = mkLeg(rig.legRGeo, rig.hipR);
 
-  const head = new THREE.Group(); head.position.set(0, TARGET_H * 0.82, 0); inner.add(head);
-
-  const baseY = inner.position.y;
-  // A non-deforming waddle: the whole duck bobs and rocks side to side — never distorts the mesh.
   const animate = (t, moving) => {
     if (moving) {
-      const sp = 7;
-      inner.position.y = baseY + Math.abs(Math.sin(t * sp)) * 0.05;
-      inner.rotation.z = Math.sin(t * sp) * 0.10;
+      const sp = 8, amp = 0.5;
+      legL.rotation.x = Math.sin(t * sp) * amp;
+      legR.rotation.x = Math.sin(t * sp + Math.PI) * amp;
+      inner.position.y = baseY + Math.abs(Math.sin(t * sp)) * 0.04;   // bob on each step
+      inner.rotation.z = Math.sin(t * sp) * 0.05;                     // gentle waddle roll
     } else {
+      legL.rotation.x = 0; legR.rotation.x = 0;
       inner.position.y = baseY + Math.sin(t * 2) * 0.012;
       inner.rotation.z = 0;
     }
   };
-
-  return { head, legs: [], tail: null, ears: [], animate };
+  return { head, legs: [legL, legR], tail: null, ears: [], animate };
 }
