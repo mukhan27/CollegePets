@@ -155,17 +155,28 @@ function buildRig(geo, prep) {
     return { x: c ? sx / c : 0, y: top, z: c ? sz / c : 0 };
   };
   console.log('[duck] leg faces L:%d R:%d body:%d', lF.length / 3, rF.length / 3, bodyF.length / 3);
-  return { bodyGeo: subGeo(geo, bodyF), legLGeo: subGeo(geo, lF), legRGeo: subGeo(geo, rF), hipL: hipOf(lF), hipR: hipOf(rF) };
+  // Extend each leg's top up into the belly (an internal stub) so the hip joint stays plugged
+  // as the leg swings — otherwise the leg's top pulls out from under the belly and shows a gap.
+  const raiseL = { topY: hipOf(lF).y, band: 0.12 * H, stub: 0.18 * H };
+  const raiseR = { topY: hipOf(rF).y, band: 0.12 * H, stub: 0.18 * H };
+  return {
+    bodyGeo: subGeo(geo, bodyF), legLGeo: subGeo(geo, lF, raiseL), legRGeo: subGeo(geo, rF, raiseR),
+    hipL: hipOf(lF), hipR: hipOf(rF),
+  };
 }
 
-// Build a non-indexed geometry from a flat list of source vertex indices (3 per face).
-function subGeo(src, verts) {
+// Build a non-indexed geometry from a flat list of source vertex indices (3 per face). When
+// `raise` is given, vertices in the top band are pushed up by `stub` to form a hidden stub
+// that tucks into the body and keeps the hip joint covered through the swing.
+function subGeo(src, verts, raise) {
   const sp = src.attributes.position, sn = src.attributes.normal, su = src.attributes.uv;
   const m = verts.length;
   const P = new Float32Array(m * 3), U = new Float32Array(m * 2), N = sn ? new Float32Array(m * 3) : null;
   for (let k = 0; k < m; k++) {
     const vi = verts[k];
-    P[k * 3] = sp.getX(vi); P[k * 3 + 1] = sp.getY(vi); P[k * 3 + 2] = sp.getZ(vi);
+    let y = sp.getY(vi);
+    if (raise && y > raise.topY - raise.band) y += raise.stub;   // lift the top band into the body
+    P[k * 3] = sp.getX(vi); P[k * 3 + 1] = y; P[k * 3 + 2] = sp.getZ(vi);
     U[k * 2] = su.getX(vi); U[k * 2 + 1] = su.getY(vi);
     if (N) { N[k * 3] = sn.getX(vi); N[k * 3 + 1] = sn.getY(vi); N[k * 3 + 2] = sn.getZ(vi); }
   }
@@ -236,7 +247,7 @@ export function buildGlbDuck(inner, a) {
 
   const animate = (t, moving) => {
     if (moving) {
-      const sp = 8, amp = 0.5;
+      const sp = 8, amp = 0.42;
       legL.rotation.x = Math.sin(t * sp) * amp;
       legR.rotation.x = Math.sin(t * sp + Math.PI) * amp;
       inner.position.y = baseY + Math.abs(Math.sin(t * sp)) * 0.04;   // bob on each step
