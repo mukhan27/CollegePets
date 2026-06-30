@@ -78,16 +78,22 @@ function firstMap(material) {
   return null;
 }
 
-// Classify every texel of the baked atlas once, at native resolution (no downscale — that is
-// what used to blur the hard zone edges into a grainy fringe). Returns a per-pixel zone mask.
+// Classify the baked atlas once into a per-pixel zone mask. We downscale to a mobile-safe
+// size with NEAREST sampling (imageSmoothingEnabled = false): the source 4096² atlas would
+// blow iOS Safari's per-tab memory once recoloured and uploaded as a texture, while this
+// model's flat zones are large, so 1024² is visually identical. Nearest sampling keeps the
+// hard zone edges crisp (bilinear downscale is what blurred them into a grainy fringe before).
+const MASK = 1024;
 function buildMask(map) {
   if (!map || !map.image || typeof document === 'undefined') return null;
   const img = map.image;
-  const W = img.width || img.naturalWidth, H = img.height || img.naturalHeight;
-  if (!W || !H) return null;
+  const NW = img.width || img.naturalWidth, NH = img.height || img.naturalHeight;
+  if (!NW || !NH) return null;
+  const W = Math.min(MASK, NW), H = Math.min(MASK, NH);
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, W, H);
   const d = ctx.getImageData(0, 0, W, H).data;
   const mask = new Uint8Array(W * H);
   for (let i = 0, p = 0; i < mask.length; i++, p += 4) mask[i] = classifyPixel(d[p], d[p + 1], d[p + 2]);
@@ -116,7 +122,7 @@ function recolour(featherHex, shirtHex, billHex, eyeHex) {
   tex.flipY = prep.flipY; tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
   tex.needsUpdate = true;
-  if (texCache.size > 12) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
+  if (texCache.size > 6) { const [k, old] = texCache.entries().next().value; old.dispose(); texCache.delete(k); }
   texCache.set(key, tex);
   return tex;
 }
