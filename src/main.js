@@ -674,15 +674,20 @@ function frame(dt, t) {
   // camera yaw rotates both the view and the movement frame, so "up" on the
   // stick always walks away from the camera no matter which way it's turned
   const cy = Math.cos(input.camYaw), sy = Math.sin(input.camYaw);
+  let moved = 0;
   if (!uiOpen && !seated && !editMode && input.active) {
     const speed = currentLoc === 'campus' ? 9 : 6;
     const mx = input.x * cy + input.y * sy;
     const mz = -input.x * sy + input.y * cy;
+    const px0 = player.position.x, pz0 = player.position.z;
     movePlayer(loc, mx * speed * dt, mz * speed * dt);
     player.rotation.y = Math.atan2(mx, mz);
-    moving = true;
+    // actual ground distance covered (collisions may shorten it) — drives the gait so the
+    // feet stay planted instead of gliding; if blocked by a wall, the legs stop.
+    moved = Math.hypot(player.position.x - px0, player.position.z - pz0);
+    moving = moved > 1e-4;
   }
-  player.userData.animate(t, moving);
+  player.userData.animate(t, moving, moved);
   // never let the player get stuck inside a collider (runs even without input)
   if (!seated && !editMode) resolveStuck(player.position, levelDef(loc).colliders);
   // smooth elevation toward the active floor / stair height (not while seated)
