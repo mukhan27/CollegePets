@@ -799,12 +799,12 @@ function loftBody(keys, SEG, RES) {
   }
   for (let r = 0; r < RES; r++) for (let s = 0; s < SEG; s++) {
     const s2 = (s + 1) % SEG, a = rings[r][s], b = rings[r][s2], c = rings[r + 1][s2], d = rings[r + 1][s];
-    idx.push(a, b, c, a, c, d);
+    idx.push(a, c, b, a, d, c);                 // outward winding (front faces face out)
   }
   const botC = pos.length / 3; pos.push(0, at(yS, 0) - 0.03, at(zS, 0));
-  for (let s = 0; s < SEG; s++) idx.push(botC, rings[0][(s + 1) % SEG], rings[0][s]);
+  for (let s = 0; s < SEG; s++) idx.push(botC, rings[0][s], rings[0][(s + 1) % SEG]);
   const topC = pos.length / 3; pos.push(0, at(yS, 1) + 0.03, at(zS, 1));
-  for (let s = 0; s < SEG; s++) idx.push(topC, rings[RES][s], rings[RES][(s + 1) % SEG]);
+  for (let s = 0; s < SEG; s++) idx.push(topC, rings[RES][(s + 1) % SEG], rings[RES][s]);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx); g.computeVertexNormals();
@@ -827,7 +827,7 @@ function duckBill(hw, len, color) {
   const geo = new THREE.ExtrudeGeometry(duckBillShape(hw, len), {
     depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 3, steps: 1, curveSegments: 20,
   });
-  geo.rotateX(-Math.PI / 2);          // lay flat, scoop points +z
+  geo.rotateX(Math.PI / 2);           // lay flat; the scoop length now points +z (forward)
   geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, toonMat(color)); m.castShadow = true;
   return m;
@@ -841,57 +841,90 @@ function duckLeg(color) {
   return g;
 }
 
-// The shared duck model — a chunky cozy duckling in the game's toon style (toonMat +
-// inverted-hull outlines, same as the NPC animals). Two-tone: `coat` (yellow feathers:
-// head, belly, wings, tail), `saddle` (green back), `beak` (orange beak + legs + feet),
-// `eye` (dot). Both the player's customizable duck and the NPC duck build from this so
-// they match. Returns {head, legs, tail, ears} for the generic waddle animator in
-// createPet (walk = leg swing + hop, idle = breathe + tail wag). NO material override.
+// The shared duck model — a cozy toon duckling in the game's style (toonMat + inverted-
+// hull outlines, like the NPC animals). The whole body→neck→head is ONE continuous
+// lofted surface (a deep neck pinch + a forward-bloomed head) so it reads as a real
+// duckling, not stacked spheres. Two-tone: `coat` (yellow feathers + belly + head +
+// wings + tail), `saddle` (green back vest), `beak` (orange beak + legs + feet), `eye`.
+// Returns a custom waddle `animate` (legs swing + body bob; the face is part of the body
+// loft, so we never rotate the head). Both the player and NPC ducks build from this.
 function duckModel(inner, { coat, saddle, beak, eye, sizeScale = 1 }) {
   inner.scale.setScalar(sizeScale);
 
-  // legs first (behind the body), hip-pivoted so rotation.x swings the whole leg
+  // legs (hip-pivoted) first, so the body overlaps them
   const legs = [];
-  for (const [s, dz] of [[-1, 0.03], [1, -0.03]]) {
-    const leg = duckLeg(beak); leg.position.set(s * 0.15, 0.4, dz); inner.add(leg); legs.push(leg);
-  }
-
-  // body egg (yellow belly / lower body), held slightly head-up
-  const body = ball(0.46, coat, 1.0, 0.95, 1.18); body.position.set(0, 0.66, -0.02); body.rotation.x = -0.16;
-  inner.add(body); addOutline(body);
-
-  // green saddle over the back / upper body — a flatter shell sitting on top. NO own
-  // outline (the body's outline carries the silhouette; outlining the saddle would
-  // draw a ragged dark ring where green meets yellow).
-  const sad = ball(0.45, saddle, 1.04, 0.74, 1.1); sad.position.set(0, 0.83, -0.05); sad.rotation.x = -0.16;
-  inner.add(sad);
-
-  // yellow wing patches on the lower flanks (resting over the green)
   for (const s of [-1, 1]) {
-    const wing = ball(0.22, coat, 0.14, 0.6, 0.82);
-    wing.position.set(s * 0.46, 0.56, 0.04); wing.rotation.z = s * 0.12; wing.rotation.y = s * 0.1;
-    inner.add(wing);
+    const leg = duckLeg(beak); leg.position.set(s * 0.15, 0.4, 0.04); inner.add(leg); legs.push(leg);
   }
 
-  // upturned tail tuft (Group so the idle wag rotates around its base)
-  const tail = new THREE.Group(); tail.position.set(0, 0.86, -0.46); tail.rotation.x = -0.5; inner.add(tail);
-  const tball = ball(0.14, coat, 0.7, 0.6, 1.0); tail.add(tball); addOutlineLater(tail, tball);
+  // BODY + NECK + HEAD as one smooth continuous loft. keys = [y, z, rx, rz]: an ellipse
+  // at height y centred (0,y,z). Egg body deeper than wide, a deep neck pinch at y0.90,
+  // then the head blooms out and pushes FORWARD (+z) so it sits up-and-forward.
+  const bodyKeys = [
+    [0.30, -0.02, 0.10, 0.12],
+    [0.40, 0.02, 0.30, 0.34],
+    [0.52, 0.04, 0.42, 0.46],     // widest chest
+    [0.64, 0.02, 0.42, 0.45],
+    [0.74, -0.04, 0.37, 0.40],
+    [0.83, -0.05, 0.25, 0.26],
+    [0.90, -0.02, 0.16, 0.16],    // neck pinch (anti-peanut)
+    [0.97, 0.06, 0.20, 0.20],
+    [1.05, 0.12, 0.27, 0.27],
+    [1.16, 0.16, 0.31, 0.31],     // head equator, forward over the chest
+    [1.27, 0.16, 0.27, 0.27],
+    [1.34, 0.15, 0.18, 0.18],
+    [1.40, 0.14, 0.09, 0.09],     // rounded crown
+  ];
+  const geo = loftBody(bodyKeys, 56, 48);       // higher resolution → a smooth round head
+  geo.computeBoundingBox();
+  const c = new THREE.Vector3(); geo.boundingBox.getCenter(c);
+  geo.translate(-c.x, -c.y, -c.z);            // centre at origin so the outline scales evenly
+  const body = new THREE.Mesh(geo, toonMat(coat));
+  body.position.copy(c); body.castShadow = true; body.receiveShadow = true;
+  inner.add(body); addOutline(body, 1.035);
 
-  // round head up front, joined by a short neck — sat a touch higher so it reads as a
-  // distinct head rather than merging into the body
-  const head = new THREE.Group(); head.position.set(0, 1.13, 0.34); inner.add(head);
-  const skull = ball(0.33, coat, 1.0, 1.02, 1.0); head.add(skull); addOutlineLater(head, skull);
-  const neck = ball(0.2, coat, 0.9, 1.0, 0.9); neck.position.set(0, -0.34, -0.12); head.add(neck);
-  // small beak, tipped down a touch
-  const billG = new THREE.Group(); billG.position.set(0, -0.07, 0.27); billG.rotation.x = 0.14; head.add(billG);
-  billG.add(duckBill(0.13, 0.18, beak));
-  // dot eyes with a tiny catchlight
+  // head anchor (face parts ride here; hats attach here). NOT animated.
+  const head = new THREE.Group(); head.position.set(0, 1.16, 0.16); inner.add(head);
+  // beak — flat scoop protruding from the head front, tip dipped slightly down (orange
+  // reads clearly against the yellow head, so no outline needed)
+  const bk = duckBill(0.16, 0.26, beak); bk.position.set(0, -0.04, 0.24); bk.rotation.x = 0.12; head.add(bk);
+  // eyes + tiny catchlights, one per side
   for (const s of [-1, 1]) {
-    const e = ball(0.05, eye, 1, 1.05, 1); e.position.set(s * 0.15, 0.08, 0.27); head.add(e);
-    const hi = ball(0.016, 0xffffff); hi.position.set(s * 0.15 + 0.015, 0.11, 0.31); head.add(hi);
+    const e = ball(0.045, eye); e.position.set(s * 0.19, 0.05, 0.225); head.add(e);
+    const hi = ball(0.015, 0xffffff); hi.position.set(s * 0.175, 0.075, 0.26); head.add(hi);
   }
 
-  return { head, legs, tail, ears: [] };
+  // green saddle vest over the back/upper sides, ridden high so a yellow belly shows
+  const sad = ball(0.4, saddle, 1.16, 0.62, 1.12); sad.position.set(0, 0.66, -0.04); sad.rotation.x = 0.12;
+  inner.add(sad); addOutline(sad, 1.04);
+
+  // yellow teardrop wing patches — same colour as the body, so their outline defines them
+  for (const s of [-1, 1]) {
+    const wing = ball(0.14, coat, 0.46, 0.92, 1.3);
+    wing.position.set(s * 0.38, 0.54, 0.04); wing.rotation.set(0, s * 0.12, s * 0.2);
+    inner.add(wing); addOutline(wing, 1.07);
+  }
+
+  // small upturned tail tuft
+  const tail = ball(0.14, coat, 0.9, 0.8, 1.1); tail.position.set(0, 0.78, -0.4); tail.rotation.x = -0.55;
+  inner.add(tail); addOutline(tail, 1.06);
+
+  // gentle waddle: legs swing + a hop/squash when moving; a soft breathe when idle.
+  const baseScaleY = inner.scale.y;
+  const animate = (t, moving) => {
+    if (moving) {
+      const hop = Math.abs(Math.sin(t * 8));
+      inner.position.y = hop * 0.05;
+      inner.scale.y = baseScaleY * (1 + (hop - 0.5) * 0.04);
+      legs.forEach((leg, i) => { leg.rotation.x = Math.sin(t * 8 + (i % 2) * Math.PI) * 0.5; });
+    } else {
+      inner.position.y = 0;
+      inner.scale.y = baseScaleY * (1 + Math.sin(t * 2.0) * 0.012);
+      legs.forEach((leg) => { leg.rotation.x = 0; });
+    }
+  };
+
+  return { head, legs, tail, ears: [], animate };
 }
 
 // The player's customizable duck — drives the shared model from the appearance fields.
