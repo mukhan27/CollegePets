@@ -62,7 +62,8 @@ function loop() {
   if (!pet) return;
   // no auto-spin — the player rotates the character by dragging (or arrows)
   pet.rotation.y = spin;
-  if (pet.userData.animate) pet.userData.animate(performance.now() / 1000, false);
+  // walk the preview so the rig/animation is visible while customizing
+  if (pet.userData.animate) pet.userData.animate(performance.now() / 1000, true);
   renderer.render(scene, camera);
 }
 
