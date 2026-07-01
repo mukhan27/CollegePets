@@ -658,14 +658,27 @@ const tintHex = (c, t) => new THREE.Color(c).lerp(new THREE.Color(t < 0 ? 0x0000
 // Positions/sizes are tuned to that; the constants below make them easy to nudge.
 const TORSO_Y = 0.60, TORSO_R = 0.37, HIPS_Y = 0.33, BACK_Z = -0.34;
 function shirtMesh(body, color) {
+  // duckFit (set by the mount-fitting wrapper): the GLB duck is a wingless fat egg, so the
+  // stick-out arm sleeves become small cap-sleeves hugging the wing shoulders, and the hem
+  // ring pulls in so it grazes the belly instead of hovering like a hula hoop.
+  const duck = !!(body.userData && body.userData.duckFit);
   const g = new THREE.Group();
   const torso = new THREE.Mesh(new THREE.SphereGeometry(TORSO_R, 18, 14), toonMat(color));
   torso.scale.set(1.06, 0.86, 1.02); torso.castShadow = true; g.add(torso);
-  for (const s of [-1, 1]) { const sl = ball(0.145, color, 1, 0.85, 1); sl.position.set(s * 0.35, 0.02, 0); g.add(sl); }
+  for (const s of [-1, 1]) {
+    const sl = ball(0.145, color, 1, 0.85, 1);
+    if (duck) { sl.position.set(s * 0.40, 0.03, 0.06); sl.scale.multiplyScalar(0.72); }
+    else sl.position.set(s * 0.35, 0.02, 0);
+    g.add(sl);
+  }
   const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(tintHex(color, 0.35)));
-  collar.rotation.x = Math.PI / 2; collar.position.y = 0.27; g.add(collar);
+  collar.rotation.x = Math.PI / 2; collar.position.y = 0.27;
+  if (duck) collar.scale.setScalar(0.82);   // tuck fully inside the duck's neck
+  g.add(collar);
   const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(tintHex(color, 0.22)));
-  hem.rotation.x = Math.PI / 2; hem.position.y = -0.27; g.add(hem);
+  hem.rotation.x = Math.PI / 2; hem.position.y = -0.27;
+  if (duck) hem.scale.setScalar(0.67);   // rolled edge sitting on the shell, not a loose hoop
+  g.add(hem);
   g.position.set(0, TORSO_Y, 0); body.add(g); return g;
 }
 function pantsMesh(body, color) {
@@ -962,6 +975,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
+  g.userData.mounts = parts.mounts || null;   // measured attach points (GLB duck only)
   g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
   g.userData.petType = type;
   g.userData.wearables = [];
@@ -1018,14 +1032,80 @@ export function buildWearable(id) {
 
 // Body-worn slots attach to the torso anchor; everything else to the head.
 const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
+
+// ---- mount-based fitting (GLB duck) -------------------------------------------------------
+// Every wearable builder above is hand-tuned to the old procedural pet: head items assume a
+// head of radius 0.52 centred on the head-group origin; body items assume a torso centred at
+// y=0.60 with radius 0.37 on the pet root. Rather than fork 19 builders for the GLB duck,
+// each wearable is built inside a wrapper group that maps that reference space onto the
+// duck's MEASURED mounts (see glbDuck computeMounts): one uniform radius-to-radius scale,
+// plus a small per-slot nudge (and a per-item nudge where a single item still sits off).
+// Nudge fields (duck local space): dx/dy/dz offset, rx lean (radians), s extra uniform
+// scale, sx/sy/sz per-axis multipliers (the egg-shaped duck is deeper than it is wide, so
+// body garments need a slightly stretched depth and a squashed height to hug it).
+const REF_HEAD_R = 0.52, REF_TORSO_Y = 0.60, REF_TORSO_R = 0.37;
+const SLOT_FIT = {
+  hat:    { s: 1.12 },
+  face:   { s: 1.55, dy: -0.06, dz: -0.10 },
+  neck:   { s: 1.35 },
+  top:    { s: 1.03, sy: 1.09, sz: 1.21, dy: -0.03 },
+  bottom: { s: 0.85, sy: 0.62, sz: 1.12, dy: -0.19 },
+  back:   { s: 0.88, dy: 0.18, dz: -0.19, rx: 0.30 },
+};
+const ITEM_FIT = {
+  beanie:    { dy: -0.05, s: 1.1 },
+  party_hat: { dy: -0.06 },
+  bow:       { dx: 0.10, dy: 0.05 },   // corner-placed: push out of the duck's fuller crown
+  flower:    { dx: 0.09, dy: 0.05 },
+};
+function fitNudge(slot, id, key) {
+  const a = SLOT_FIT[slot], b = ITEM_FIT[id];
+  if (key === 's' || key === 'sx' || key === 'sy' || key === 'sz')
+    return (a && a[key] != null ? a[key] : 1) * (b && b[key] != null ? b[key] : 1);
+  return ((a && a[key]) || 0) + ((b && b[key]) || 0);
+}
+
+// Build wearable `id` fitted to this pet. Procedural pets (no mounts) keep the untouched
+// legacy path: the builder attaches straight to the head/torso anchor.
+function buildFitted(pet, slot, id) {
+  const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
+  const m = pet.userData.mounts;
+  if (!m) return WEARABLES[id](BODY_SLOTS[slot] ? body : head);
+  const s = fitNudge(slot, id, 's');
+  const wrap = new THREE.Group();
+  wrap.rotation.x = fitNudge(slot, id, 'rx');
+  if (BODY_SLOTS[slot]) {
+    // wrapper sits at the torso mount so nudges/rotation pivot about the torso centre;
+    // the inner `space` re-creates the builder's pet-root frame (torso centre at y 0.60).
+    const k = (m.torso.radius / REF_TORSO_R) * s;
+    wrap.scale.set(k * fitNudge(slot, id, 'sx'), k * fitNudge(slot, id, 'sy'), k * fitNudge(slot, id, 'sz'));
+    wrap.position.set(
+      m.torso.pos[0] + fitNudge(slot, id, 'dx'),
+      m.torso.pos[1] + fitNudge(slot, id, 'dy'),
+      m.torso.pos[2] + fitNudge(slot, id, 'dz'));
+    const space = new THREE.Group();
+    space.position.y = -REF_TORSO_Y;
+    space.userData.duckFit = true;      // hint: builders may adapt details to the duck shape
+    wrap.add(space);
+    WEARABLES[id](space);
+    body.add(wrap);
+  } else {
+    // head items: the head group already sits at the measured skull centre.
+    wrap.scale.setScalar((m.head.radius / REF_HEAD_R) * s);
+    wrap.position.set(fitNudge(slot, id, 'dx'), fitNudge(slot, id, 'dy'), fitNudge(slot, id, 'dz'));
+    WEARABLES[id](wrap);
+    head.add(wrap);
+  }
+  return wrap;
+}
+
 export function setWearables(pet, equipped) {
   // The duck's feather/back/beak colours come from its appearance, not wearables.
   // Only genuine add-on accessories (e.g. backpack) are built here.
-  const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
   for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];
   for (const [slot, id] of Object.entries(equipped)) {
     if (!id || !WEARABLES[id]) continue;
-    pet.userData.wearables.push(WEARABLES[id](BODY_SLOTS[slot] ? body : head));
+    pet.userData.wearables.push(buildFitted(pet, slot, id));
   }
 }

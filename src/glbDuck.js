@@ -69,13 +69,43 @@ export function preloadDuck() {
         if (!geo.attributes.normal) geo.computeVertexNormals();
 
         const tex = buildMask(firstMap(mesh.material));
-        cache = { tex, rig: buildRig(geo, tex) || { fullGeo: geo } };
+        const mounts = computeMounts(geo);
+        cache = { tex, mounts, rig: buildRig(geo, tex) || { fullGeo: geo } };
         ready = true;
         resolve(true);
       } catch (e) { console.warn('[duck] preprocess error', e && e.message); ready = false; resolve(false); }
     }, undefined, () => { ready = false; resolve(false); });
   });
   return loadingPromise;
+}
+
+// ---- accessory mounts --------------------------------------------------------------------
+// Measure where wearables should attach, straight from the normalized geometry (H=TARGET_H,
+// feet y=0, centred x/z, facing +z). The model is one chibi egg: the "skull" is the top of
+// the egg minus the protruding bill (far +z), and the torso is the wide middle minus the
+// tail spike (far -z). Everything is expressed as fractions of H so a model swap re-measures.
+function computeMounts(geo) {
+  const pos = geo.attributes.position, n = pos.count, H = TARGET_H;
+  const mk = () => ({ sx: 0, sy: 0, sz: 0, c: 0, xMax: 0, yMin: 1e9, yMax: -1e9, zMin: 1e9, zMax: -1e9 });
+  const add = (a, x, y, z) => {
+    a.sx += x; a.sy += y; a.sz += z; a.c++;
+    a.xMax = Math.max(a.xMax, Math.abs(x));
+    a.yMin = Math.min(a.yMin, y); a.yMax = Math.max(a.yMax, y);
+    a.zMin = Math.min(a.zMin, z); a.zMax = Math.max(a.zMax, z);
+  };
+  const skull = mk(), torso = mk();
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (y > 0.675 * H && z <= 0.31 * H) add(skull, x, y, z);                       // head minus bill
+    else if (y > 0.25 * H && y < 0.62 * H && z > -0.31 * H) add(torso, x, y, z);   // body minus tail
+  }
+  if (!skull.c || !torso.c) return null;
+  const tc = [0, torso.sy / torso.c, torso.sz / torso.c];
+  return {
+    head: { pos: [0, skull.sy / skull.c, skull.sz / skull.c], radius: skull.xMax },
+    torso: { pos: tc, radius: torso.xMax, height: torso.yMax - torso.yMin, zMin: torso.zMin, zMax: torso.zMax },
+    back: { pos: [0, tc[1], torso.zMin] },
+  };
 }
 
 function firstMap(material) {
@@ -218,7 +248,13 @@ export function buildGlbDuck(inner, a) {
   const tex = recolour(a.bodyColor ?? 0xffd23e, a.shirtColor ?? 0x5a9e44, a.muzzleColor ?? 0xff9e2c, a.eyeColor ?? 0x232020);
   const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toonGradient() });
   const rig = cache.rig;
-  const head = new THREE.Group(); head.position.set(0, TARGET_H * 0.82, 0); inner.add(head);
+  const mounts = cache.mounts || null;
+  // head anchor at the MEASURED skull centre (hats/glasses attach here); the old
+  // (0, 0.82*H, 0) guess sat behind and below the actual head of the egg-shaped model.
+  const head = new THREE.Group();
+  if (mounts) head.position.set(mounts.head.pos[0], mounts.head.pos[1], mounts.head.pos[2]);
+  else head.position.set(0, TARGET_H * 0.82, 0);
+  inner.add(head);
   const baseY = inner.position.y;
 
   if (rig.fullGeo) {
@@ -230,7 +266,7 @@ export function buildGlbDuck(inner, a) {
       if (moving) { inner.position.y = baseY + Math.abs(Math.sin(t * 7)) * 0.05; inner.rotation.z = Math.sin(t * 7) * 0.10; }
       else { inner.position.y = baseY + Math.sin(t * 2) * 0.012; inner.rotation.z = 0; }
     };
-    return { head, legs: [], tail: null, ears: [], animate };
+    return { head, legs: [], tail: null, ears: [], animate, mounts };
   }
 
   // segmented rig: rigid body + two legs that pivot at the hips.
@@ -271,5 +307,5 @@ export function buildGlbDuck(inner, a) {
       inner.rotation.z += (0 - inner.rotation.z) * 0.2;
     }
   };
-  return { head, legs: [legL, legR], tail: null, ears: [], animate };
+  return { head, legs: [legL, legR], tail: null, ears: [], animate, mounts };
 }
