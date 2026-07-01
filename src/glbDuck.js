@@ -157,8 +157,8 @@ function buildRig(geo, prep) {
   console.log('[duck] leg faces L:%d R:%d body:%d', lF.length / 3, rF.length / 3, bodyF.length / 3);
   // Extend each leg's top up into the belly (an internal stub) so the hip joint stays plugged
   // as the leg swings — otherwise the leg's top pulls out from under the belly and shows a gap.
-  const raiseL = { topY: hipOf(lF).y, band: 0.14 * H, stub: 0.24 * H };
-  const raiseR = { topY: hipOf(rF).y, band: 0.14 * H, stub: 0.24 * H };
+  const raiseL = { topY: hipOf(lF).y, band: 0.16 * H, stub: 0.30 * H };
+  const raiseR = { topY: hipOf(rF).y, band: 0.16 * H, stub: 0.30 * H };
   return {
     bodyGeo: subGeo(geo, bodyF), legLGeo: subGeo(geo, lF, raiseL), legRGeo: subGeo(geo, rF, raiseR),
     hipL: hipOf(lF), hipR: hipOf(rF),
@@ -250,13 +250,15 @@ export function buildGlbDuck(inner, a) {
   // moved this frame (passed by the game loop); the creator preview omits it and falls back to
   // a steady time-based cadence. With phase = dist / (amp·legLen), peak foot speed == body
   // speed regardless of the amplitude, so the feet always look planted.
-  const amp = 0.5;
+  const amp = 0.8;                             // pronounced swing → more ground per step → calmer cadence
   const legLen = Math.max(0.3, rig.hipL.y);    // foot sits at ~y=0, hip pivot at hipL.y
+  const GAIT = 0.55;                           // <1: legs cycle slower than a perfectly-planted foot (a little
+                                               // slide, but avoids the frantic buzzing at the fast campus speed)
   let phase = 0, prevT = 0;
   const animate = (t, moving, dist) => {
     const dt = Math.min(0.05, Math.max(0, t - prevT)); prevT = t;
     if (moving) {
-      phase += (dist == null) ? dt * 7 : dist / (amp * legLen);
+      phase += (dist == null) ? dt * 5 : (dist / (amp * legLen)) * GAIT;
       legL.rotation.x = Math.sin(phase) * amp;
       legR.rotation.x = Math.sin(phase + Math.PI) * amp;
       inner.position.y = baseY + Math.abs(Math.sin(phase)) * 0.05;    // bob on each step
