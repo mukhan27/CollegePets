@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
+import { toonGradient } from './textures.js';
 
 const loader = new GLTFLoader();
 const URL = 'assets/duckmodel.glb';
@@ -65,25 +66,10 @@ export function preloadDuck() {
         geo.computeBoundingBox(); bb = geo.boundingBox;
         const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
         geo.translate(-cx, -bb.min.y, -cz);
-
-        // Round the polygonal silhouette to match the soft illustrated style: subdivide (adds
-        // vertices, carrying UVs so the texture recolour still lines up) then Taubin-smooth
-        // (volume-preserving, so it rounds without deflating). Rebuild + renormalise after.
-        let [P, U] = toArrays(geo);
-        for (let l = 0; l < SUBDIV; l++) [P, U] = subdivideOnce(P, U);
-        taubinSmooth(P, SMOOTH_ITERS);
-        const sgeo = new THREE.BufferGeometry();
-        sgeo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-        sgeo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
-        sgeo.computeBoundingBox(); let sb = sgeo.boundingBox;
-        const s2 = TARGET_H / ((sb.max.y - sb.min.y) || 1);
-        sgeo.scale(s2, s2, s2);
-        sgeo.computeBoundingBox(); sb = sgeo.boundingBox;
-        sgeo.translate(-(sb.min.x + sb.max.x) / 2, -sb.min.y, -(sb.min.z + sb.max.z) / 2);
-        smoothNormals(sgeo);   // average normals by position → soft, non-faceted cartoon shading
+        if (!geo.attributes.normal) geo.computeVertexNormals();
 
         const tex = buildMask(firstMap(mesh.material));
-        cache = { tex, rig: buildRig(sgeo, tex) || { fullGeo: sgeo } };
+        cache = { tex, rig: buildRig(geo, tex) || { fullGeo: geo } };
         ready = true;
         resolve(true);
       } catch (e) { console.warn('[duck] preprocess error', e && e.message); ready = false; resolve(false); }
@@ -96,109 +82,6 @@ function firstMap(material) {
   const mats = Array.isArray(material) ? material : [material];
   for (const m of mats) if (m && m.map) return m.map;
   return null;
-}
-
-// ---- silhouette smoothing (subdivide + Taubin) ------------------------------------------
-const SUBDIV = 1;          // subdivision levels (x4 triangles each) — 1 is plenty for this mesh
-const SMOOTH_ITERS = 9;    // Taubin smoothing passes (rounds the outline)
-
-// Flatten an (indexed or not) geometry to per-triangle position/uv arrays.
-function toArrays(geo) {
-  const pos = geo.attributes.position, uv = geo.attributes.uv;
-  const index = geo.index ? geo.index.array : null;
-  const nTri = index ? index.length / 3 : pos.count / 3;
-  const P = new Float32Array(nTri * 9), U = new Float32Array(nTri * 6);
-  for (let t = 0; t < nTri; t++) for (let k = 0; k < 3; k++) {
-    const vi = index ? index[t * 3 + k] : t * 3 + k;
-    P[t * 9 + k * 3] = pos.getX(vi); P[t * 9 + k * 3 + 1] = pos.getY(vi); P[t * 9 + k * 3 + 2] = pos.getZ(vi);
-    U[t * 6 + k * 2] = uv ? uv.getX(vi) : 0; U[t * 6 + k * 2 + 1] = uv ? uv.getY(vi) : 0;
-  }
-  return [P, U];
-}
-
-// One level of midpoint (1→4) subdivision, interpolating UVs at the new edge midpoints.
-function subdivideOnce(P, U) {
-  const nTri = P.length / 9;
-  const OP = new Float32Array(nTri * 4 * 9), OU = new Float32Array(nTri * 4 * 6);
-  let pi = 0, ui = 0;
-  const emit = (p0, p1, p2, u0, u1, u2) => {
-    OP.set(p0, pi); OP.set(p1, pi + 3); OP.set(p2, pi + 6); pi += 9;
-    OU.set(u0, ui); OU.set(u1, ui + 2); OU.set(u2, ui + 4); ui += 6;
-  };
-  const m3 = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-  const m2 = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  for (let t = 0; t < nTri; t++) {
-    const a = P.subarray(t * 9, t * 9 + 3), b = P.subarray(t * 9 + 3, t * 9 + 6), c = P.subarray(t * 9 + 6, t * 9 + 9);
-    const ua = U.subarray(t * 6, t * 6 + 2), ub = U.subarray(t * 6 + 2, t * 6 + 4), uc = U.subarray(t * 6 + 4, t * 6 + 6);
-    const ab = m3(a, b), bc = m3(b, c), ca = m3(c, a);
-    const uab = m2(ua, ub), ubc = m2(ub, uc), uca = m2(uc, ua);
-    emit(a, ab, ca, ua, uab, uca);
-    emit(ab, b, bc, uab, ub, ubc);
-    emit(ca, bc, c, uca, ubc, uc);
-    emit(ab, bc, ca, uab, ubc, uca);
-  }
-  return [OP, OU];
-}
-
-// Taubin smoothing (λ|μ passes) over positions, welded by position so the mesh moves as one
-// surface. λ>0 shrinks, μ<0 re-inflates → the outline rounds without the mesh deflating.
-function taubinSmooth(P, iters) {
-  const n = P.length / 3;
-  const KEY = (i) => `${Math.round(P[i * 3] * 2000)},${Math.round(P[i * 3 + 1] * 2000)},${Math.round(P[i * 3 + 2] * 2000)}`;
-  const map = new Map(), uni = [], vToU = new Int32Array(n);
-  for (let i = 0; i < n; i++) {
-    const k = KEY(i); let u = map.get(k);
-    if (u === undefined) { u = uni.length; map.set(k, u); uni.push([P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]); }
-    vToU[i] = u;
-  }
-  const nbr = Array.from({ length: uni.length }, () => new Set());
-  for (let t = 0; t < n / 3; t++) {
-    const a = vToU[t * 3], b = vToU[t * 3 + 1], c = vToU[t * 3 + 2];
-    nbr[a].add(b); nbr[a].add(c); nbr[b].add(a); nbr[b].add(c); nbr[c].add(a); nbr[c].add(b);
-  }
-  let pts = uni;
-  const step = (f) => pts.map((p, ui) => {
-    const ns = nbr[ui]; if (!ns.size) return p;
-    let x = 0, y = 0, z = 0; for (const j of ns) { x += pts[j][0]; y += pts[j][1]; z += pts[j][2]; }
-    const k = ns.size; return [p[0] + f * (x / k - p[0]), p[1] + f * (y / k - p[1]), p[2] + f * (z / k - p[2])];
-  });
-  for (let it = 0; it < iters; it++) { pts = step(0.5); pts = step(-0.53); }
-  for (let i = 0; i < n; i++) { const p = pts[vToU[i]]; P[i * 3] = p[0]; P[i * 3 + 1] = p[1]; P[i * 3 + 2] = p[2]; }
-}
-
-// Recompute vertex normals averaged by POSITION (welding across the GLB's split/flat-shaded
-// vertices and across UV seams), so the low-poly surface shades smoothly instead of showing a
-// hard facet on every triangle — the main thing that made it read as "geometric low-poly".
-function smoothNormals(geo) {
-  const pos = geo.attributes.position;
-  const index = geo.index ? geo.index.array : null;
-  const n = pos.count, faces = index ? index.length / 3 : n / 3;
-  const key = (i) => `${Math.round(pos.getX(i) * 1000)},${Math.round(pos.getY(i) * 1000)},${Math.round(pos.getZ(i) * 1000)}`;
-  const acc = new Map();
-  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), cb = new THREE.Vector3(), ab = new THREE.Vector3();
-  for (let f = 0; f < faces; f++) {
-    const a = index ? index[f * 3] : f * 3, b = index ? index[f * 3 + 1] : f * 3 + 1, c = index ? index[f * 3 + 2] : f * 3 + 2;
-    vA.fromBufferAttribute(pos, a); vB.fromBufferAttribute(pos, b); vC.fromBufferAttribute(pos, c);
-    cb.subVectors(vC, vB); ab.subVectors(vA, vB); cb.cross(ab);   // area-weighted face normal
-    for (const vi of [a, b, c]) { const k = key(vi); let e = acc.get(k); if (!e) { e = [0, 0, 0]; acc.set(k, e); } e[0] += cb.x; e[1] += cb.y; e[2] += cb.z; }
-  }
-  const norm = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const e = acc.get(key(i)); const l = Math.hypot(e[0], e[1], e[2]) || 1;
-    norm[i * 3] = e[0] / l; norm[i * 3 + 1] = e[1] / l; norm[i * 3 + 2] = e[2] / l;
-  }
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
-}
-
-// A soft, nearly-flat toon ramp for the duck: a high floor keeps it bright and cartoony with
-// only a gentle shadow (matching the flat illustrated reference), rather than deep toon bands.
-let softGrad = null;
-function softGradient() {
-  if (softGrad) return softGrad;
-  const data = new Uint8Array([200, 224, 244, 255]);
-  softGrad = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat);
-  softGrad.minFilter = THREE.LinearFilter; softGrad.magFilter = THREE.LinearFilter; softGrad.needsUpdate = true;
-  return softGrad;
 }
 
 // Classify the baked atlas once into a per-pixel zone mask. We downscale to a mobile-safe
@@ -333,7 +216,7 @@ function recolour(featherHex, shirtHex, billHex, eyeHex) {
 
 export function buildGlbDuck(inner, a) {
   const tex = recolour(a.bodyColor ?? 0xffd23e, a.shirtColor ?? 0x5a9e44, a.muzzleColor ?? 0xff9e2c, a.eyeColor ?? 0x232020);
-  const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: softGradient() });
+  const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toonGradient() });
   const rig = cache.rig;
   const head = new THREE.Group(); head.position.set(0, TARGET_H * 0.82, 0); inner.add(head);
   const baseY = inner.position.y;
