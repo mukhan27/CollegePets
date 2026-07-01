@@ -18,7 +18,7 @@ const HIP_Y = 0.44, HIP_X = 0.17, HIP_Z = 0.04;
 const SW_LO = 0.70, SW_HI = 1.24;   // sweater band (35%..62% of height)
 
 const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
-const leanAt = (y) => LEAN * smooth(0.85, 1.55, y);
+const leanAt = (y) => LEAN * smooth(0.72, 1.72, y);
 
 // body profile: soft union (p-norm) of the head sphere and the body ellipse
 function bodyRadius(y) {
@@ -103,7 +103,8 @@ export function buildFableDuck(inner, a) {
     (parent || inner).add(m);
     return m;
   };
-  const sph = new THREE.SphereGeometry(1, 24, 18);
+  const sph = new THREE.SphereGeometry(1, 24, 18);       // bill (large, needs smoothness)
+  const sphSmall = new THREE.SphereGeometry(1, 16, 12);  // eyes/glints (tiny on screen)
 
   // ---- body + head: one continuous form ----
   const body = add(latheBody(), mFeather);
@@ -119,17 +120,17 @@ export function buildFableDuck(inner, a) {
   const billTop = add(sph, mBill, head);
   billTop.scale.set(0.235, 0.072, 0.19);
   billTop.position.set(0, -0.035, 0.52);
-  billTop.rotation.x = 0.10;
+  billTop.rotation.x = 0.06;
   const billBot = add(sph, mBill, head);
   billBot.scale.set(0.165, 0.048, 0.13);
   billBot.position.set(0, -0.085, 0.47);
 
   // eyes: tiny black dots on the front curve + a white glint each
   for (const s of [-1, 1]) {
-    const eye = add(sph, mEye, head);
+    const eye = add(sphSmall, mEye, head);
     eye.scale.setScalar(0.052);
     eye.position.set(0.21 * s, 0.10, 0.45);
-    const glint = add(sph, mGlint, head);
+    const glint = add(sphSmall, mGlint, head);
     glint.scale.setScalar(0.015);
     glint.position.set(0.21 * s + 0.018 * s, 0.128, 0.485);
   }
@@ -138,20 +139,20 @@ export function buildFableDuck(inner, a) {
   const wingGeo = teardrop();
   for (const s of [-1, 1]) {
     const wing = add(wingGeo, mFeather);
-    wing.scale.set(0.11, 0.24, 0.40);
-    wing.position.set(0.58 * s, 0.90, -0.10);
-    wing.rotation.set(0.30, -0.28 * s, 0.20 * s);
+    wing.scale.set(0.13, 0.24, 0.40);
+    wing.position.set(0.63 * s, 0.89, -0.10);
+    wing.rotation.set(-0.25, -0.12 * s, 0.16 * s);
   }
 
   // ---- tail: tiny up-turned nub at the back ----
-  const tail = add(sph, mFeather);
-  tail.scale.set(0.20, 0.16, 0.25);
-  tail.position.set(0, 0.72, -0.62);
+  const tail = add(teardrop(), mFeather);   // tip (-z) swings up-back: a perky tuft
+  tail.scale.set(0.17, 0.15, 0.26);
+  tail.position.set(0, 0.63, -0.57);
   tail.rotation.x = 0.75;
 
   // ---- legs: hip-pivot groups; thin orange leg + webbed fan foot ----
   const legGeo = new THREE.CylinderGeometry(0.040, 0.036, HIP_Y, 16, 1);
-  const toeGeo = new THREE.SphereGeometry(1, 18, 12);
+  const toeGeo = new THREE.SphereGeometry(1, 14, 10);
   const mkLeg = (s) => {
     const pivot = new THREE.Group();
     pivot.position.set(HIP_X * s, HIP_Y, HIP_Z);
@@ -159,13 +160,13 @@ export function buildFableDuck(inner, a) {
     const leg = add(legGeo, mBill, pivot);
     leg.position.set(0, -HIP_Y / 2 + 0.03, 0);
     const foot = new THREE.Group();
-    foot.position.set(0, -HIP_Y + 0.042, 0.02);
+    foot.position.set(0, -HIP_Y + 0.042, 0.04);
     pivot.add(foot);
     for (const ang of [-0.42, 0, 0.42]) {       // three flattened toes fanning forward
       const toe = add(toeGeo, mBill, foot);
-      toe.scale.set(0.075, 0.040, 0.17);
+      toe.scale.set(0.075, 0.040, 0.185);
       toe.rotation.y = ang;
-      toe.position.set(Math.sin(ang) * 0.09, 0, Math.cos(ang) * 0.10);
+      toe.position.set(Math.sin(ang) * 0.10, 0, Math.cos(ang) * 0.11);
     }
     return pivot;
   };
