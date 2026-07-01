@@ -13,12 +13,17 @@ const H = 2.0;                 // total height, feet on y=0, facing +z
 // ---- master proportions (all other numbers derive from these) ----
 const BODY_Y = 0.84, BODY_R = 0.62, BODY_VLO = 0.68, BODY_VHI = 0.64;
 const HEAD_Y = 1.46, HEAD_R = 0.50;
-const LEAN = 0.16;             // how far the head/neck shears forward
+const LEAN = 0.24;             // how far the head/neck shears forward
+const RUMP = 0.10;             // how far the lower body swings back (duck posture)
 const HIP_Y = 0.44, HIP_X = 0.17, HIP_Z = 0.04;
 const SW_LO = 0.70, SW_HI = 1.24;   // sweater band (35%..62% of height)
+const DEPTH = 1.12;            // egg is deeper than wide
 
 const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
-const leanAt = (y) => LEAN * smooth(0.72, 1.72, y);
+// S-curve shear: head/neck forward, rump back — reads as the reference's leaning duck.
+// The forward term saturates BELOW the head (by y≈1.30) so the whole head translates
+// rigidly and face features stay seated on its surface.
+const leanAt = (y) => LEAN * smooth(0.55, 1.30, y) - RUMP * smooth(0.95, 0.15, y);
 
 // body profile: soft union (p-norm) of the head sphere and the body ellipse
 function bodyRadius(y) {
@@ -47,7 +52,7 @@ function latheBody() {
     pts.push(new THREE.Vector2(Math.max(0.0001, bodyRadius(y)) * (i === 0 || i === N - 1 ? 0.001 : 1), y));
   }
   const geo = new THREE.LatheGeometry(pts, 48);
-  geo.scale(1, 1, 1.05);       // slightly deeper than wide → egg
+  geo.scale(1, 1, DEPTH);      // deeper than wide → egg
   return shearGeo(geo);
 }
 
@@ -62,7 +67,7 @@ function latheSweater() {
     pts.push(new THREE.Vector2(bodyRadius(y) + bump, y));
   }
   const geo = new THREE.LatheGeometry(pts, 48);
-  geo.scale(1, 1, 1.05);
+  geo.scale(1, 1, DEPTH);
   return shearGeo(geo);
 }
 
@@ -118,21 +123,21 @@ export function buildFableDuck(inner, a) {
 
   // bill: two stacked flattened rounded shapes — wide, flat, protruding forward
   const billTop = add(sph, mBill, head);
-  billTop.scale.set(0.235, 0.072, 0.19);
-  billTop.position.set(0, -0.035, 0.52);
-  billTop.rotation.x = 0.06;
+  billTop.scale.set(0.27, 0.075, 0.24);
+  billTop.position.set(0, -0.09, 0.52);      // mid-face, root embedded in the head curve
+  billTop.rotation.x = 0.11;
   const billBot = add(sph, mBill, head);
-  billBot.scale.set(0.165, 0.048, 0.13);
-  billBot.position.set(0, -0.085, 0.47);
+  billBot.scale.set(0.19, 0.05, 0.16);
+  billBot.position.set(0, -0.145, 0.46);
 
   // eyes: tiny black dots on the front curve + a white glint each
   for (const s of [-1, 1]) {
     const eye = add(sphSmall, mEye, head);
     eye.scale.setScalar(0.052);
-    eye.position.set(0.21 * s, 0.10, 0.45);
+    eye.position.set(0.21 * s, 0.10, 0.50);   // proud of the (deeper) head surface
     const glint = add(sphSmall, mGlint, head);
     glint.scale.setScalar(0.015);
-    glint.position.set(0.21 * s + 0.018 * s, 0.128, 0.485);
+    glint.position.set(0.21 * s + 0.018 * s, 0.128, 0.535);
   }
 
   // ---- wings: flattened teardrops lying over the sweater on each side ----
@@ -144,11 +149,11 @@ export function buildFableDuck(inner, a) {
     wing.rotation.set(-0.25, -0.12 * s, 0.16 * s);
   }
 
-  // ---- tail: tiny up-turned nub at the back ----
+  // ---- tail: a clear up-turned tuft at the rump ----
   const tail = add(teardrop(), mFeather);   // tip (-z) swings up-back: a perky tuft
-  tail.scale.set(0.17, 0.15, 0.26);
-  tail.position.set(0, 0.63, -0.57);
-  tail.rotation.x = 0.75;
+  tail.scale.set(0.22, 0.19, 0.38);
+  tail.position.set(0, 0.72, -0.64);
+  tail.rotation.x = 0.95;
 
   // ---- legs: hip-pivot groups; thin orange leg + webbed fan foot ----
   const legGeo = new THREE.CylinderGeometry(0.040, 0.036, HIP_Y, 16, 1);
@@ -198,7 +203,7 @@ export function buildFableDuck(inner, a) {
   const mounts = {
     head: { pos: [0, HEAD_Y, leanAt(HEAD_Y)], radius: HEAD_R },
     torso: { pos: [0, (SW_LO + SW_HI) / 2, 0.02], radius: BODY_R + 0.05, height: SW_HI - SW_LO },
-    back: { pos: [0, 1.04, -(bodyRadius(1.04) * 1.05 + 0.02)] },
+    back: { pos: [0, 1.04, leanAt(1.04) - (bodyRadius(1.04) * DEPTH + 0.02)] },
   };
 
   return { head, legs: [legL, legR], tail, ears: [], animate, mounts };

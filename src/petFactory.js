@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
-import { isDuckReady, buildGlbDuck } from './glbDuck.js';
+import { buildFableDuck } from './fableDuck.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -956,12 +956,11 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const inner = new THREE.Group();
   g.add(inner);
   const parts = type === 'creature'
-    ? (isDuckReady()
-      ? buildGlbDuck(inner, appearance || defaultCreature())       // authored low-poly GLB (rigged)
-      : buildDuck(inner, appearance || defaultCreature()))         // procedural toon fallback
+    ? buildFableDuck(inner, appearance || defaultCreature())       // canonical procedural duck (Phase 0.5)
     : (BUILDERS[type] || BUILDERS.cat)(inner);
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
+  g.userData.mounts = parts.mounts || null;   // measured cosmetic anchors (head/torso/back)
   g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
   g.userData.petType = type;
   g.userData.wearables = [];
