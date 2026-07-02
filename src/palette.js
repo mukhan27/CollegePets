@@ -39,14 +39,6 @@ export const PALETTE = {
   white: 0xf7f4ec,
   glass: 0xbfe8f2,
 
-  // pets
-  catCoat: 0xf2a25c, catBelly: 0xfae3c8,
-  dogCoat: 0xc8935e, dogBelly: 0xe8cba4, dogEar: 0x9a6a3f,
-  bearCoat: 0x9a6f4b, bearMuzzle: 0xd9b98e,
-  duckCoat: 0xfaf3dc, duckBeak: 0xf2a93b,
-  hamCoat: 0xe8c08a, hamBelly: 0xf8ead0, hamEar: 0xc89a63,
-  blush: 0xf2a0a0,
-
   // library / interiors
   libFloor: 0xe9e3d6,   // light stone tile
   libWall: 0xede2cc,    // cream plaster

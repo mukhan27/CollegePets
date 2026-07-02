@@ -50,7 +50,7 @@ export function wearablePreview(id) {
   if (slot === 'top' || slot === 'bottom' || slot === 'back') return accessoryPreview(id);
   const k = 'w:' + id;
   if (cache.has(k)) return cache.get(k);
-  const pet = createPet('cat', { equipped: { [slot]: id } });
+  const pet = createPet('creature', { equipped: { [slot]: id } });
   if (pet.userData.animate) pet.userData.animate(0, false);
   const url = snapshot(pet, 0.15);
   cache.set(k, url);

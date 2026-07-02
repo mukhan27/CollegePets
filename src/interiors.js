@@ -973,13 +973,13 @@ export function buildShop() {
   const sign = textSprite('🛍️ Campus Store'); sign.position.set(0, 4.2, cz + 0.6); root.add(sign);
   interactables.push({ id: 'shop_buy', x: 0, z: cz + 2.5, r: 2.5, label: '🛍️ Browse & buy' });
 
-  // ---- display mannequins: plain white animal-shaped forms wearing featured
+  // ---- display mannequins: plain white duck-shaped forms wearing featured
   // items (built without coats/faces, then re-skinned to a single matte white) --
   const mannequinMat = toonMat(0xf3efe6); // soft matte white, no pattern
   function pedestal(x, z) { add(cyl(0.7, 0.82, 0.5, 16, 0xe8dcc6), x, 0.25, z); shade(x, z, 2, 2); colliders.push({ x, z, w: 1.4, d: 1.4 }); }
-  function mannequin(x, z, type, equipped, ry) {
+  function mannequin(x, z, equipped, ry) {
     pedestal(x, z);
-    const pet = createPet(type, {}); // no items yet
+    const pet = createPet('creature', {}); // duck form, no items yet
     // recolour the body to matte white but keep the dark back-side toon outline,
     // so it reads as a clean mannequin silhouette
     pet.traverse((o) => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) o.material = mannequinMat; });
@@ -988,10 +988,10 @@ export function buildShop() {
     if (pet.userData.animate) pet.userData.animate(0, false); // settle to idle pose
     root.add(pet);
   }
-  mannequin(-10, 5, 'cat', { hat: 'gradcap' }, 0.5);
-  mannequin(-10, 0.5, 'dog', { face: 'glasses' }, 0.25);
-  mannequin(-10, -4, 'bear', { neck: 'scarf' }, 0.05);
-  mannequin(-6.5, -6.5, 'hamster', { hat: 'cap_red' }, 0.8);
+  mannequin(-10, 5, { hat: 'gradcap' }, 0.5);
+  mannequin(-10, 0.5, { face: 'glasses' }, 0.25);
+  mannequin(-10, -4, { neck: 'scarf' }, 0.05);
+  mannequin(-6.5, -6.5, { hat: 'cap_red' }, 0.8);
 
   // ---- small furniture showroom (right-back ambiance) ----
   add(tb(3, 0.5, 4.6, 0x6b4a33), 9, 0.3, -6).rotation.y = 0;          // staged bed base

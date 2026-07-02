@@ -1,10 +1,10 @@
-// Pet builder v2 — Animal Crossing proportions: big round heads, stubby
-// toon-shaded bodies, big eyes with highlights, blush, soft outlines.
-// Public API unchanged from v1: createPet(type, {equipped}) returns a Group
-// with userData { head, animate(t, moving) }; setWearables re-dresses a pet.
+// Pet builder — every character in College Ducks is a duck. createPet returns a
+// Group with userData { head, animate(t, moving) }; setWearables re-dresses a pet.
+// The player's authored GLB duck is preferred; a procedural toon duck is the
+// fallback when the GLB fails to load. Appearance {bodyColor, shirtColor,
+// muzzleColor, eyeColor} recolours both, so NPCs are just recolored instances.
 
 import * as THREE from 'three';
-import { PALETTE as P } from './palette.js';
 import { toonMat } from './textures.js';
 import { isDuckReady, buildGlbDuck } from './glbDuck.js';
 
@@ -35,233 +35,11 @@ function addOutline(target, scale = 1.05) {
   target.parent.add(o);
 }
 
-// big AC eyes + blush, shared by all species. eyeColor/eyeStyle/blush let the
-// custom creature vary them; animals call with defaults → unchanged look.
-function addFace(head, { eyeSpread = 0.19, eyeY = 0.1, eyeZ = 0.45, blushY = -0.1, blushSpread = 0.34,
-  eyeColor = 0x2a2420, eyeStyle = 'round', blush = true } = {}) {
-  const eyeR = eyeStyle === 'sparkly' ? 0.095 : 0.085;
-  const eyeSy = eyeStyle === 'sleepy' ? 0.72 : 1.35;   // sleepy = half-lidded oval
-  const ey = eyeStyle === 'sleepy' ? eyeY + 0.04 : eyeY;
-  for (const s of [-1, 1]) {
-    const eye = ball(eyeR, eyeColor, 1, eyeSy, 0.55);
-    eye.position.set(s * eyeSpread, ey, eyeZ);
-    head.add(eye);
-    const shine = ball(0.028, 0xffffff, 1, 1, 0.6);
-    shine.position.set(s * eyeSpread + 0.03, ey + 0.05, eyeZ + 0.05);
-    head.add(shine);
-    if (eyeStyle === 'sparkly') {
-      const shine2 = ball(0.018, 0xffffff, 1, 1, 0.6);
-      shine2.position.set(s * eyeSpread - 0.03, ey - 0.04, eyeZ + 0.05);
-      head.add(shine2);
-    }
-    if (blush) {
-      const b = ball(0.07, P.blush, 1, 0.6, 0.3);
-      b.position.set(s * blushSpread, blushY, eyeZ - 0.06);
-      head.add(b);
-    }
-  }
-}
+// ===================================================================== the duck
+// The one species: appearance is {bodyColor (feathers), shirtColor, muzzleColor
+// (bill + feet), eyeColor} (+ size). The palettes below feed the character
+// creator's swatch rows and drive both the GLB duck and the procedural fallback.
 
-function stubbyLegs(inner, coat, { y = 0.16, spreadX = 0.2, spreadZ = 0.16, r = 0.11 } = {}) {
-  const legs = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const leg = capsule(r, 0.16, coat);
-    leg.position.set(sx * spreadX, y, sz * spreadZ);
-    inner.add(leg);
-    legs.push(leg);
-  }
-  return legs;
-}
-
-// Each builder fills `inner` (the bobbing container) facing +Z.
-const BUILDERS = {
-  cat(inner) {
-    const body = ball(0.42, P.catCoat, 1, 0.95, 1.1);
-    body.position.y = 0.52;
-    inner.add(body);
-    addOutline(body);
-    const belly = ball(0.3, P.catBelly, 0.9, 0.85, 0.55);
-    belly.position.set(0, 0.45, 0.22);
-    inner.add(belly);
-
-    const head = new THREE.Group();
-    head.position.set(0, 1.18, 0.12);
-    const skull = ball(0.52, P.catCoat, 1, 0.92, 0.95);
-    head.add(skull);
-    addOutlineLater(head, skull);
-    const muzzle = ball(0.16, P.catBelly, 1.3, 0.8, 0.6);
-    muzzle.position.set(0, -0.14, 0.42);
-    head.add(muzzle);
-    const nose = ball(0.05, 0xd96a6a, 1.2, 0.8, 0.7);
-    nose.position.set(0, -0.05, 0.5);
-    head.add(nose);
-    addFace(head);
-    for (const s of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.32, 4), toonMat(P.catCoat));
-      ear.castShadow = true;
-      ear.position.set(s * 0.27, 0.55, -0.02);
-      ear.rotation.z = s * -0.3;
-      head.add(ear);
-      const earIn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.18, 4), toonMat(0xe8a0a0));
-      earIn.position.set(s * 0.26, 0.55, 0.04);
-      earIn.rotation.z = s * -0.3;
-      head.add(earIn);
-    }
-    inner.add(head);
-
-    const tail = capsule(0.07, 0.45, P.catCoat);
-    tail.position.set(0, 0.72, -0.5);
-    tail.rotation.x = -0.9;
-    inner.add(tail);
-
-    const legs = stubbyLegs(inner, P.catCoat);
-    return { head, legs, tail, ears: [] };
-  },
-
-  dog(inner) {
-    const body = ball(0.46, P.dogCoat, 1, 0.95, 1.12);
-    body.position.y = 0.54;
-    inner.add(body);
-    addOutline(body);
-    const belly = ball(0.32, P.dogBelly, 0.9, 0.85, 0.55);
-    belly.position.set(0, 0.46, 0.24);
-    inner.add(belly);
-
-    const head = new THREE.Group();
-    head.position.set(0, 1.22, 0.12);
-    const skull = ball(0.54, P.dogCoat, 1, 0.94, 0.95);
-    head.add(skull);
-    addOutlineLater(head, skull);
-    const snout = ball(0.2, P.dogBelly, 1.2, 0.85, 0.9);
-    snout.position.set(0, -0.16, 0.42);
-    head.add(snout);
-    const nose = ball(0.07, 0x33261a, 1.1, 0.9, 0.8);
-    nose.position.set(0, -0.08, 0.58);
-    head.add(nose);
-    addFace(head, { eyeY: 0.12 });
-    const ears = [];
-    for (const s of [-1, 1]) { // floppy ears
-      const ear = ball(0.16, P.dogEar, 0.7, 1.5, 0.45);
-      ear.position.set(s * 0.46, 0.16, 0);
-      ear.rotation.z = s * 0.55;
-      head.add(ear);
-      ears.push(ear);
-    }
-    inner.add(head);
-
-    const tail = capsule(0.07, 0.4, P.dogEar);
-    tail.position.set(0, 0.74, -0.52);
-    tail.rotation.x = -1.1;
-    inner.add(tail);
-
-    const legs = stubbyLegs(inner, P.dogEar, { spreadX: 0.22, spreadZ: 0.18 });
-    return { head, legs, tail, ears };
-  },
-
-  bear(inner) {
-    inner.scale.setScalar(1.12);
-    const body = ball(0.5, P.bearCoat, 1.05, 1, 1.12);
-    body.position.y = 0.56;
-    inner.add(body);
-    addOutline(body);
-    const belly = ball(0.34, P.bearMuzzle, 0.95, 0.9, 0.55);
-    belly.position.set(0, 0.48, 0.26);
-    inner.add(belly);
-
-    const head = new THREE.Group();
-    head.position.set(0, 1.3, 0.1);
-    const skull = ball(0.56, P.bearCoat, 1, 0.94, 0.95);
-    head.add(skull);
-    addOutlineLater(head, skull);
-    const muzzle = ball(0.22, P.bearMuzzle, 1.1, 0.85, 0.8);
-    muzzle.position.set(0, -0.18, 0.42);
-    head.add(muzzle);
-    const nose = ball(0.08, 0x2e2018, 1.2, 0.8, 0.8);
-    nose.position.set(0, -0.1, 0.6);
-    head.add(nose);
-    addFace(head, { eyeSpread: 0.21, eyeY: 0.12 });
-    for (const s of [-1, 1]) { // round ears
-      const ear = ball(0.16, P.bearCoat);
-      ear.position.set(s * 0.36, 0.46, -0.05);
-      head.add(ear);
-      const earIn = ball(0.08, P.bearMuzzle, 1, 1, 0.5);
-      earIn.position.set(s * 0.35, 0.45, 0.05);
-      head.add(earIn);
-    }
-    inner.add(head);
-
-    const legs = stubbyLegs(inner, 0x7d5a38, { spreadX: 0.26, spreadZ: 0.2, r: 0.13 });
-    return { head, legs, tail: null, ears: [] };
-  },
-
-  duck(inner) {
-    // NPC ducks share the player's duck model (fixed palette) so they match.
-    return duckModel(inner, { coat: 0xf6d33b, saddle: 0x5a9e44, beak: 0xf0922f, eye: 0x1a1714 });
-  },
-
-  hamster(inner) {
-    inner.scale.setScalar(0.85);
-    const body = ball(0.48, P.hamCoat, 1, 0.9, 1.05);
-    body.position.y = 0.5;
-    inner.add(body);
-    addOutline(body);
-    const belly = ball(0.32, P.hamBelly, 0.95, 0.85, 0.55);
-    belly.position.set(0, 0.42, 0.24);
-    inner.add(belly);
-
-    const head = new THREE.Group();
-    head.position.set(0, 1.12, 0.12);
-    const skull = ball(0.52, P.hamCoat, 1.05, 0.92, 0.95);
-    head.add(skull);
-    addOutlineLater(head, skull);
-    for (const s of [-1, 1]) { // chubby cheeks (set wide & high, hugging the face) + little ears
-      const cheek = ball(0.18, P.hamBelly, 1.15, 1.0, 0.42);
-      cheek.position.set(s * 0.36, 0.0, 0.26);
-      head.add(cheek);
-      const ear = ball(0.13, P.hamEar);
-      ear.position.set(s * 0.3, 0.5, -0.05);
-      head.add(ear);
-      const earIn = ball(0.07, 0xe8a0a0, 1, 1, 0.5);
-      earIn.position.set(s * 0.29, 0.5, 0.05);
-      head.add(earIn);
-    }
-    const nose = ball(0.06, 0xcc7788, 1.3, 0.85, 0.7);
-    nose.position.set(0, 0.04, 0.48);
-    head.add(nose);
-    addFace(head, { blushSpread: 0.4, blushY: -0.16 });
-    inner.add(head);
-
-    const legs = stubbyLegs(inner, P.hamEar, { y: 0.12, spreadX: 0.18, spreadZ: 0.14, r: 0.09 });
-    return { head, legs, tail: null, ears: [] };
-  },
-};
-
-// ===================================================================== creature
-// "Aura" (working name) — the player's original, customizable species, modelled
-// on the concept sheet: a soft, green-furred, BIPEDAL critter with two arms and
-// two legs (four limbs total — NOT four-legged, and NO antlers/horns). Built from
-// the same primitives as the animals and returns the same {head, legs, tail, ears}
-// shape so createPet's animation loop is reused. Head radius stays 0.52 so all
-// existing wearables fit.
-
-// Coat palette: a coherent run of natural fur tones (snow → cream → fawn →
-// caramel → brown → cocoa, then a cool grey→charcoal column) followed by soft,
-// cheerful candy colours. Ordered light→dark within each family.
-export const COAT_SWATCHES = [
-  0xf7f1e6, 0xefdcc0, 0xe3c39a, 0xcaa472, 0xb07b46, 0x8a5a32, 0x5e3d22,
-  0xcfd2d6, 0x9aa0a6, 0x6b7178, 0x3c4047,
-  0xef8d6a, 0xf0b84e, 0x7ec98a, 0x4bb3a6, 0x5f9fe0, 0xc98fd0, 0xee9ac2,
-];
-export const BELLY_SWATCHES = [0xffffff, 0xfff6ea, 0xeaf2fb, 0xfceef3, 0xeef8e9, 0xf5eefa, 0xfff6e0, 0xeef7f4, 0xf2efe9];
-export const ACCENT_SWATCHES = [0xe8a0a0, 0xf0b8c0, 0xd0b0e0, 0xa0c8e0, 0xf2c14e, 0xb0d0a0, 0xd8b89a, 0xc0c0c8]; // inner ear / cheeks
-export const SPOT_SWATCHES = [0xcfcfcf, 0xbfbfbf, 0xe0d6c8, 0xd6c0c0, 0xc8d2dc, 0xbcbcc6]; // soft markings
-// Muzzle / snout tones, curated to pair with the coat palette: ivory & creams
-// for light coats, fawn/tan/brown for warm coats, blush/rose accents, and a
-// grey→charcoal run for the cool coats. Ordered light→dark.
-export const MUZZLE_SWATCHES = [
-  0xf6ecdc, 0xe9d6b8, 0xf0cdb0, 0xd9b48c, 0xc09a6e, 0x9a7350,
-  0xf3c9cf, 0xe39aa6, 0xd7dade, 0xa6abb0, 0x6f747a, 0x3f4248,
-];
 // eye / iris colours — vivid but believable: rich browns, amber/hazel, then a
 // clear blue / green / grey / violet, plus a deep near-black for a classic look.
 export const EYE_SWATCHES = [
@@ -283,23 +61,9 @@ export const DUCK_BODY_SWATCHES = [
 export const BEAK_SWATCHES = [
   0xff9e2c, 0xf2a93b, 0xffc04d, 0xe07b2e, 0xd6584f, 0xb07b46, 0x8a5a32, 0x4a4f57,
 ];
-export const PANTS_SWATCHES = [
-  0xff7e1a, 0xffd21e, 0x2f50b0, 0x4a86e8, 0x1fc4b0, 0x55b76a, 0x9a5a30, 0x707680, 0x3a3f4a, 0xe6e2d8,
-];
-
-export const CREATURE_OPTIONS = {
-  build: ['slim', 'round', 'chonky'],
-  size: ['small', 'medium', 'tall'],
-  fur: ['velvety', 'silky', 'shaggy'],           // Smooth / Soft / Fuzzy
-  pattern: ['none', 'spots', 'stripes', 'patch', 'freckles'],
-  ears: ['none', 'round', 'pointed', 'tall', 'floppy', 'folded', 'wide'],
-  tail: ['none', 'fluffy', 'pom'],                // None / Long Fluffy / Pom-Pom
-  eyeStyle: ['round', 'sparkly', 'sleepy'],
-};
-
 export function defaultCreature() {
-  // the canon look: a clean smooth white toy-critter — big round head, big glossy
-  // black eyes, soft floppy ears, little nose, no tail.
+  // the canon duck: duckling-yellow feathers, orange bill & feet, dark eyes,
+  // green shirt. (Extra legacy fields are kept so old saves round-trip cleanly.)
   return {
     build: 'round', size: 'medium',
     bodyColor: 0xffd23e, bellyColor: 0xfff3cf, accentColor: 0xffb3a3,   // duckling yellow
@@ -311,197 +75,17 @@ export function defaultCreature() {
   };
 }
 
+// Randomize only the fields the duck actually renders (and the creator exposes);
+// everything else stays at the canon defaults.
 export function randomCreature() {
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   return {
-    build: pick(CREATURE_OPTIONS.build), size: pick(CREATURE_OPTIONS.size),
-    bodyColor: pick(COAT_SWATCHES), bellyColor: pick(BELLY_SWATCHES), accentColor: pick(ACCENT_SWATCHES),
-    muzzleColor: pick(MUZZLE_SWATCHES),
-    pattern: pick(CREATURE_OPTIONS.pattern), patternColor: pick(SPOT_SWATCHES), fur: pick(CREATURE_OPTIONS.fur),
-    ears: pick(CREATURE_OPTIONS.ears), tail: pick(CREATURE_OPTIONS.tail),
-    eyeColor: pick(EYE_SWATCHES), eyeStyle: pick(CREATURE_OPTIONS.eyeStyle),
-    blush: false,
-    shirtColor: pick(SHIRT_SWATCHES), pantsColor: pick(PANTS_SWATCHES),
+    ...defaultCreature(),
+    bodyColor: pick(DUCK_BODY_SWATCHES),
+    muzzleColor: pick(BEAK_SWATCHES),
+    eyeColor: pick(EYE_SWATCHES),
+    shirtColor: pick(SHIRT_SWATCHES),
   };
-}
-
-function creatureEars(head, a, ears) {
-  const coat = a.bodyColor, acc = a.accentColor;
-  for (const s of [-1, 1]) {
-    if (a.ears === 'rounded') {           // small round ears on top
-      const ear = ball(0.15, coat);
-      ear.position.set(s * 0.33, 0.46, -0.02); head.add(ear);
-    } else if (a.ears === 'upright') {    // tall upright ears
-      const ear = ball(0.12, coat, 0.82, 1.7, 0.7);
-      ear.position.set(s * 0.26, 0.7, -0.02); ear.rotation.z = s * 0.16; head.add(ear);
-      const earIn = ball(0.07, acc, 0.65, 1.4, 0.5);
-      earIn.position.set(s * 0.26, 0.72, 0.05); earIn.rotation.z = s * 0.16; head.add(earIn);
-    } else if (a.ears === 'floppy') {     // big soft floppy ears draping down the sides, framing the face
-      const ear = ball(0.2, coat, 0.66, 1.85, 0.6);
-      ear.position.set(s * 0.41, -0.04, 0.05); ear.rotation.z = s * 0.24; ear.rotation.x = -0.12;
-      head.add(ear); ears.push(ear);
-    }
-  }
-}
-
-// soft, slightly darker shade of a hex colour (for gentle creases / shadow)
-function shade(hex, f) {
-  const r = Math.round(((hex >> 16) & 255) * f);
-  const g = Math.round(((hex >> 8) & 255) * f);
-  const b = Math.round((hex & 255) * f);
-  return (r << 16) | (g << 8) | b;
-}
-
-// the toy face: big glossy oval eyes + soft highlight, subtle worried brows, nose
-function creatureFace(head, a) {
-  const sparkly = a.eyeStyle === 'sparkly', sleepy = a.eyeStyle === 'sleepy';
-  const eyeR = sparkly ? 0.135 : 0.125;
-  const eyeSy = sleepy ? 0.8 : 1.28;
-  for (const s of [-1, 1]) {
-    const eye = ball(eyeR, a.eyeColor, 0.94, eyeSy, 0.5);
-    eye.position.set(s * 0.205, 0.02, 0.45); head.add(eye);
-    const shine = ball(0.052, 0xffffff, 1, 1, 0.6);
-    shine.position.set(s * 0.205 + 0.05, 0.13, 0.5); head.add(shine);
-    if (sparkly) { const sh2 = ball(0.026, 0xffffff, 1, 1, 0.6); sh2.position.set(s * 0.205 - 0.04, -0.04, 0.5); head.add(sh2); }
-    // subtle soft worried brow — slightly above the eye, gently angled
-    const brow = ball(0.075, shade(a.bodyColor, 0.86), 1.5, 0.2, 0.45);
-    brow.position.set(s * 0.205, 0.22, 0.46); brow.rotation.z = s * -0.13; head.add(brow);
-    if (a.blush) { const b = ball(0.07, P.blush, 1, 0.6, 0.3); b.position.set(s * 0.34, -0.12, 0.4); head.add(b); }
-  }
-  const nose = ball(0.055, 0x1a1a1a, 1.25, 0.95, 0.85); nose.position.set(0, -0.08, 0.49); head.add(nose);
-}
-
-function creatureTail(inner, a) {
-  if (a.tail === 'none') return null;
-  if (a.tail === 'pom') {                 // short fluffy pom-pom
-    const tail = ball(0.17, a.bodyColor);
-    tail.position.set(0, 0.46, -0.46); inner.add(tail);
-    const tip = ball(0.1, a.bellyColor); tip.position.set(0, 0.5, -0.56); tail.add(tip);
-    return tail;
-  }
-  // long fluffy (squirrel-like) tail: a curved stack of balls in a group so the
-  // createPet wag (rotation.y) sweeps the whole plume.
-  const g = new THREE.Group();
-  for (const [y, z, r] of [[0, 0, 0.16], [0.18, -0.03, 0.18], [0.36, -0.01, 0.19], [0.52, 0.08, 0.18], [0.64, 0.2, 0.15]]) {
-    const b = ball(r, a.bodyColor); b.position.set(0, y, z); g.add(b);
-  }
-  const tip = ball(0.13, a.bellyColor); tip.position.set(0, 0.72, 0.26); g.add(tip);
-  g.position.set(0, 0.5, -0.44); inner.add(g);
-  return g;
-}
-
-// soft fur look: velvety = smooth (nothing extra); shaggy = chunky tufts around
-// the body + cheeks; silky = a few smooth, elongated wisps on the chest/sides.
-function creatureFur(inner, head, a, bw) {
-  if (a.fur === 'velvety') return;
-  const c = a.bodyColor;
-  if (a.fur === 'shaggy') {
-    for (const [x, y, z] of [[0.34, 0.5, 0.08], [-0.34, 0.5, 0.08], [0.3, 0.42, -0.22], [-0.3, 0.42, -0.22], [0.2, 0.68, -0.18], [-0.2, 0.68, -0.18], [0.36, 0.6, -0.04], [-0.36, 0.6, -0.04]]) {
-      const t = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.22, 5), toonMat(c));
-      t.castShadow = true;
-      t.position.set(x * bw, y, z * bw);
-      t.rotation.z = x > 0 ? -0.9 : 0.9;
-      t.rotation.x = z < 0 ? -0.6 : 0.4;
-      inner.add(t);
-    }
-    for (const s of [-1, 1]) {            // cheek fuzz
-      const cf = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 5), toonMat(c));
-      cf.position.set(s * 0.5, -0.05, 0.08); cf.rotation.z = s * 1.3; head.add(cf);
-    }
-  } else if (a.fur === 'silky') {
-    for (const [x, y, z, sy] of [[0, 0.34, 0.32, 1.5], [0.3, 0.32, 0.18, 1.25], [-0.3, 0.32, 0.18, 1.25]]) {
-      const w = ball(0.1, c, 0.7, sy, 0.7);
-      w.position.set(x * bw, y, z * bw); inner.add(w);
-    }
-  }
-}
-
-function creaturePattern(inner, head, a, bw) {
-  const c = a.patternColor;
-  if (a.pattern === 'spots') {            // darker fur markings
-    for (const [x, y, z] of [[0.22, 0.64, 0.32], [-0.26, 0.6, 0.2], [0.0, 0.72, 0.32], [0.28, 0.52, -0.1], [-0.2, 0.5, -0.16], [0.12, 0.68, -0.26]]) {
-      const sp = ball(0.09, c, 1, 1, 0.4);
-      sp.position.set(x * bw, y, z * bw); inner.add(sp);
-    }
-  } else if (a.pattern === 'stripes') {
-    for (const z of [0.12, -0.03, -0.18]) {
-      const st = box(0.52 * bw, 0.05, 0.15, c);
-      st.position.set(0, 0.74, z); inner.add(st);
-    }
-  } else if (a.pattern === 'freckles') {
-    for (const s of [-1, 1]) for (const [dx, dy] of [[0, 0], [0.07, 0.02], [-0.05, -0.03]]) {
-      const fr = ball(0.022, c, 1, 1, 0.5);
-      fr.position.set(s * (0.28 + dx), -0.04 + dy, 0.46); head.add(fr);
-    }
-  }
-}
-
-function buildCreature(inner, a) {
-  const sizeScale = a.size === 'small' ? 0.9 : a.size === 'tall' ? 1.12 : 1.0;
-  inner.scale.setScalar(sizeScale);
-  const bw = a.build === 'slim' ? 0.92 : a.build === 'chonky' ? 1.16 : 1.0; // body width factor
-
-  // smooth egg-shaped body (small relative to the big head). No outline — this
-  // species uses soft vinyl-toy shading instead of the cel outline, so the head
-  // and body blend into one seamless form (see smooth-material pass below).
-  const body = ball(0.40, a.bodyColor, bw, 1.08, 0.98 * bw);
-  body.position.y = 0.54; inner.add(body);
-
-  if (a.pattern === 'patch') {            // optional belly patch (off by default)
-    const belly = ball(0.3, a.patternColor, 0.9 * bw, 0.95, 0.6);
-    belly.position.set(0, 0.5, 0.22); inner.add(belly);
-  }
-
-  // big round head — radius locked at 0.52 so all wearables still fit. Sunk into
-  // the body a touch (no outline) for a seamless neck.
-  const head = new THREE.Group();
-  head.position.set(0, 1.12, 0.08);
-  const skull = ball(0.52, a.bodyColor, 1.05, 0.98, 1.0);
-  head.add(skull);
-
-  creatureFace(head, a);
-  const ears = [];
-  creatureEars(head, a, ears);
-  inner.add(head);
-
-  // short stubby arms, one on each side (bipedal — four limbs total)
-  for (const s of [-1, 1]) {
-    const arm = ball(0.12, a.bodyColor, 0.82, 1.15, 0.85);
-    arm.position.set(s * 0.40 * bw, 0.5, 0.05);
-    arm.rotation.z = s * 0.26; inner.add(arm);
-  }
-
-  const tail = creatureTail(inner, a);
-  creaturePattern(inner, head, a, bw);
-  creatureFur(inner, head, a, bw);
-
-  // two little feet
-  const legs = [];
-  for (const s of [-1, 1]) {
-    const foot = ball(0.14, a.bodyColor, 1.0, 0.82, 1.3);
-    foot.position.set(s * 0.16 * bw, 0.06, 0.06);
-    inner.add(foot); legs.push(foot);
-  }
-
-  // smooth-vinyl pass: swap this species off the cel-shaded toon material onto
-  // soft standard shading (no hard bands, no outline) to match the toy look.
-  // Dark parts (eyes, nose) get a glossy finish; everything else is soft-matte.
-  inner.traverse((o) => {
-    if (!o.isMesh) return;
-    const hex = o.material.color.getHex();
-    const lum = (((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)) / 3;
-    o.material = new THREE.MeshStandardMaterial({ color: hex, roughness: lum < 60 ? 0.3 : 0.82, metalness: 0 });
-  });
-
-  return { head, legs, tail, ears };
-}
-
-// Outline for a mesh inside a group that may not be attached yet.
-function addOutlineLater(group, target, scale = 1.05) {
-  const o = new THREE.Mesh(target.geometry, outlineMat);
-  o.scale.copy(target.scale).multiplyScalar(scale);
-  o.position.copy(target.position);
-  group.add(o);
 }
 
 // ---- wearables (fitted to v2 head radius ~0.52, attach to head group) ----
@@ -1063,63 +647,29 @@ function buildDuck(inner, a) {
   });
 }
 
+// Every pet is a duck. The `type` argument is kept for API compatibility —
+// unknown / legacy animal types ('cat', 'dog', …, from old saves or callers)
+// all route to the duck.
 export function createPet(type, { equipped = {}, appearance = null } = {}) {
   const g = new THREE.Group();
   const inner = new THREE.Group();
   g.add(inner);
-  const parts = type === 'creature'
-    ? (isDuckReady()
-      ? buildGlbDuck(inner, appearance || defaultCreature())       // authored low-poly GLB (rigged)
-      : buildDuck(inner, appearance || defaultCreature()))         // procedural toon fallback
-    : (BUILDERS[type] || BUILDERS.cat)(inner);
+  const a = appearance || defaultCreature();
+  const parts = isDuckReady()
+    ? buildGlbDuck(inner, a)     // authored low-poly GLB (rigged)
+    : buildDuck(inner, a);       // procedural toon fallback
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
   g.userData.mounts = parts.mounts || null;   // measured attach points (GLB duck only)
   g.userData.setShirtColor = parts.setShirtColor || null;   // live shirt-zone repaint (GLB duck only)
   g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
-  g.userData.petType = type;
+  g.userData.petType = 'creature';
   g.userData.wearables = [];
 
   setWearables(g, equipped);
 
-  // a builder may supply its own animator (e.g. the rigged duck's bone-driven walk)
-  if (parts.animate) { g.userData.animate = parts.animate; return g; }
-
-  // hop + squash walk, idle breathing/tail-wag — driven from the main loop
-  const baseHeadY = parts.head.position.y;
-  const baseScaleY = inner.scale.y;
-  let prevT = 0;
-  g.userData.animate = (t, moving) => {
-    // authored model: it's posed once into a static standing idle, so we never
-    // touch the bones here (that was causing the flailing). Life comes from a
-    // subtle whole-body breathing scale, a gentle walk hop, and the ear flap.
-    if (parts.breathe) {
-      prevT = t;
-      inner.scale.y = baseScaleY * (1 + Math.sin(t * 1.7) * 0.012);
-      inner.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.06 : 0;
-      for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.06;
-      return;
-    }
-    if (moving) {
-      const hop = Math.abs(Math.sin(t * 9));
-      inner.position.y = hop * 0.09;
-      inner.scale.y = baseScaleY * (1 + (hop - 0.5) * 0.05);
-      parts.head.rotation.z = Math.sin(t * 9) * 0.05;
-      parts.legs.forEach((leg, i) => {
-        leg.rotation.x = Math.sin(t * 11 + (i % 2) * Math.PI) * 0.7;
-      });
-    } else {
-      inner.position.y = 0;
-      inner.scale.y = baseScaleY * (1 + Math.sin(t * 2.2) * 0.012);
-      parts.head.rotation.z = 0;
-      parts.head.position.y = baseHeadY + Math.sin(t * 2.2) * 0.012;
-      parts.legs.forEach((leg) => { leg.rotation.x = 0; });
-    }
-    // eating: a quick chewing head-nod that overrides the idle/walk head tilt
-    parts.head.rotation.x = (g.userData.eatUntil && t < g.userData.eatUntil) ? (-0.16 + Math.abs(Math.sin(t * 14)) * 0.22) : 0;
-    if (parts.tail) parts.tail.rotation.y = Math.sin(t * 5) * 0.35;
-    for (const e of parts.ears) e.rotation.x = (e.userData.flapX || 0) + Math.sin(t * 3 + 1) * 0.08;
-  };
+  // both duck builders supply their own animator (waddle walk + idle breathe)
+  g.userData.animate = parts.animate;
   return g;
 }
 

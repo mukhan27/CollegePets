@@ -598,7 +598,7 @@ async function bootOrCreate() {
 const clock = new THREE.Clock();
 
 function startGame() {
-  player = createPet(state.petType, { equipped: state.equipped, appearance: state.creature });
+  player = createPet('creature', { equipped: state.equipped, appearance: state.creature });
   scene.add(player);
 
   npcs = createNpcs(campus.root);

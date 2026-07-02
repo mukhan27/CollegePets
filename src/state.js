@@ -4,14 +4,6 @@ import { defaultCreature } from './petFactory.js';
 
 const SAVE_KEY = 'collegepets-save-v1';
 
-export const PET_TYPES = [
-  { id: 'cat',     emoji: '🐱', label: 'Cat',     desc: 'Cool & curious' },
-  { id: 'dog',     emoji: '🐶', label: 'Dog',     desc: 'Loyal & upbeat' },
-  { id: 'bear',    emoji: '🐻', label: 'Bear',    desc: 'Big & friendly' },
-  { id: 'duck',    emoji: '🦆', label: 'Duck',    desc: 'Chill & quirky' },
-  { id: 'hamster', emoji: '🐹', label: 'Hamster', desc: 'Tiny & speedy' },
-];
-
 // Wearables attach to the pet's head/neck. Decor goes in the dorm bedroom.
 export const CATALOG = {
   clothes: [
@@ -146,6 +138,12 @@ function ensureShape(s) {
   }
   delete s.needs.energy;       // energy meter retired
   delete s.quests; delete s.questStamp; delete s.daily; // quest system retired
+  // legacy animal pets (cat/dog/bear/duck/hamster) retired — everyone's a duck now.
+  // Old saves keep their name/coins/etc; the pet becomes the default duck.
+  if (s.petType && s.petType !== 'creature') {
+    s.petType = 'creature';
+    if (!s.creature || typeof s.creature !== 'object') s.creature = d.creature;
+  }
   return s;
 }
 

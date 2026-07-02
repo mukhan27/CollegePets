@@ -4,18 +4,27 @@
 import * as THREE from 'three';
 import { createPet } from './petFactory.js';
 
+// Every student is a duck; each gets a distinct feather/shirt/bill/eye palette
+// so they stay recognizable at a glance ({bodyColor, shirtColor, muzzleColor,
+// eyeColor} — the same appearance fields as the player's duck).
 export const NPC_DEFS = [
-  { name: 'Maya',   type: 'cat',     emoji: '🐱', major: 'Art History',  vibe: 'dreamy',
+  { name: 'Maya',   emoji: '🦆', major: 'Art History',  vibe: 'dreamy',
+    appearance: { bodyColor: 0xf7e7a8, shirtColor: 0xf76fa0, muzzleColor: 0xf2a93b, eyeColor: 0x6b4324 }, // cream + pink
     greet: "Oh hey! I was just sketching the fountain. It never sits still though… rude." },
-  { name: 'Boomer', type: 'dog',     emoji: '🐶', major: 'Kinesiology',  vibe: 'hype',
+  { name: 'Boomer', emoji: '🦆', major: 'Kinesiology',  vibe: 'hype',
+    appearance: { bodyColor: 0xf0c060, shirtColor: 0xee3b34, muzzleColor: 0xe07b2e, eyeColor: 0x2a241e }, // golden + red
     greet: "YO!! New face!! Wanna run laps with me?? Or not!! Either way, HI!!" },
-  { name: 'Bruno',  type: 'bear',    emoji: '🐻', major: 'Philosophy',   vibe: 'chill',
+  { name: 'Bruno',  emoji: '🦆', major: 'Philosophy',   vibe: 'chill',
+    appearance: { bodyColor: 0x8a5a32, shirtColor: 0x3a3f4a, muzzleColor: 0xffc04d, eyeColor: 0x2a241e }, // brown + navy
     greet: "Hey. I was just thinking about hibernation as a metaphor for finals week." },
-  { name: 'Quincy', type: 'duck',    emoji: '🦆', major: 'Marine Bio',   vibe: 'quirky',
+  { name: 'Quincy', emoji: '🦆', major: 'Marine Bio',   vibe: 'quirky',
+    appearance: { bodyColor: 0xffd23e, shirtColor: 0x55b76a, muzzleColor: 0xff9e2c, eyeColor: 0x1a1714 }, // classic yellow + green
     greet: "Quack— I mean, hi. Sorry, I code-switch around new people." },
-  { name: 'Pip',    type: 'hamster', emoji: '🐹', major: 'Computer Sci', vibe: 'nerdy',
+  { name: 'Pip',    emoji: '🦆', major: 'Computer Sci', vibe: 'nerdy',
+    appearance: { bodyColor: 0xf7f1e6, shirtColor: 0x1fc4b0, muzzleColor: 0xd6584f, eyeColor: 0x3f7bbf }, // white + teal
     greet: "Hi!! Sorry if I'm jittery, I've had four espressos and a sunflower seed." },
-  { name: 'Cleo',   type: 'cat',     emoji: '🐱', major: 'Economics',    vibe: 'sassy',
+  { name: 'Cleo',   emoji: '🦆', major: 'Economics',    vibe: 'sassy',
+    appearance: { bodyColor: 0x9aa0a6, shirtColor: 0x9b5de5, muzzleColor: 0x4a4f57, eyeColor: 0x6f6086 }, // grey + purple
     greet: "Hi. I'd love to chat, but my nap schedule is brutal. You've got 5 minutes." },
 ];
 
@@ -93,7 +102,7 @@ export function npcReply(npc, message) {
   return line;
 }
 
-const IDLE_BUBBLES = ['☀️', '🎵', '💭', '📖', '😺', '✨', '🍂', '☕'];
+const IDLE_BUBBLES = ['☀️', '🎵', '💭', '📖', '🦆', '✨', '🍂', '☕'];
 
 // Spawn NPCs on the quad; each wanders between random waypoints.
 export function createNpcs(scene) {
@@ -102,7 +111,7 @@ export function createNpcs(scene) {
     [-15, 12], [18, -10], [-22, -14], [25, 14], [-5, 22], [12, -22],
   ];
   NPC_DEFS.forEach((def, i) => {
-    const mesh = createPet(def.type, {});
+    const mesh = createPet('creature', { appearance: def.appearance });
     const [sx, sz] = spots[i % spots.length];
     mesh.position.set(sx, 0, sz);
     scene.add(mesh);

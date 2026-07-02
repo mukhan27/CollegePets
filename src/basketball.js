@@ -34,8 +34,8 @@ export function createBasketball({ parent, court }) {
   const CC = court.center;
   const group = new THREE.Group(); group.visible = false; parent.add(group);
 
-  function makeNpc(type, teamColor) {
-    const pet = createPet(type, {});
+  function makeNpc(appearance, teamColor) {
+    const pet = createPet('creature', { appearance });
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.08, 8, 18), toonMat(teamColor));
     band.rotation.x = Math.PI / 2; band.position.y = 0.55; band.castShadow = true;
     pet.add(band);
@@ -43,7 +43,11 @@ export function createBasketball({ parent, court }) {
     return pet;
   }
   const BLUE = 0x3a78c8, RED = 0xd14b4b;
-  const tmPet = makeNpc('dog', BLUE), e1Pet = makeNpc('bear', RED), e2Pet = makeNpc('cat', RED);
+  // NPC ducks: shirts follow the team colour (teammate blue like the player's band,
+  // opponents red) with varied feathers so each player still reads as an individual.
+  const tmPet = makeNpc({ bodyColor: 0xf0c060, shirtColor: 0x4a86e8, muzzleColor: 0xff9e2c, eyeColor: 0x2a241e }, BLUE);
+  const e1Pet = makeNpc({ bodyColor: 0x8a5a32, shirtColor: 0xee3b34, muzzleColor: 0xffc04d, eyeColor: 0x2a241e }, RED);
+  const e2Pet = makeNpc({ bodyColor: 0xf7f1e6, shirtColor: 0xee3b34, muzzleColor: 0xe07b2e, eyeColor: 0x1a1714 }, RED);
   // a real-looking basketball: orange sphere + black panel seams
   const ball = new THREE.Group();
   const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 22, 16), toonMat(0xe07a33));
