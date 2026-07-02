@@ -368,6 +368,21 @@ html, body {
 .tryon-item.on { border-color: #ff9f43; background: #fff4e3; }
 .tryon-item.on .ti-tag { color: #d2791f; font-weight: 700; }
 .tryon-item.locked .ti-tag { color: #b07a18; font-weight: 700; }
+/* free preview of an unowned item: cool blue card + an explicit Buy chip */
+.tryon-item.previewing { border-color: #7ec8e3; background: #eaf6fd;
+  grid-template-columns: 52px 1fr auto; }
+.tryon-item.previewing .ti-tag { color: #2f7ea6; font-weight: 700; }
+.ti-buy { flex: 0 0 auto; padding: 9px 12px; border-radius: 11px; background: #ff9f43;
+  color: #fff; font-size: 13px; font-weight: 800; white-space: nowrap;
+  box-shadow: 0 2px 0 #d2791f; }
+.ti-buy:active { transform: translateY(1px); box-shadow: 0 1px 0 #d2791f; }
+
+/* ---------- Shop buy confirmation ---------- */
+.buy-confirm { display: flex; align-items: center; gap: 14px; padding: 6px 2px; }
+.buy-confirm img { width: 84px; height: 84px; object-fit: contain; border-radius: 12px;
+  background: linear-gradient(160deg, #fbf6ec, #efe4d0); }
+.buy-confirm-text { line-height: 1.55; }
+.buy-confirm-sub { color: #7a6a55; font-size: 13px; }
 
 /* ---------- Campus-life HUD: level pill, needs, menu ---------- */
 #hud-level { display: flex; align-items: center; gap: 6px; }

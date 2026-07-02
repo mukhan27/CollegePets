@@ -100,7 +100,7 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
     if (tab === 'clothes') {
       for (const item of CATALOG.clothes) {
         const owned = owns(item.id);
-        const equipped = state.equipped.hat === item.id || state.equipped.face === item.id || state.equipped.neck === item.id;
+        const equipped = state.equipped[clothesSlot(item.id)] === item.id;
         html += `<div class="item-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" data-id="${item.id}">
           <div class="item-icon"><img class="item-img" src="${wearablePreview(item.id)}" alt=""></div><div class="item-name">${item.name}</div>
           ${owned
@@ -133,18 +133,28 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
       [{ label: 'Back to shop', onClick: render }]);
   }
 
+  // Explicit purchase confirmation — clicking a card never silently spends coins.
+  function confirmBuy(item, doBuy) {
+    showModal(`Buy ${item.name}?`,
+      `<div class="buy-confirm"><img class="item-img" src="${item.preview}" alt="">
+        <div class="buy-confirm-text"><b>${item.name}</b><br>Price: 🪙 ${item.price}<br>
+        <span class="buy-confirm-sub">You have 🪙 ${state.coins}</span></div></div>`,
+      [{ label: `Buy 🪙 ${item.price}`, onClick: () => { doBuy(); track('spend', item.price); render(); } },
+       { label: 'Cancel', primary: false, onClick: render }]);
+  }
+
   function handleItem(id) {
     if (tab === 'furniture') {
       const item = FURNITURE_CATALOG.find(f => f.id === id);
       if (state.coins < item.price) { notEnough(item.price); return; }
-      buyFurniture(id); track('spend', item.price);
-      render();
+      confirmBuy({ ...item, preview: furniturePreview(id) }, () => buyFurniture(id));
       return;
     }
     const item = CATALOG.clothes.find(i => i.id === id);
     if (!owns(id)) {
       if (state.coins < item.price) { notEnough(item.price); return; }
-      buy(id); track('spend', item.price); render(); return;
+      confirmBuy({ ...item, preview: wearablePreview(id) }, () => buy(id));
+      return;
     }
     const slot = clothesSlot(id);
     state.equipped[slot] = state.equipped[slot] === id ? null : id;

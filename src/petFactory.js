@@ -637,7 +637,99 @@ const WEARABLES = {
     const center = ball(0.06, 0xffd166); g.add(center);
     g.position.set(0.26, 0.45, 0.12); head.add(g); return g;
   },
+  bucket_hat(head) {
+    const g = new THREE.Group();
+    const c = 0xc9b48a, dark = 0xa89163;
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.46, 0.30, 16), toonMat(c));
+    crown.castShadow = true; crown.position.y = 0.18; g.add(crown);
+    const top = ball(0.40, c, 1, 0.3, 1); top.position.y = 0.33; g.add(top);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.63, 0.1, 18), toonMat(c));
+    brim.castShadow = true; brim.position.y = 0.02; g.add(brim);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.465, 0.475, 0.08, 16), toonMat(dark));
+    band.position.y = 0.1; g.add(band);
+    g.position.y = 0.28; head.add(g); return g;
+  },
+  cowboy_hat(head) {
+    const g = new THREE.Group();
+    const c = 0x9a6a3f, bandC = 0x5e3d22;
+    const brim = ball(0.3, c, 2.55, 0.13, 1.95); g.add(brim);       // wide oval brim
+    for (const s of [-1, 1]) {                                       // rolled-up brim edges
+      const curl = ball(0.3, c, 0.38, 0.42, 1.75);
+      curl.position.set(s * 0.68, 0.08, 0); curl.rotation.z = s * 0.5; g.add(curl);
+    }
+    const dome = ball(0.42, c, 1.02, 0.72, 1.14); dome.position.y = 0.16; g.add(dome);
+    const crease = ball(0.24, c, 0.55, 0.5, 1.2); crease.position.y = 0.42; g.add(crease);
+    const hb = new THREE.Mesh(new THREE.CylinderGeometry(0.415, 0.44, 0.09, 16), toonMat(bandC));
+    hb.position.y = 0.1; g.add(hb);
+    g.position.y = 0.32; head.add(g); return g;
+  },
+  wizard_hat(head) {
+    const g = new THREE.Group();
+    const c = 0x4a3d8f, trim = 0xf2c14e;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.7, 0.09, 18), toonMat(c));
+    brim.castShadow = true; g.add(brim);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.0, 16), toonMat(c));
+    cone.castShadow = true; cone.position.y = 0.52; g.add(cone);
+    const tip = ball(0.08, trim); tip.position.y = 1.02; g.add(tip);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.43, 0.11, 16), toonMat(trim));
+    band.position.y = 0.1; g.add(band);
+    for (const [x, y, z] of [[0.16, 0.45, 0.2], [-0.12, 0.65, 0.13], [0.05, 0.85, 0.08]]) {  // gold star studs
+      const star = ball(0.05, trim, 1, 1, 0.5);
+      star.position.set(x, y, z); star.lookAt(x * 3, y, z * 3); g.add(star);
+    }
+    g.position.y = 0.33; head.add(g); return g;
+  },
+  round_glasses(head) {
+    const g = new THREE.Group();
+    const gold = 0xc9a227;
+    const lensMat = new THREE.MeshToonMaterial({ color: 0xdfe9f2, transparent: true, opacity: 0.35 });
+    for (const s of [-1, 1]) {
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.02, 8, 20), toonMat(gold));
+      rim.position.set(s * 0.19, 0.1, 0.47); g.add(rim);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), lensMat);
+      lens.position.set(s * 0.19, 0.1, 0.47); g.add(lens);
+    }
+    const bridge = box(0.13, 0.024, 0.024, gold); bridge.position.set(0, 0.14, 0.48); g.add(bridge);
+    head.add(g); return g;
+  },
+  star_shades(head) {
+    const g = new THREE.Group();
+    const rimC = 0xf2c14e, lensC = 0xd94fa3;
+    for (const s of [-1, 1]) {
+      const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(0.2), { depth: 0.02, bevelEnabled: false }), toonMat(rimC));
+      rim.position.set(s * 0.21, 0.1, 0.44); g.add(rim);
+      const lens = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(0.15), { depth: 0.02, bevelEnabled: false }), toonMat(lensC));
+      lens.position.set(s * 0.21, 0.1, 0.455); g.add(lens);
+    }
+    const bridge = box(0.12, 0.03, 0.03, rimC); bridge.position.set(0, 0.12, 0.47); g.add(bridge);
+    head.add(g); return g;
+  },
+  bowtie(head) {
+    const g = new THREE.Group();
+    const c = 0xd6584f, dark = tintHex(0xd6584f, -0.25);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.04, 8, 20), toonMat(dark));
+    band.rotation.x = Math.PI / 2; g.add(band);
+    for (const s of [-1, 1]) {
+      const wing = ball(0.1, c, 1.3, 0.75, 0.5);
+      wing.position.set(s * 0.115, 0, 0.375); wing.rotation.y = s * 0.35; g.add(wing);
+    }
+    const knot = ball(0.055, dark, 0.85, 0.85, 0.7); knot.position.set(0, 0, 0.43); g.add(knot);
+    g.position.y = -0.42; head.add(g); return g;
+  },
+  chain_gold(head) {
+    const g = new THREE.Group();
+    const gold = 0xf2c14e;
+    const chain = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.035, 8, 24), toonMat(gold));
+    chain.rotation.x = Math.PI / 2 + 0.16; g.add(chain);   // draped slightly forward
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 16), toonMat(gold));
+    coin.rotation.x = Math.PI / 2; coin.position.set(0, -0.12, 0.38); coin.castShadow = true; g.add(coin);
+    const gem = ball(0.035, 0xd6584f, 1, 1, 0.6); gem.position.set(0, -0.12, 0.4); g.add(gem);
+    g.position.y = -0.42; head.add(g); return g;
+  },
   // ---- body-worn accessories (attached to the torso anchor) ----
+  hoodie_grey: (b) => hoodieMesh(b, 0x8a8f98),
+  varsity:     (b) => varsityMesh(b, 0x2f3a66, 0xf2f0e8),
+  tee_band:    (b) => bandTeeMesh(b, 0x2b2b30),
   shirt_white: (b) => shirtMesh(b, 0xf2f1ee),
   shirt_blue:  (b) => shirtMesh(b, 0x4a78c8),
   shirt_red:   (b) => shirtMesh(b, 0xd6584f),
@@ -657,7 +749,12 @@ const tintHex = (c, t) => new THREE.Color(c).lerp(new THREE.Color(t < 0 ? 0x0000
 // big chibi head spans y≈0.81–1.70, so the torso is ~0.45–0.81 and the legs below.
 // Positions/sizes are tuned to that; the constants below make them easy to nudge.
 const TORSO_Y = 0.60, TORSO_R = 0.37, HIPS_Y = 0.33, BACK_Z = -0.34;
-function shirtMesh(body, color) {
+// opts lets themed tops (varsity jacket, hoodie…) recolour the sleeves / collar /
+// hem while reusing the tee's duck-fitting behaviour.
+function shirtMesh(body, color, opts = {}) {
+  const sleeveC = opts.sleeve ?? color;
+  const collarC = opts.collar ?? tintHex(color, 0.35);
+  const hemC = opts.hem ?? tintHex(color, 0.22);
   // duckFit (set by the mount-fitting wrapper): the GLB duck is a wingless fat egg, so the
   // stick-out arm sleeves become small cap-sleeves hugging the wing shoulders, and the hem
   // ring pulls in so it grazes the belly instead of hovering like a hula hoop.
@@ -666,20 +763,64 @@ function shirtMesh(body, color) {
   const torso = new THREE.Mesh(new THREE.SphereGeometry(TORSO_R, 18, 14), toonMat(color));
   torso.scale.set(1.06, 0.86, 1.02); torso.castShadow = true; g.add(torso);
   for (const s of [-1, 1]) {
-    const sl = ball(0.145, color, 1, 0.85, 1);
+    const sl = ball(0.145, sleeveC, 1, 0.85, 1);
     if (duck) { sl.position.set(s * 0.40, 0.03, 0.06); sl.scale.multiplyScalar(0.72); }
     else sl.position.set(s * 0.35, 0.02, 0);
     g.add(sl);
   }
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(tintHex(color, 0.35)));
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(collarC));
   collar.rotation.x = Math.PI / 2; collar.position.y = 0.27;
   if (duck) collar.scale.setScalar(0.82);   // tuck fully inside the duck's neck
   g.add(collar);
-  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(tintHex(color, 0.22)));
+  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(hemC));
   hem.rotation.x = Math.PI / 2; hem.position.y = -0.27;
   if (duck) hem.scale.setScalar(0.67);   // rolled edge sitting on the shell, not a loose hoop
   g.add(hem);
   g.position.set(0, TORSO_Y, 0); body.add(g); return g;
+}
+
+// Campus hoodie: tee base + a draped hood shell on the shoulders, kangaroo
+// pocket and drawstrings. Same builder space as shirtMesh (torso frame).
+function hoodieMesh(body, color) {
+  const dark = tintHex(color, -0.22);
+  const g = shirtMesh(body, color, { collar: dark, hem: dark });
+  const hood = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toonMat(dark));
+  hood.scale.set(1.15, 0.75, 0.95); hood.rotation.x = -0.65; hood.position.set(0, 0.25, -0.19);
+  hood.castShadow = true; g.add(hood);
+  const pocket = box(0.26, 0.13, 0.045, dark);
+  pocket.position.set(0, -0.16, 0.325); pocket.rotation.x = 0.3; g.add(pocket);
+  for (const s of [-1, 1]) {
+    const str = capsule(0.012, 0.08, 0xf2f0e8);
+    str.position.set(s * 0.07, 0.15, 0.34); g.add(str);
+    const tip = ball(0.018, tintHex(color, -0.4)); tip.position.set(s * 0.07, 0.08, 0.35); g.add(tip);
+  }
+  return g;
+}
+
+// Varsity letter jacket: dark body, cream sleeves, snap-button strip + chest letter.
+function varsityMesh(body, color, sleeve) {
+  const g = shirtMesh(body, color, { sleeve, collar: sleeve, hem: sleeve });
+  const strip = box(0.035, 0.34, 0.03, sleeve);
+  strip.position.set(0, -0.02, 0.365); strip.rotation.x = 0.1; g.add(strip);
+  for (const y of [0.1, -0.02, -0.14]) {
+    const snap = ball(0.018, tintHex(color, -0.35), 1, 1, 0.6);
+    snap.position.set(0.035, y, 0.37 - Math.abs(y) * 0.14); g.add(snap);
+  }
+  const patch = box(0.11, 0.13, 0.03, 0xf2c14e);         // chest letter patch
+  patch.position.set(-0.15, 0.06, 0.345); patch.rotation.x = 0.12; patch.rotation.y = -0.35; g.add(patch);
+  const bar = box(0.06, 0.05, 0.012, color);
+  bar.position.set(-0.15, 0.06, 0.362); bar.rotation.x = 0.12; bar.rotation.y = -0.35; g.add(bar);
+  return g;
+}
+
+// Band tee: black tee with a white oval print on the chest.
+function bandTeeMesh(body, color) {
+  const g = shirtMesh(body, color, { collar: tintHex(color, 0.15), hem: tintHex(color, 0.12) });
+  const print = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(starShape(0.12), { depth: 0.015, bevelEnabled: false }), toonMat(0xf2f0e8));
+  print.position.set(0, 0.04, 0.365); print.rotation.x = -0.1; g.add(print);
+  return g;
 }
 function pantsMesh(body, color) {
   const g = new THREE.Group();
@@ -758,6 +899,19 @@ function backpackMesh(body, color) {
     strap.scale.x = 1.5; strap.castShadow = true; g.add(strap);
   }
   body.add(g); return g;
+}
+
+// Flat five-point star outline (point-up), used by the star shades.
+function starShape(r) {
+  const s = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+    if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
+  }
+  s.closePath();
+  return s;
 }
 
 function capMesh(head, color) {

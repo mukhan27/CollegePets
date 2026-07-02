@@ -11,6 +11,13 @@ const slotOf = (id) => clothesSlot(id);
 
 let renderer, scene, camera, pet;
 let raf = null, spin = 0.4, dragging = false, lastX = 0, onChanged = null;
+// Free try-on previews: slot -> unowned item id currently shown on the pet.
+// These live only in this module — they are NEVER written to state.equipped,
+// so nothing unowned can be saved; closing the room simply drops them.
+let preview = {};
+
+const effectiveEquip = () => ({ ...state.equipped, ...preview });
+function redressPet() { if (pet) setWearables(pet, effectiveEquip()); }
 
 function init() {
   if (renderer) return;
@@ -42,7 +49,7 @@ function resize() {
 
 function buildPet() {
   if (pet) scene.remove(pet);
-  pet = createPet(state.petType || 'creature', { equipped: state.equipped, appearance: state.creature });
+  pet = createPet(state.petType || 'creature', { equipped: effectiveEquip(), appearance: state.creature });
   scene.add(pet);
 }
 
@@ -65,13 +72,21 @@ function renderItems() {
   for (const item of CATALOG.clothes) {
     const owned = owns(item.id);
     const slot = slotOf(item.id);
-    const on = state.equipped[slot] === item.id;
+    const on = state.equipped[slot] === item.id && !preview[slot];
+    const previewing = preview[slot] === item.id;
     const btn = document.createElement('button');
-    btn.className = 'tryon-item' + (on ? ' on' : '') + (owned ? '' : ' locked');
+    btn.className = 'tryon-item' + (on ? ' on' : '') + (previewing ? ' previewing' : '') + (owned ? '' : ' locked');
+    const tag = owned ? (on ? 'Wearing ✓' : 'Tap to wear')
+      : previewing ? 'Previewing — not yours yet'
+      : `Tap to try · 🪙 ${item.price}`;
     btn.innerHTML = `<img src="${wearablePreview(item.id)}" alt="">
       <span class="ti-text"><span class="ti-name">${item.name}</span>
-      <span class="ti-tag">${owned ? (on ? 'Wearing ✓' : 'Tap to wear') : '🪙 ' + item.price}</span></span>`;
-    btn.addEventListener('click', () => toggle(item));
+      <span class="ti-tag">${tag}</span></span>
+      ${previewing ? `<span class="ti-buy">Buy 🪙 ${item.price}</span>` : ''}`;
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.ti-buy')) buyItem(item);
+      else toggle(item);
+    });
     wrap.appendChild(btn);
   }
 }
@@ -79,11 +94,32 @@ function renderItems() {
 function toggle(item) {
   const slot = slotOf(item.id);
   if (!owns(item.id)) {
-    if (!buy(item.id)) { flashCoins(); return; } // not enough coins
+    // Free preview — no coins move, no ownership changes, nothing is saved.
+    if (preview[slot] === item.id) delete preview[slot];
+    else preview[slot] = item.id;
+  } else {
+    // picking an owned item replaces any preview in the slot; if it was already
+    // equipped underneath that preview, just uncover it instead of unequipping
+    const uncovered = preview[slot] && state.equipped[slot] === item.id;
+    delete preview[slot];
+    if (!uncovered) {
+      state.equipped[slot] = state.equipped[slot] === item.id ? null : item.id;
+      save();
+      if (onChanged) onChanged();
+    }
   }
-  state.equipped[slot] = state.equipped[slot] === item.id ? null : item.id;
+  redressPet();
+  renderItems();
+}
+
+// Explicit purchase of the item being previewed: only here do coins move.
+function buyItem(item) {
+  const slot = slotOf(item.id);
+  if (!buy(item.id)) { flashCoins(); return; } // not enough coins
+  delete preview[slot];
+  state.equipped[slot] = item.id;              // you bought it while wearing it — keep it on
   save();
-  setWearables(pet, state.equipped);
+  redressPet();
   if (onChanged) onChanged();
   updateCoins();
   renderItems();
@@ -91,6 +127,7 @@ function toggle(item) {
 
 export function openTryOn(_player, changed) {
   onChanged = changed;
+  preview = {};            // fresh visit — no leftover previews
   init();
   $('tryon-overlay').classList.remove('hidden');
   resize();
@@ -106,6 +143,9 @@ export function openTryOn(_player, changed) {
 }
 
 function close() {
+  // drop any previewed-but-unbought items; state.equipped never contained them
+  preview = {};
+  redressPet();
   $('tryon-overlay').classList.add('hidden');
   if (raf) { cancelAnimationFrame(raf); raf = null; }
 }

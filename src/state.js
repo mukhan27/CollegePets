@@ -24,9 +24,19 @@ export const CATALOG = {
     { id: 'headphones', icon: '🎧', name: 'Headphones',    price: 110, slot: 'hat' },
     { id: 'crown',      icon: '👑', name: 'Golden Crown',  price: 220, slot: 'hat' },
     { id: 'bow',        icon: '🎀', name: 'Hair Bow',      price: 40,  slot: 'hat' },
+    { id: 'bucket_hat', icon: '👒', name: 'Bucket Hat',    price: 55,  slot: 'hat' },
+    { id: 'cowboy_hat', icon: '🤠', name: 'Cowboy Hat',    price: 75,  slot: 'hat' },
+    { id: 'wizard_hat', icon: '🧙', name: 'Wizard Hat',    price: 95,  slot: 'hat' },
     { id: 'glasses',    icon: '👓', name: 'Smart Glasses', price: 80,  slot: 'face' },
     { id: 'sunglasses', icon: '🕶️', name: 'Shades',        price: 90,  slot: 'face' },
+    { id: 'round_glasses', icon: '🤓', name: 'Round Glasses', price: 60, slot: 'face' },
+    { id: 'star_shades',   icon: '⭐', name: 'Star Shades',   price: 85, slot: 'face' },
     { id: 'scarf',      icon: '🧣', name: 'Team Scarf',    price: 70,  slot: 'neck' },
+    { id: 'bowtie',     icon: '🎀', name: 'Bow Tie',       price: 45,  slot: 'neck' },
+    { id: 'chain_gold', icon: '📿', name: 'Gold Chain',    price: 70,  slot: 'neck' },
+    { id: 'hoodie_grey',icon: '🧥', name: 'Campus Hoodie', price: 85,  slot: 'top' },
+    { id: 'varsity',    icon: '🧥', name: 'Varsity Jacket',price: 110, slot: 'top' },
+    { id: 'tee_band',   icon: '👕', name: 'Band Tee',      price: 65,  slot: 'top' },
     // free starter accessories (offered in the character creator)
     { id: 'shirt_white', icon: '👕', name: 'White Tee',    price: 0, slot: 'top',    starter: true },
     { id: 'shirt_blue',  icon: '👕', name: 'Blue Tee',     price: 0, slot: 'top',    starter: true },
@@ -78,6 +88,12 @@ export const FURNITURE_CATALOG = [
   { id: 'plant',      icon: '🪴', name: 'Plant',       price: 30 },
   { id: 'lamp',       icon: '💡', name: 'Floor Lamp',  price: 40 },
   { id: 'rug',        icon: '🟪', name: 'Rug',         price: 35 },
+  { id: 'mini_fridge',   icon: '🧊', name: 'Mini Fridge',   price: 55 },
+  { id: 'gaming_chair',  icon: '🎮', name: 'Gaming Chair',  price: 85 },
+  { id: 'floor_mirror',  icon: '🪞', name: 'Floor Mirror',  price: 60 },
+  { id: 'aquarium',      icon: '🐠', name: 'Aquarium',      price: 100 },
+  { id: 'string_lights', icon: '✨', name: 'String Lights', price: 45 },
+  { id: 'rug_round',     icon: '🟣', name: 'Round Rug',     price: 35 },
 ];
 
 // Dining-hall menu. Each food tops up the gentle hunger/fun meters (and cold brew
