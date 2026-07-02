@@ -34,14 +34,12 @@ export const CATALOG = {
     { id: 'scarf',      icon: '🧣', name: 'Team Scarf',    price: 70,  slot: 'neck' },
     { id: 'bowtie',     icon: '🎀', name: 'Bow Tie',       price: 45,  slot: 'neck' },
     { id: 'chain_gold', icon: '📿', name: 'Gold Chain',    price: 70,  slot: 'neck' },
-    { id: 'hoodie_grey',icon: '🧥', name: 'Campus Hoodie', price: 85,  slot: 'top' },
-    { id: 'varsity',    icon: '🧥', name: 'Varsity Jacket',price: 110, slot: 'top' },
-    { id: 'tee_band',   icon: '👕', name: 'Band Tee',      price: 65,  slot: 'top' },
-    // free starter accessories (offered in the character creator)
-    { id: 'shirt_white', icon: '👕', name: 'White Tee',    price: 0, slot: 'top',    starter: true },
-    { id: 'shirt_blue',  icon: '👕', name: 'Blue Tee',     price: 0, slot: 'top',    starter: true },
-    { id: 'shirt_red',   icon: '👕', name: 'Red Tee',      price: 0, slot: 'top',    starter: true },
-    { id: 'shirt_green', icon: '👕', name: 'Green Tee',    price: 0, slot: 'top',    starter: true },
+    // free starter accessories (offered in the character creator). On the duck the
+    // "top" slot recolours its baked shirt zone — these are shirt COLOURS, not overlays.
+    { id: 'shirt_white', icon: '👕', name: 'White Shirt',  price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_blue',  icon: '👕', name: 'Blue Shirt',   price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_red',   icon: '👕', name: 'Red Shirt',    price: 0, slot: 'top',    starter: true },
+    { id: 'shirt_green', icon: '👕', name: 'Green Shirt',  price: 0, slot: 'top',    starter: true },
     { id: 'pants_blue',  icon: '👖', name: 'Blue Jeans',   price: 0, slot: 'bottom', starter: true },
     { id: 'pants_khaki', icon: '👖', name: 'Khakis',       price: 0, slot: 'bottom', starter: true },
     { id: 'pants_grey',  icon: '👖', name: 'Grey Joggers', price: 0, slot: 'bottom', starter: true },

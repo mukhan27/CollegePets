@@ -727,9 +727,8 @@ const WEARABLES = {
     g.position.y = -0.42; head.add(g); return g;
   },
   // ---- body-worn accessories (attached to the torso anchor) ----
-  hoodie_grey: (b) => hoodieMesh(b, 0x8a8f98),
-  varsity:     (b) => varsityMesh(b, 0x2f3a66, 0xf2f0e8),
-  tee_band:    (b) => bandTeeMesh(b, 0x2b2b30),
+  // NOTE: on the GLB duck the `top` slot never builds these meshes — equipping a shirt
+  // repaints the duck's baked shirt zone instead (see SHIRT_COLORS / buildFitted).
   shirt_white: (b) => shirtMesh(b, 0xf2f1ee),
   shirt_blue:  (b) => shirtMesh(b, 0x4a78c8),
   shirt_red:   (b) => shirtMesh(b, 0xd6584f),
@@ -748,79 +747,25 @@ const tintHex = (c, t) => new THREE.Color(c).lerp(new THREE.Color(t < 0 ? 0x0000
 // Body accessories sit in the Aura's normalised space (feet y=0, ~1.7 tall). The
 // big chibi head spans y≈0.81–1.70, so the torso is ~0.45–0.81 and the legs below.
 // Positions/sizes are tuned to that; the constants below make them easy to nudge.
-const TORSO_Y = 0.60, TORSO_R = 0.37, HIPS_Y = 0.33, BACK_Z = -0.34;
-// opts lets themed tops (varsity jacket, hoodie…) recolour the sleeves / collar /
-// hem while reusing the tee's duck-fitting behaviour.
-function shirtMesh(body, color, opts = {}) {
-  const sleeveC = opts.sleeve ?? color;
-  const collarC = opts.collar ?? tintHex(color, 0.35);
-  const hemC = opts.hem ?? tintHex(color, 0.22);
-  // duckFit (set by the mount-fitting wrapper): the GLB duck is a wingless fat egg, so the
-  // stick-out arm sleeves become small cap-sleeves hugging the wing shoulders, and the hem
-  // ring pulls in so it grazes the belly instead of hovering like a hula hoop.
-  const duck = !!(body.userData && body.userData.duckFit);
+const TORSO_Y = 0.60, TORSO_R = 0.37, HIPS_Y = 0.33;
+// Simple tee for the procedural pets (the GLB duck never builds this — its shirt is a
+// repainted texture zone, see SHIRT_COLORS).
+function shirtMesh(body, color) {
   const g = new THREE.Group();
   const torso = new THREE.Mesh(new THREE.SphereGeometry(TORSO_R, 18, 14), toonMat(color));
   torso.scale.set(1.06, 0.86, 1.02); torso.castShadow = true; g.add(torso);
   for (const s of [-1, 1]) {
-    const sl = ball(0.145, sleeveC, 1, 0.85, 1);
-    if (duck) { sl.position.set(s * 0.40, 0.03, 0.06); sl.scale.multiplyScalar(0.72); }
-    else sl.position.set(s * 0.35, 0.02, 0);
+    const sl = ball(0.145, color, 1, 0.85, 1);
+    sl.position.set(s * 0.35, 0.02, 0);
     g.add(sl);
   }
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(collarC));
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 16), toonMat(tintHex(color, 0.35)));
   collar.rotation.x = Math.PI / 2; collar.position.y = 0.27;
-  if (duck) collar.scale.setScalar(0.82);   // tuck fully inside the duck's neck
   g.add(collar);
-  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(hemC));
+  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.028, 8, 18), toonMat(tintHex(color, 0.22)));
   hem.rotation.x = Math.PI / 2; hem.position.y = -0.27;
-  if (duck) hem.scale.setScalar(0.67);   // rolled edge sitting on the shell, not a loose hoop
   g.add(hem);
   g.position.set(0, TORSO_Y, 0); body.add(g); return g;
-}
-
-// Campus hoodie: tee base + a draped hood shell on the shoulders, kangaroo
-// pocket and drawstrings. Same builder space as shirtMesh (torso frame).
-function hoodieMesh(body, color) {
-  const dark = tintHex(color, -0.22);
-  const g = shirtMesh(body, color, { collar: dark, hem: dark });
-  const hood = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toonMat(dark));
-  hood.scale.set(1.15, 0.75, 0.95); hood.rotation.x = -0.65; hood.position.set(0, 0.25, -0.19);
-  hood.castShadow = true; g.add(hood);
-  const pocket = box(0.26, 0.13, 0.045, dark);
-  pocket.position.set(0, -0.16, 0.325); pocket.rotation.x = 0.3; g.add(pocket);
-  for (const s of [-1, 1]) {
-    const str = capsule(0.012, 0.08, 0xf2f0e8);
-    str.position.set(s * 0.07, 0.15, 0.34); g.add(str);
-    const tip = ball(0.018, tintHex(color, -0.4)); tip.position.set(s * 0.07, 0.08, 0.35); g.add(tip);
-  }
-  return g;
-}
-
-// Varsity letter jacket: dark body, cream sleeves, snap-button strip + chest letter.
-function varsityMesh(body, color, sleeve) {
-  const g = shirtMesh(body, color, { sleeve, collar: sleeve, hem: sleeve });
-  const strip = box(0.035, 0.34, 0.03, sleeve);
-  strip.position.set(0, -0.02, 0.365); strip.rotation.x = 0.1; g.add(strip);
-  for (const y of [0.1, -0.02, -0.14]) {
-    const snap = ball(0.018, tintHex(color, -0.35), 1, 1, 0.6);
-    snap.position.set(0.035, y, 0.37 - Math.abs(y) * 0.14); g.add(snap);
-  }
-  const patch = box(0.11, 0.13, 0.03, 0xf2c14e);         // chest letter patch
-  patch.position.set(-0.15, 0.06, 0.345); patch.rotation.x = 0.12; patch.rotation.y = -0.35; g.add(patch);
-  const bar = box(0.06, 0.05, 0.012, color);
-  bar.position.set(-0.15, 0.06, 0.362); bar.rotation.x = 0.12; bar.rotation.y = -0.35; g.add(bar);
-  return g;
-}
-
-// Band tee: black tee with a white oval print on the chest.
-function bandTeeMesh(body, color) {
-  const g = shirtMesh(body, color, { collar: tintHex(color, 0.15), hem: tintHex(color, 0.12) });
-  const print = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(starShape(0.12), { depth: 0.015, bevelEnabled: false }), toonMat(0xf2f0e8));
-  print.position.set(0, 0.04, 0.365); print.rotation.x = -0.1; g.add(print);
-  return g;
 }
 function pantsMesh(body, color) {
   const g = new THREE.Group();
@@ -1130,6 +1075,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
   g.userData.mounts = parts.mounts || null;   // measured attach points (GLB duck only)
+  g.userData.setShirtColor = parts.setShirtColor || null;   // live shirt-zone repaint (GLB duck only)
   g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
   g.userData.petType = type;
   g.userData.wearables = [];
@@ -1187,6 +1133,15 @@ export function buildWearable(id) {
 // Body-worn slots attach to the torso anchor; everything else to the head.
 const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
 
+// On the GLB duck the baked green texture zone IS the shirt, so a `top` item is a shirt
+// COLOUR, not geometry: equipping repaints that zone via the pet's setShirtColor hook.
+const SHIRT_COLORS = {
+  shirt_white: 0xf2f1ee,
+  shirt_blue:  0x4a78c8,
+  shirt_red:   0xd6584f,
+  shirt_green: 0x4f9e6a,
+};
+
 // ---- mount-based fitting (GLB duck) -------------------------------------------------------
 // Every wearable builder above is hand-tuned to the old procedural pet: head items assume a
 // head of radius 0.52 centred on the head-group origin; body items assume a torso centred at
@@ -1199,16 +1154,17 @@ const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
 // body garments need a slightly stretched depth and a squashed height to hug it).
 const REF_HEAD_R = 0.52, REF_TORSO_Y = TORSO_Y, REF_TORSO_R = TORSO_R;   // stay in lock-step with the builders' tuning
 const SLOT_FIT = {
-  hat:    { s: 1.12 },
+  hat:    { s: 1.12, dy: 0.06, dz: -0.07 },   // seated on the crown, pushed back off the eyes
   face:   { s: 1.55, dy: -0.06, dz: -0.10 },
   neck:   { s: 1.35 },
   top:    { s: 1.03, sy: 1.09, sz: 1.21, dy: -0.03 },
-  bottom: { s: 0.85, sy: 0.62, sz: 1.12, dy: -0.19 },
-  back:   { s: 0.88, dy: 0.18, dz: -0.19, rx: 0.30 },
+  bottom: { s: 0.93, sy: 0.68, sz: 0.95, dy: -0.15, dz: 0.03 },
+  back:   { s: 0.85, dy: 0.26, dz: -0.14, rx: 0.40 },
 };
 const ITEM_FIT = {
-  beanie:    { dy: -0.05, s: 1.1 },
-  party_hat: { dy: -0.06 },
+  beanie:     { dy: -0.05, s: 1.1 },
+  party_hat:  { dy: -0.06 },
+  cowboy_hat: { dy: -0.05, dz: 0.04 },   // deep hat: re-seat it down + forward onto the crown
   bow:       { dx: 0.10, dy: 0.05 },   // corner-placed: push out of the duck's fuller crown
   flower:    { dx: 0.09, dy: 0.05 },
 };
@@ -1224,6 +1180,13 @@ function fitNudge(slot, id, key) {
 function buildFitted(pet, slot, id) {
   const head = pet.userData.head, body = pet.userData.body || pet.userData.head;
   const m = pet.userData.mounts;
+  // GLB duck shirts: no geometry — repaint the baked shirt zone and hand back an empty
+  // placeholder so the wearables bookkeeping stays uniform (setWearables already reverted
+  // the zone to the player's own colour before re-applying equips).
+  if (m && slot === 'top' && pet.userData.setShirtColor && SHIRT_COLORS[id] != null) {
+    pet.userData.setShirtColor(SHIRT_COLORS[id]);
+    return new THREE.Group();
+  }
   if (!m) return WEARABLES[id](BODY_SLOTS[slot] ? body : head);
   const s = fitNudge(slot, id, 's');
   const wrap = new THREE.Group();
@@ -1239,7 +1202,6 @@ function buildFitted(pet, slot, id) {
       m.torso.pos[2] + fitNudge(slot, id, 'dz'));
     const space = new THREE.Group();
     space.position.y = -REF_TORSO_Y;
-    space.userData.duckFit = true;      // hint: builders may adapt details to the duck shape
     wrap.add(space);
     WEARABLES[id](space);
     body.add(wrap);
@@ -1259,6 +1221,9 @@ export function setWearables(pet, equipped) {
   // Only genuine add-on accessories (e.g. backpack) are built here.
   for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
   pet.userData.wearables = [];
+  // GLB duck: reset the shirt zone to the player's own colour first, so an unequipped /
+  // un-previewed top always reverts; an equipped shirt re-applies below via buildFitted.
+  if (pet.userData.setShirtColor) pet.userData.setShirtColor(null);
   for (const [slot, id] of Object.entries(equipped)) {
     if (!id || !WEARABLES[id]) continue;
     pet.userData.wearables.push(buildFitted(pet, slot, id));

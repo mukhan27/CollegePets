@@ -249,6 +249,14 @@ function recolour(featherHex, shirtHex, billHex, eyeHex) {
 export function buildGlbDuck(inner, a) {
   const tex = recolour(a.bodyColor ?? 0xffd23e, a.shirtColor ?? 0x5a9e44, a.muzzleColor ?? 0xff9e2c, a.eyeColor ?? 0x232020);
   const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toonGradient() });
+  // Live shirt-zone repaint: equipping a "top" recolours the baked shirt zone instead of
+  // adding geometry (the green zone IS the duck's shirt). null reverts to the player's own
+  // appearance colour. recolour() is texture-cached, so swapping is cheap.
+  const setShirtColor = (hex) => {
+    const t = recolour(a.bodyColor ?? 0xffd23e, hex ?? (a.shirtColor ?? 0x5a9e44),
+      a.muzzleColor ?? 0xff9e2c, a.eyeColor ?? 0x232020);
+    if (t) { mat.map = t; mat.needsUpdate = true; }
+  };
   const rig = cache.rig;
   const mounts = cache.mounts || null;
   // head anchor at the MEASURED skull centre (hats/glasses attach here); the old
@@ -268,7 +276,7 @@ export function buildGlbDuck(inner, a) {
       if (moving) { inner.position.y = baseY + Math.abs(Math.sin(t * 7)) * 0.05; inner.rotation.z = Math.sin(t * 7) * 0.10; }
       else { inner.position.y = baseY + Math.sin(t * 2) * 0.012; inner.rotation.z = 0; }
     };
-    return { head, legs: [], tail: null, ears: [], animate, mounts };
+    return { head, legs: [], tail: null, ears: [], animate, mounts, setShirtColor };
   }
 
   // segmented rig: rigid body + two legs that pivot at the hips.
@@ -309,5 +317,5 @@ export function buildGlbDuck(inner, a) {
       inner.rotation.z += (0 - inner.rotation.z) * 0.2;
     }
   };
-  return { head, legs: [legL, legR], tail: null, ears: [], animate, mounts };
+  return { head, legs: [legL, legR], tail: null, ears: [], animate, mounts, setShirtColor };
 }
