@@ -26,6 +26,9 @@ export const CATALOG = {
     { id: 'scarf',      icon: '🧣', name: 'Team Scarf',    price: 70,  slot: 'neck' },
     { id: 'bowtie',     icon: '🎀', name: 'Bow Tie',       price: 45,  slot: 'neck' },
     { id: 'chain_gold', icon: '📿', name: 'Gold Chain',    price: 70,  slot: 'neck' },
+    // fitted jacket overlays (mesh-derived shells) — worn over the recolorable shirt zone
+    { id: 'jacket_denim', icon: '🧥', name: 'Denim Jacket', price: 90,  slot: 'top' },
+    { id: 'jacket_black', icon: '🧥', name: 'Black Jacket', price: 110, slot: 'top' },
     // free starter accessories (offered in the character creator). On the duck the
     // "top" slot recolours its baked shirt zone — these are shirt COLOURS, not overlays.
     { id: 'shirt_white', icon: '👕', name: 'White Shirt',  price: 0, slot: 'top',    starter: true },

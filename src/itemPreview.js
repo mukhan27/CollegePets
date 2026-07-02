@@ -3,7 +3,7 @@
 // can show a real preview instead of an emoji. One small WebGL context, reused.
 
 import * as THREE from 'three';
-import { createPet, buildWearable } from './petFactory.js';
+import { createPet } from './petFactory.js';
 import { FURNITURE } from './furniture.js';
 import { FOOD_MODELS } from './foodModels.js';
 import { clothesSlot } from './state.js';
@@ -45,26 +45,29 @@ function snapshot(group, lift = 0, dir = new THREE.Vector3(0.55, 0.42, 1)) {
   return url;
 }
 
+// Every clothing thumbnail shows the DUCK actually wearing the item (shirts recolour
+// the duck's baked shirt zone, so a standalone mesh can't represent them). Body slots
+// get a slot-appropriate camera: shirts/pants framed on the torso, bags from behind.
+const SLOT_CAM = {
+  top:    { lift: -0.28, dir: new THREE.Vector3(0.3, 0.25, 1) },
+  bottom: { lift: -0.55, dir: new THREE.Vector3(0.35, 0.3, 1) },
+  back:   { lift: -0.1,  dir: new THREE.Vector3(-0.55, 0.5, -1) },
+};
 export function wearablePreview(id) {
   const slot = slotOf(id);
-  if (slot === 'top' || slot === 'bottom' || slot === 'back') return accessoryPreview(id);
-  const k = 'w:' + id;
+  const k = 'w2:' + id;
   if (cache.has(k)) return cache.get(k);
   const pet = createPet('creature', { equipped: { [slot]: id } });
   if (pet.userData.animate) pet.userData.animate(0, false);
-  const url = snapshot(pet, 0.15);
+  const c = SLOT_CAM[slot] || { lift: 0.15, dir: new THREE.Vector3(0.55, 0.42, 1) };
+  const url = snapshot(pet, c.lift, c.dir);
   cache.set(k, url);
   return url;
 }
 
-// A standalone thumbnail of a worn accessory (shirt / pants / backpack), framed
-// straight on so the garment shape + colour read clearly in the picker chip.
+// Back-compat alias (creator picker chips) — same duck-worn preview.
 export function accessoryPreview(id) {
-  const k = 'acc:' + id;
-  if (cache.has(k)) return cache.get(k);
-  const url = snapshot(buildWearable(id), 0, new THREE.Vector3(0.25, 0.18, 1));
-  cache.set(k, url);
-  return url;
+  return wearablePreview(id);
 }
 
 

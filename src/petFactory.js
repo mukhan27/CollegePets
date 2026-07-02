@@ -5,8 +5,8 @@
 // muzzleColor, eyeColor} recolours both, so NPCs are just recolored instances.
 
 import * as THREE from 'three';
-import { toonMat } from './textures.js';
-import { isDuckReady, buildGlbDuck } from './glbDuck.js';
+import { toonMat, toonGradient } from './textures.js';
+import { isDuckReady, buildGlbDuck, duckShellGeo, duckRadiusAt } from './glbDuck.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -125,17 +125,29 @@ const WEARABLES = {
     head.add(g);
     return g;
   },
+  // Hair bow: two teardrop lobes pinched into a centre knot, SEATED on the crown —
+  // the group is positioned on the reference head surface and tilted so its base
+  // plane matches the local crown slope (no floating).
   bow(head) {
     const g = new THREE.Group();
+    const c = 0xe75480, dark = 0xc23b66;
     for (const s of [-1, 1]) {
-      const loop = ball(0.12, 0xe75480, 1.3, 0.9, 0.5);
-      loop.position.x = s * 0.13;
-      loop.rotation.z = s * 0.5;
-      g.add(loop);
+      const lobe = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.26, 12), toonMat(c));
+      lobe.scale.y = 0.9; lobe.scale.z = 0.5;                  // flatten into a ribbon loop
+      lobe.rotation.z = s * (Math.PI / 2 + 0.35);              // tip points into the knot, outer end lifted
+      lobe.position.set(s * 0.125, 0.055, 0);
+      lobe.castShadow = true; g.add(lobe);
     }
-    const knot = ball(0.07, 0xc23b66);
-    g.add(knot);
-    g.position.set(0.25, 0.44, 0.1);
+    const knot = ball(0.062, dark, 0.9, 0.85, 0.8); knot.position.y = 0.045; g.add(knot);
+    for (const s of [-1, 1]) {                                  // little ribbon tails
+      const tail = box(0.07, 0.14, 0.02, c);
+      tail.position.set(s * 0.05, -0.055, -0.01); tail.rotation.z = s * 0.35; g.add(tail);
+    }
+    // seat: put the bow's base on the head surface at an upper-side point, base plane
+    // tangent to the sphere there (local +y = surface normal)
+    const n = new THREE.Vector3(0.44, 0.82, 0.28).normalize();
+    g.position.copy(n).multiplyScalar(0.50);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
     head.add(g);
     return g;
   },
@@ -193,13 +205,16 @@ const WEARABLES = {
   },
   headphones(head) {
     const g = new THREE.Group();
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 8, 20, 0, Math.PI), toonMat(0x2a2d34));
+    // NOTE: TorusGeometry's 5th arg is the arc itself (there is no thetaStart) — an
+    // extra leading 0 made arc=0, so the band never rendered at all.
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 8, 20, Math.PI), toonMat(0x2a2d34));
+    band.scale.set(1.05, 1.15, 1);   // tall arc: clears the duck's egg-shaped crown instead of sinking in
     band.castShadow = true; g.add(band);
     for (const s of [-1, 1]) {
       const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.13, 14), toonMat(0x33353b));
       cup.rotation.z = Math.PI / 2; cup.position.set(s * 0.5, 0.02, 0); g.add(cup);
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 12), toonMat(0xff5fa2));
-      pad.rotation.z = Math.PI / 2; pad.position.set(s * 0.55, 0.02, 0); g.add(pad);
+      pad.rotation.z = Math.PI / 2; pad.position.set(s * 0.45, 0.02, 0); g.add(pad);   // pads face the head
     }
     g.position.y = 0.16; head.add(g); return g;
   },
@@ -218,8 +233,12 @@ const WEARABLES = {
   flower(head) {
     const g = new THREE.Group();
     for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; const petal = ball(0.08, 0xff8fb0, 1, 1, 0.6); petal.position.set(Math.cos(a) * 0.1, Math.sin(a) * 0.1, 0); g.add(petal); }
-    const center = ball(0.06, 0xffd166); g.add(center);
-    g.position.set(0.26, 0.45, 0.12); head.add(g); return g;
+    const center = ball(0.06, 0xffd166); center.position.z = 0.02; g.add(center);
+    // seat flat against the head surface (petals face outward along the local normal)
+    const n = new THREE.Vector3(0.44, 0.80, 0.32).normalize();
+    g.position.copy(n).multiplyScalar(0.50);
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+    head.add(g); return g;
   },
   bucket_hat(head) {
     const g = new THREE.Group();
@@ -233,19 +252,49 @@ const WEARABLES = {
     band.position.y = 0.1; g.add(band);
     g.position.y = 0.28; head.add(g); return g;
   },
+  // A real cowboy-hat silhouette, built from lathe profiles instead of squashed spheres:
+  // a flat oval brim whose SIDES roll up (classic taco curl), a tall pinched crown with a
+  // centre crease running front-to-back, and a thin dark hat band at the crown base.
   cowboy_hat(head) {
     const g = new THREE.Group();
-    const c = 0x9a6a3f, bandC = 0x5e3d22;
-    const brim = ball(0.3, c, 2.55, 0.13, 1.95); g.add(brim);       // wide oval brim
-    for (const s of [-1, 1]) {                                       // rolled-up brim edges
-      const curl = ball(0.3, c, 0.38, 0.42, 1.75);
-      curl.position.set(s * 0.68, 0.08, 0); curl.rotation.z = s * 0.5; g.add(curl);
+    const c = 0x9a6a3f, bandC = 0x50331d;
+    const mat = toonMat(c, { noCache: true, side: THREE.DoubleSide });
+    // brim: open lathe profile (bottom run out, rounded edge, top run back in) —
+    // kept tight so the tall crown, not the brim, dominates the silhouette
+    const prof = [
+      [0.26, 0.000], [0.40, -0.012], [0.50, 0.000], [0.555, 0.020], [0.57, 0.048],
+      [0.555, 0.070], [0.50, 0.054], [0.40, 0.040], [0.26, 0.050],
+    ].map(([x, y]) => new THREE.Vector2(x, y));
+    const brimGeo = new THREE.LatheGeometry(prof, 28);
+    { // curl the sides (±x) up hard (classic taco roll), droop the front lip a touch
+      const p = brimGeo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), z = p.getZ(i), r = Math.hypot(x, z) || 1;
+        const f = Math.max(0, (r - 0.28) / 0.29);
+        p.setY(i, p.getY(i) + f * f * (0.34 * (x / r) * (x / r) - 0.045 * (Math.max(0, z / r) ** 2)));
+      }
+      brimGeo.scale(1, 1, 1.06);
+      brimGeo.computeVertexNormals();
     }
-    const dome = ball(0.42, c, 1.02, 0.72, 1.14); dome.position.y = 0.16; g.add(dome);
-    const crease = ball(0.24, c, 0.55, 0.5, 1.2); crease.position.y = 0.42; g.add(crease);
-    const hb = new THREE.Mesh(new THREE.CylinderGeometry(0.415, 0.44, 0.09, 16), toonMat(bandC));
-    hb.position.y = 0.1; g.add(hb);
-    g.position.y = 0.32; head.add(g); return g;
+    const brim = new THREE.Mesh(brimGeo, mat); brim.castShadow = true; g.add(brim);
+    // crown: TALL pinched dome (height ≈ brim radius) with a front-back crease dented in
+    const cprof = [
+      [0.305, 0.015], [0.33, 0.17], [0.325, 0.32], [0.295, 0.44], [0.245, 0.54], [0.155, 0.615], [0.0, 0.64],
+    ].map(([x, y]) => new THREE.Vector2(x, y));
+    const crGeo = new THREE.LatheGeometry(cprof, 22);
+    {
+      const p = crGeo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i);
+        if (y > 0.36) p.setY(i, y - ((y - 0.36) / 0.28) * 0.13 * Math.exp(-((x / 0.12) ** 2)));
+      }
+      crGeo.scale(1, 1, 1.10);
+      crGeo.computeVertexNormals();
+    }
+    const crown = new THREE.Mesh(crGeo, mat); crown.castShadow = true; g.add(crown);
+    const hb = new THREE.Mesh(new THREE.CylinderGeometry(0.322, 0.34, 0.10, 22), toonMat(bandC));
+    hb.scale.z = 1.10; hb.position.y = 0.085; g.add(hb);
+    g.position.y = 0.40; head.add(g); return g;
   },
   wizard_hat(head) {
     const g = new THREE.Group();
@@ -317,6 +366,8 @@ const WEARABLES = {
   shirt_blue:  (b) => shirtMesh(b, 0x4a78c8),
   shirt_red:   (b) => shirtMesh(b, 0xd6584f),
   shirt_green: (b) => shirtMesh(b, 0x4f9e6a),
+  jacket_denim: (b) => shirtMesh(b, 0x4f74a8),   // simple fallback for the procedural duck;
+  jacket_black: (b) => shirtMesh(b, 0x2e3138),   // the GLB duck gets the real fitted jacket
   pants_blue:  (b) => pantsMesh(b, 0x3f567f),
   pants_khaki: (b) => pantsMesh(b, 0xc2a172),
   pants_grey:  (b) => pantsMesh(b, 0x5b6068),
@@ -429,6 +480,287 @@ function backpackMesh(body, color) {
   }
   body.add(g); return g;
 }
+
+// ==================================================================================
+// Duck-space wearables — built directly in the GLB duck's own normalized space
+// (feet y=0, height 2, facing +z) from MEASURED geometry, so they fit exactly.
+// Body garments are shells derived from the duck's own mesh (duckShellGeo): the
+// duck's skin, offset outward — they can't gap, float or mis-fit by construction.
+// ==================================================================================
+
+// thin cylinder connecting two points (glasses temples / bridges)
+function barBetween(a, b, r, color) {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 8), toonMat(color));
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+  m.castShadow = true;
+  return m;
+}
+
+function shellMesh(opts, color) {
+  const geo = duckShellGeo(opts);
+  if (!geo) return null;
+  const m = new THREE.Mesh(geo, toonMat(color, { noCache: true, side: THREE.DoubleSide }));
+  m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+  return m;
+}
+
+// Pants: a shell over the lower belly (its own skin, inflated), with a thicker,
+// darker waistband ring standing a little prouder at the top edge.
+function duckPants(pet, color) {
+  const g = new THREE.Group();
+  const main = shellMesh({ yMin: 0.26, yMax: 0.78, inflate: 0.028 }, color);
+  if (main) g.add(main);
+  const waist = shellMesh({ yMin: 0.70, yMax: 0.82, inflate: 0.048 }, tintHex(color, -0.32));
+  if (waist) g.add(waist);
+  pet.userData.body.add(g);
+  return g;
+}
+
+// Jacket: torso shell with an open front (the shirt zone shows through), the tail
+// left poking out under the back hem, cap-sleeve shells over the wing area, collar
+// flaps at the neckline and buttons down the right placket edge.
+function duckJacket(pet, color, trimC, buttonC) {
+  const g = new THREE.Group();
+  const OPEN_HW = 0.15;                    // half-width of the front opening
+  const YB = 0.76;                         // hem height
+  const INF = 0.034;
+  // Neckline: a TILTED plane — low at the front (under the chin, y≈1.30 @ z 0.5) and
+  // high over the steep back dome (y≈1.46 @ z −0.3), like a real jacket back that
+  // rises to the collar. A horizontal cut left the whole upper back exposed.
+  const topClip = { n: [0, -1, -0.20], d: -1.40 };
+  // The open front is a non-convex cut, so the body is three complementary clipped
+  // pieces sharing exact boundary planes (no overlap, no gap): back+sides, and the
+  // two front panels flanking the opening. The tail exits under the back hem.
+  const tailClip = { n: [0, 0, 1], d: -0.49, when: (x, y) => y < 1.06 };
+  const backP = shellMesh({ yMin: YB, inflate: INF, clips: [topClip, { n: [0, 0, -1], d: -0.32 }, tailClip] }, color);
+  if (backP) g.add(backP);
+  for (const s of [-1, 1]) {
+    const panel = shellMesh({ yMin: YB, inflate: INF, clips: [topClip, { n: [0, 0, 1], d: 0.32 }, { n: [s, 0, 0], d: OPEN_HW }] }, color);
+    if (panel) g.add(panel);
+    // cap sleeve: a clean-edged patch over the wing area, riding prouder than the body
+    const sleeve = shellMesh({
+      yMin: 0.78, yMax: 1.12, inflate: 0.055,
+      clips: [{ n: [s, 0, 0], d: 0.40 }, { n: [0, 0, 1], d: -0.30 }, { n: [0, 0, -1], d: -0.40 }],
+      filter: (x) => Math.sign(x) === s,
+    }, trimC);
+    if (sleeve) g.add(sleeve);
+  }
+  // stand collar: a raised band riding along the tilted neckline (proud of the body,
+  // wrapping behind the neck like a real jacket collar)
+  const collar = shellMesh({
+    inflate: 0.06,
+    clips: [{ n: [0, 1, 0.20], d: 1.355 }, { n: [0, -1, -0.20], d: -1.475 }],
+  }, trimC);
+  if (collar) g.add(collar);
+  // collar points: two small flattened flaps folding down-outward at the front
+  for (const s of [-1, 1]) {
+    const flap = box(0.17, 0.04, 0.13, trimC);
+    flap.position.set(s * 0.21, 1.27, 0.48);
+    flap.rotation.set(-0.62, s * 0.5, s * 0.22);
+    g.add(flap);
+  }
+  // buttons down the right placket edge (front surface measured: z≈0.72 @ y1.0)
+  for (const [y, z] of [[1.16, 0.66], [1.00, 0.755], [0.86, 0.765]]) {
+    const b = ball(0.03, buttonC, 1, 1, 0.55);
+    b.position.set(OPEN_HW + 0.05, y, z);
+    g.add(b);
+  }
+  pet.userData.body.add(g);
+  return g;
+}
+
+// Backpack: lies along the duck's steep upper-back slope (measured ~55° from
+// vertical), sized and seated so its lowest rear corner clears the tail envelope
+// (tail: y 0.60–1.11 for z < -0.55) through the whole walk cycle — the tail wiggles
+// WITH the body group, so clearance here is clearance always.
+const DBAG = { tilt: 0.95, cy: 1.385, cz: -0.415, w: 0.56, h: 0.52, d: 0.28 };
+function duckBag(pet, color) {
+  const g = new THREE.Group();
+  const s = new THREE.Group();                 // the tilted slab frame
+  s.position.set(0, DBAG.cy, DBAG.cz);
+  s.rotation.x = DBAG.tilt;                    // local +y runs up the back slope, -z faces outward
+  g.add(s);
+  const outZ = -DBAG.d / 2;
+  const main = archSlab(DBAG.w, DBAG.h, DBAG.d, DBAG.w * 0.46, 0.07, color);
+  s.add(main);
+  const baseH = 0.15;
+  const base = archSlab(DBAG.w * 1.02, baseH, DBAG.d * 1.05, 0.03, 0.07, BAG_LEATHER, 0.025);
+  base.position.y = -DBAG.h / 2 + baseH / 2;
+  s.add(base);
+  const pocket = archSlab(DBAG.w * 0.62, 0.20, 0.06, 0.05, 0.05, color, 0.02);
+  pocket.position.set(0, -0.035, outZ - 0.018);
+  s.add(pocket);
+  const zip = box(DBAG.w * 0.56, 0.018, 0.024, BAG_DARK);
+  zip.position.set(0, 0.09, outZ - 0.045); s.add(zip);
+  const pull = box(0.028, 0.05, 0.028, BAG_DARK);
+  pull.position.set(DBAG.w * 0.2, 0.08, outZ - 0.045); s.add(pull);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.017, 8, 18, Math.PI), toonMat(BAG_DARK));
+  handle.position.set(0, DBAG.h / 2 - 0.01, 0.02); handle.castShadow = true; s.add(handle);
+  // straps: padded tubes from the bag's top inner corners, over the shoulders,
+  // down the chest — control points measured against the body surface (+~0.01 proud)
+  for (const sx of [-1, 1]) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(sx * 0.16, 1.53, -0.245),
+      new THREE.Vector3(sx * 0.29, 1.40, 0.12),
+      new THREE.Vector3(sx * 0.32, 1.17, 0.50),
+      new THREE.Vector3(sx * 0.25, 0.97, 0.68),
+    ]);
+    const strap = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.036, 8, false), toonMat(BAG_DARK));
+    strap.castShadow = true; g.add(strap);
+  }
+  pet.userData.body.add(g);
+  return g;
+}
+
+// Gold chain: a real chain — chunky torus links whose positions are PROJECTED onto
+// the measured body surface (duckRadiusAt) so the drape hugs the chest/nape exactly,
+// links oriented along the drape tangent with alternating 90° twists (flat / edge-on,
+// like real interlocked links), plus a medallion hanging at the lowest point.
+function duckChain(pet) {
+  const g = new THREE.Group();
+  const gold = new THREE.MeshToonMaterial({
+    color: 0xf0ad25, gradientMap: toonGradient(), emissive: 0x7a4e06, emissiveIntensity: 0.4,
+  });
+  const goldLight = new THREE.MeshToonMaterial({
+    color: 0xffd75e, gradientMap: toonGradient(), emissive: 0x8a5c07, emissiveIntensity: 0.35,
+  });
+  // The drape is parametrized BY AZIMUTH around the body axis: a collar-height loop
+  // that dips into a V at the front. Each sample is snapped to the measured surface
+  // radius + PROUD, so the loop hugs the neck/chest and can never double back.
+  const PROUD = 0.024, LINK_R = 0.036, TUBE = 0.016;
+  const yAt = (az) => {                        // az 0 = front
+    const w = 0.5 + 0.5 * Math.cos(az);        // 1 at front, 0 at nape
+    return 1.28 - 0.40 * w * w;                // nape 1.28 → front dip 0.88
+  };
+  const S = 160, dense = [];
+  for (let i = 0; i < S; i++) {
+    const az = (i / S) * Math.PI * 2 - Math.PI; // start at the nape so the front V is mid-array
+    const y = yAt(az);
+    const r = (duckRadiusAt(y, az) || 0.5) + PROUD;
+    dense.push(new THREE.Vector3(Math.sin(az) * r, y, Math.cos(az) * r));
+  }
+  let len = 0;
+  const cum = [0];
+  for (let i = 1; i <= S; i++) { len += dense[i % S].distanceTo(dense[i - 1]); cum.push(len); }
+  const N = Math.round(len / (LINK_R * 1.25));  // centres closer than a link diameter → interlock
+  const at = (d) => {                           // point at arc distance d
+    d = ((d % len) + len) % len;
+    let i = 1;
+    while (cum[i] < d) i++;
+    const t = (d - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+    return dense[i - 1].clone().lerp(dense[i % S], t);
+  };
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < N; i++) {
+    const d = (i / N) * len;
+    const p = at(d);
+    const tan = at(d + 0.03).sub(at(d - 0.03)).normalize();
+    const link = new THREE.Mesh(new THREE.TorusGeometry(LINK_R, TUBE, 6, 12), i % 2 ? goldLight : gold);
+    link.position.copy(p);
+    // torus plane contains the tangent; alternate links twist 90° about it, exactly
+    // like the alternating flat/edge-on links of a real curb chain
+    const outward = p.clone().setY(0).normalize().lerp(up, 0.2).normalize();
+    link.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(
+      new THREE.Vector3(), tan, outward));
+    link.rotateZ(Math.PI / 2);
+    if (i % 2) link.rotateY(Math.PI / 2);
+    link.castShadow = true;
+    g.add(link);
+  }
+  // medallion hanging from the V's lowest link, flat against the chest (normal
+  // points outward, only barely up, so it reads as a full disc from the front)
+  const dipY = 0.865;
+  const mr = (duckRadiusAt(dipY, 0) || 0.70) + PROUD + 0.03;
+  const medC = new THREE.Vector3(0, dipY, mr);
+  const slope = new THREE.Vector3(0, 0.18, 1).normalize();
+  const med = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.03, 20), gold);
+  med.position.copy(medC);
+  med.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), slope);
+  med.castShadow = true; g.add(med);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.096, 0.017, 6, 20), goldLight);
+  rim.position.copy(medC).addScaledVector(slope, 0.006);
+  rim.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), slope, up));
+  g.add(rim);
+  const gem = ball(0.036, 0xc03a4e, 1, 1, 0.5);
+  gem.position.copy(medC).addScaledVector(slope, 0.02);
+  gem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), slope);
+  g.add(gem);
+  pet.userData.body.add(g);
+  return g;
+}
+
+// Glasses, fitted to the MEASURED painted-eye centroids (mounts.eyes): each lens is
+// centred on an eye and faces along the local outward normal (duck eyes look
+// outward-forward ~45°), the bridge bows over the bill base, and thin temple arms
+// sweep back along the head sides. Nothing touches the bill or cuts into the head.
+function duckSpecs(pet, style) {
+  const m = pet.userData.mounts;
+  const g = new THREE.Group();
+  const headC = new THREE.Vector3(...m.head.pos);
+  const eyes = m.eyes.map((e) => new THREE.Vector3(...e));
+  const S = {
+    smart: { rimR: 0.145, rimT: 0.024, rimC: 0x2a2420, lensC: 0x86c8e8, lensOp: 0.45, off: 0.055 },
+    shade: { rimR: 0.15, rimT: 0.026, rimC: 0x1d1a17, lensC: 0x14181d, lensOp: 1.0, off: 0.06 },
+    round: { rimR: 0.125, rimT: 0.016, rimC: 0xc9a227, lensC: 0xdfe9f2, lensOp: 0.32, off: 0.05 },
+    star:  { rimR: 0.15, rimT: 0, rimC: 0xf2c14e, lensC: 0xd94fa3, lensOp: 1.0, off: 0.055 },
+  }[style];
+  const rimMat = toonMat(S.rimC, { noCache: true });
+  const lensMat = new THREE.MeshToonMaterial({
+    color: S.lensC, gradientMap: toonGradient(),
+    transparent: S.lensOp < 1, opacity: S.lensOp, side: THREE.DoubleSide,
+  });
+  const inner = [];
+  for (const e of eyes) {
+    const sgn = Math.sign(e.x) || 1;
+    const n = e.clone().sub(headC).normalize();          // outward normal at the eye
+    const c = e.clone().addScaledVector(n, S.off);       // lens centre, proud of the surface
+    const toCentre = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), n)
+      .multiplyScalar(-sgn).normalize();                 // unit vector toward the nose bridge
+    if (style === 'star') {
+      const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(0.19), { depth: 0.022, bevelEnabled: false }), rimMat);
+      rim.position.copy(c); rim.lookAt(c.clone().add(n)); g.add(rim);
+      const lens = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(0.14), { depth: 0.024, bevelEnabled: false }), lensMat);
+      lens.position.copy(c); lens.lookAt(c.clone().add(n)); g.add(lens);
+    } else {
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(S.rimR, S.rimT, 8, 20), rimMat);
+      rim.position.copy(c); rim.lookAt(c.clone().add(n)); rim.castShadow = true; g.add(rim);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(S.rimR - S.rimT * 0.5, 20), lensMat);
+      lens.position.copy(c).addScaledVector(n, -0.004); lens.lookAt(lens.position.clone().add(n)); g.add(lens);
+    }
+    inner.push(c.clone().addScaledVector(toCentre, S.rimR));
+    // temple arm: from the lens's outer edge back along the side of the head
+    const outerP = c.clone().addScaledVector(toCentre, -S.rimR * 0.9);
+    const templeEnd = new THREE.Vector3(sgn * 0.255, e.y + 0.07, headC.z - 0.16);
+    g.add(barBetween(outerP, templeEnd, 0.014, S.rimC));
+  }
+  // bridge: bowed slightly up and forward so it clears the bill base
+  const mid = inner[0].clone().add(inner[1]).multiplyScalar(0.5).add(new THREE.Vector3(0, 0.03, 0.025));
+  const bridge = new THREE.Mesh(new THREE.TubeGeometry(
+    new THREE.QuadraticBezierCurve3(inner[0], mid, inner[1]), 10, 0.014, 6, false), rimMat);
+  g.add(bridge);
+  pet.userData.body.add(g);
+  return g;
+}
+
+// registry: item id -> duck-space builder (used on the GLB duck instead of the
+// generic reference-space builders above; the procedural fallback keeps those)
+const DUCK_WEAR = {
+  pants_blue:  (pet) => duckPants(pet, 0x3f567f),
+  pants_khaki: (pet) => duckPants(pet, 0xc2a172),
+  pants_grey:  (pet) => duckPants(pet, 0x5b6068),
+  jacket_denim: (pet) => duckJacket(pet, 0x4f74a8, 0x3d5c88, 0xd8c49a),
+  jacket_black: (pet) => duckJacket(pet, 0x2e3138, 0x1f2126, 0x9aa0ab),
+  bag_navy:  (pet) => duckBag(pet, 0x2f3a66),
+  bag_red:   (pet) => duckBag(pet, 0xbe3b32),
+  bag_green: (pet) => duckBag(pet, 0x3c7a4e),
+  chain_gold: (pet) => duckChain(pet),
+  glasses:       (pet) => duckSpecs(pet, 'smart'),
+  sunglasses:    (pet) => duckSpecs(pet, 'shade'),
+  round_glasses: (pet) => duckSpecs(pet, 'round'),
+  star_shades:   (pet) => duckSpecs(pet, 'star'),
+};
 
 // Flat five-point star outline (point-up), used by the star shades.
 function starShape(r) {
@@ -704,7 +1036,7 @@ const SHIRT_COLORS = {
 // body garments need a slightly stretched depth and a squashed height to hug it).
 const REF_HEAD_R = 0.52, REF_TORSO_Y = TORSO_Y, REF_TORSO_R = TORSO_R;   // stay in lock-step with the builders' tuning
 const SLOT_FIT = {
-  hat:    { s: 1.12, dy: 0.06, dz: -0.07 },   // seated on the crown, pushed back off the eyes
+  hat:    { s: 1.12 },   // seating comes from the measured crown point (see buildFitted)
   face:   { s: 1.55, dy: -0.06, dz: -0.10 },
   neck:   { s: 1.35 },
   top:    { s: 1.03, sy: 1.09, sz: 1.21, dy: -0.03 },
@@ -712,11 +1044,8 @@ const SLOT_FIT = {
   back:   { s: 0.85, dy: 0.26, dz: -0.14, rx: 0.40 },
 };
 const ITEM_FIT = {
-  beanie:     { dy: -0.05, s: 1.1 },
-  party_hat:  { dy: -0.06 },
-  cowboy_hat: { dy: -0.05, dz: 0.04 },   // deep hat: re-seat it down + forward onto the crown
-  bow:       { dx: 0.10, dy: 0.05 },   // corner-placed: push out of the duck's fuller crown
-  flower:    { dx: 0.09, dy: 0.05 },
+  // duck units, applied after the crown-seat mapping. Tuned visually per hat.
+  headphones: { dz: -0.20, dy: 0.03 },   // cups over the ear region, not the eyes
 };
 function fitNudge(slot, id, key) {
   const a = SLOT_FIT[slot], b = ITEM_FIT[id];
@@ -737,6 +1066,9 @@ function buildFitted(pet, slot, id) {
     pet.userData.setShirtColor(SHIRT_COLORS[id]);
     return new THREE.Group();
   }
+  // GLB duck: garments/accessories authored directly in the duck's own space from
+  // measured geometry (mesh-derived shells, measured eye/back/tail mounts).
+  if (m && DUCK_WEAR[id]) return DUCK_WEAR[id](pet);
   if (!m) return WEARABLES[id](BODY_SLOTS[slot] ? body : head);
   const s = fitNudge(slot, id, 's');
   const wrap = new THREE.Group();
@@ -759,7 +1091,19 @@ function buildFitted(pet, slot, id) {
     // head items: the head group already sits at the measured skull centre.
     const k = (m.head.radius / REF_HEAD_R) * s;
     wrap.scale.set(k * fitNudge(slot, id, 'sx'), k * fitNudge(slot, id, 'sy'), k * fitNudge(slot, id, 'sz'));
-    wrap.position.set(fitNudge(slot, id, 'dx'), fitNudge(slot, id, 'dy'), fitNudge(slot, id, 'dz'));
+    if (slot === 'hat' && m.crown) {
+      // seat hats against the MEASURED top of the head: hats are authored around a
+      // reference head sphere (r 0.52, centred on the group origin), so mapping that
+      // sphere's top onto the real crown point makes the rim rest ON the crown —
+      // never floating behind it (the skull centroid sits behind the visual crown).
+      const hp = m.head.pos, cp = m.crown.pos;
+      wrap.position.set(
+        cp[0] - hp[0] + fitNudge(slot, id, 'dx'),
+        cp[1] - hp[1] - REF_HEAD_R * k + fitNudge(slot, id, 'dy'),
+        cp[2] - hp[2] + fitNudge(slot, id, 'dz'));
+    } else {
+      wrap.position.set(fitNudge(slot, id, 'dx'), fitNudge(slot, id, 'dy'), fitNudge(slot, id, 'dz'));
+    }
     WEARABLES[id](wrap);
     head.add(wrap);
   }
@@ -775,7 +1119,7 @@ export function setWearables(pet, equipped) {
   // un-previewed top always reverts; an equipped shirt re-applies below via buildFitted.
   if (pet.userData.setShirtColor) pet.userData.setShirtColor(null);
   for (const [slot, id] of Object.entries(equipped)) {
-    if (!id || !WEARABLES[id]) continue;
+    if (!id || (!WEARABLES[id] && !DUCK_WEAR[id])) continue;
     pet.userData.wearables.push(buildFitted(pet, slot, id));
   }
 }

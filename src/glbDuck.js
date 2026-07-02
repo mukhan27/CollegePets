@@ -69,7 +69,7 @@ export function preloadDuck() {
         if (!geo.attributes.normal) geo.computeVertexNormals();
 
         const tex = buildMask(firstMap(mesh.material));
-        const mounts = computeMounts(geo);
+        const mounts = computeMounts(geo, tex);
         cache = { tex, mounts, rig: buildRig(geo, tex) || { fullGeo: geo } };
         ready = true;
         resolve(true);
@@ -84,15 +84,21 @@ export function preloadDuck() {
 // feet y=0, centred x/z, facing +z). The model is one chibi egg: the "skull" is the top of
 // the egg minus the protruding bill (far +z), and the torso is the wide middle minus the
 // tail spike (far -z). Everything is expressed as fractions of H so a model swap re-measures.
-function computeMounts(geo) {
-  const pos = geo.attributes.position, n = pos.count, H = TARGET_H;
+function computeMounts(geo, prep) {
+  const pos = geo.attributes.position, uv = geo.attributes.uv, n = pos.count, H = TARGET_H;
   const mk = () => ({ sy: 0, sz: 0, c: 0, xMax: 0, zMin: 1e9 });
   const add = (a, x, y, z) => {
     a.sy += y; a.sz += z; a.c++;
     a.xMax = Math.max(a.xMax, Math.abs(x));
     a.zMin = Math.min(a.zMin, z);
   };
-  const skull = mk(), torso = mk();
+  const skull = mk(), torso = mk(), crown = mk();
+  let crownYMax = -1e9;
+  // eye centroids, measured from the texture's baked eye zone (the eyes are painted,
+  // not modelled, so the only truthful position source is uv→zone sampling)
+  const eyeL = { x: 0, y: 0, z: 0, c: 0 }, eyeR = { x: 0, y: 0, z: 0, c: 0 };
+  // tail envelope (rear spike + fat rear of the egg): everything rear of -0.275H
+  const tail = { zMin: 1e9, yMin: 1e9, yMax: -1e9, xMax: 0 };
   // NOTE: the torso band deliberately includes the tops of the legs (they start below
   // 0.42H); the SLOT_FIT nudges in petFactory were tuned against exactly this measurement,
   // so a model swap with very different legs may need those nudges re-tuned.
@@ -100,6 +106,15 @@ function computeMounts(geo) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     if (y > 0.675 * H && z <= 0.31 * H) add(skull, x, y, z);                       // head minus bill
     else if (y > 0.25 * H && y < 0.62 * H && z > -0.31 * H) add(torso, x, y, z);   // body minus tail
+    if (y > 0.92 * H) { add(crown, x, y, z); crownYMax = Math.max(crownYMax, y); } // very top of the head
+    if (z < -0.275 * H) {
+      tail.zMin = Math.min(tail.zMin, z); tail.yMin = Math.min(tail.yMin, y);
+      tail.yMax = Math.max(tail.yMax, y); tail.xMax = Math.max(tail.xMax, Math.abs(x));
+    }
+    if (prep && uv && y > 0.6 * H && sampleZone(prep, uv.getX(i), uv.getY(i)) === Z_EYE) {
+      const e = x < 0 ? eyeL : eyeR;
+      e.x += x; e.y += y; e.z += z; e.c++;
+    }
   }
   if (!skull.c || !torso.c) return null;
   const tc = [0, torso.sy / torso.c, torso.sz / torso.c];
@@ -107,7 +122,188 @@ function computeMounts(geo) {
     head: { pos: [0, skull.sy / skull.c, skull.sz / skull.c], radius: skull.xMax },
     torso: { pos: tc, radius: torso.xMax },
     back: { pos: [0, tc[1], torso.zMin] },   // rear-most torso z (for future back-mounted items)
+    // top-of-head point: hats seat against this (y = the actual highest vertex, so a hat
+    // rim mapped to it can rest ON the crown instead of hovering behind it)
+    crown: crown.c ? { pos: [0, crownYMax, crown.sz / crown.c] } : null,
+    // measured centroids of the two painted eyes (glasses align their lenses to these)
+    eyes: (eyeL.c && eyeR.c)
+      ? [[eyeL.x / eyeL.c, eyeL.y / eyeL.c, eyeL.z / eyeL.c], [eyeR.x / eyeR.c, eyeR.y / eyeR.c, eyeR.z / eyeR.c]]
+      : null,
+    tail: tail.zMin < 1e9 ? tail : null,     // keep-out envelope for back-mounted bags
   };
+}
+
+// ---- mesh-derived garments ----------------------------------------------------------------
+// Build a "shell" garment straight from the duck's own body surface: keep every triangle
+// whose centroid passes the y-band (and optional filter), then push each vertex outward
+// along an area-weighted smoothed normal by `inflate`. Because the shell is literally the
+// duck's skin offset outward, it fits the body exactly by construction — no primitive can
+// drift, gap or clip. Legs are separate geometries, so shells never cover them.
+// filter(cx, cy, cz) is evaluated on the triangle centroid.
+let shellSource = null;   // { pos: Float32Array (non-indexed), normals: Float32Array (smoothed) }
+function shellSrc() {
+  if (shellSource) return shellSource;
+  if (!cache) return null;
+  let g = cache.rig.bodyGeo || cache.rig.fullGeo;
+  if (g.index) g = g.toNonIndexed();
+  const p = g.attributes.position.array;
+  const nVerts = p.length / 3;
+  // weld by position so the smoothed normals are continuous across the low-poly facets
+  const keyOf = (i) => `${p[i * 3].toFixed(4)},${p[i * 3 + 1].toFixed(4)},${p[i * 3 + 2].toFixed(4)}`;
+  const acc = new Map();   // key -> [nx, ny, nz, Σ|faceN|]
+  for (let f = 0; f < nVerts; f += 3) {
+    const ax = p[f * 3], ay = p[f * 3 + 1], az = p[f * 3 + 2];
+    const bx = p[f * 3 + 3], by = p[f * 3 + 4], bz = p[f * 3 + 5];
+    const cx = p[f * 3 + 6], cy = p[f * 3 + 7], cz = p[f * 3 + 8];
+    // face normal, length = 2·area → summing area-weights automatically
+    const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const w = Math.hypot(nx, ny, nz);
+    for (const vi of [f, f + 1, f + 2]) {
+      const k = keyOf(vi);
+      const a = acc.get(k) || [0, 0, 0, 0];
+      a[0] += nx; a[1] += ny; a[2] += nz; a[3] += w;
+      acc.set(k, a);
+    }
+  }
+  const normals = new Float32Array(p.length);
+  for (let i = 0; i < nVerts; i++) {
+    const a = acc.get(keyOf(i));
+    const l = Math.hypot(a[0], a[1], a[2]);
+    // Thin-fin edges (wing feather tips): the two sides' normals nearly cancel, so the
+    // averaged direction is garbage and an offset along it lets the skin poke through
+    // the shell. Detect the cancellation (|Σn| ≪ Σ|n|) and push those vertices radially
+    // away from the body axis instead — fins stick out radially, so this always clears.
+    if (l < 0.35 * a[3] || l < 1e-8) {
+      const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+      const rx = x, ry = (y - 1.0) * 0.25, rz = z;
+      const rl = Math.hypot(rx, ry, rz) || 1;
+      normals[i * 3] = rx / rl; normals[i * 3 + 1] = ry / rl; normals[i * 3 + 2] = rz / rl;
+    } else {
+      normals[i * 3] = a[0] / l; normals[i * 3 + 1] = a[1] / l; normals[i * 3 + 2] = a[2] / l;
+    }
+  }
+  shellSource = { pos: p, normals };
+  return shellSource;
+}
+
+// clips: [{ n:[x,y,z], d, when?:(cx,cy,cz)=>bool }] — keep the half-space n·p ≥ d,
+// SPLITTING triangles that straddle the plane (Sutherland-Hodgman), so garment hems
+// are clean straight lines instead of the source mesh's huge jagged triangles.
+// yMin/yMax are shorthand for the two horizontal clips.
+export function duckShellGeo({ yMin, yMax, inflate = 0.03, filter = null, clips = [] } = {}) {
+  const src = shellSrc();
+  if (!src) return null;
+  const planes = clips.slice();
+  if (yMin != null) planes.push({ n: [0, 1, 0], d: yMin });
+  if (yMax != null) planes.push({ n: [0, -1, 0], d: -yMax });
+  const { pos: p, normals: nrm } = src;
+  const P = [], N = [];
+  for (let f = 0; f < p.length; f += 9) {
+    const cx = (p[f] + p[f + 3] + p[f + 6]) / 3;
+    const cy = (p[f + 1] + p[f + 4] + p[f + 7]) / 3;
+    const cz = (p[f + 2] + p[f + 5] + p[f + 8]) / 3;
+    if (filter && !filter(cx, cy, cz)) continue;
+    // polygon of {pos, nrm} vertices, clipped plane by plane
+    let poly = [0, 1, 2].map((v) => ({
+      p: [p[f + v * 3], p[f + v * 3 + 1], p[f + v * 3 + 2]],
+      n: [nrm[f + v * 3], nrm[f + v * 3 + 1], nrm[f + v * 3 + 2]],
+    }));
+    for (const pl of planes) {
+      if (pl.when && !pl.when(cx, cy, cz)) continue;
+      const [nx, ny, nz] = pl.n;
+      const side = poly.map((v) => v.p[0] * nx + v.p[1] * ny + v.p[2] * nz - pl.d);
+      const out = [];
+      for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length, a = poly[i], b = poly[j];
+        if (side[i] >= 0) out.push(a);
+        if ((side[i] >= 0) !== (side[j] >= 0)) {
+          const t = side[i] / (side[i] - side[j]);
+          const lerp = (u, v) => u + (v - u) * t;
+          const nvec = [lerp(a.n[0], b.n[0]), lerp(a.n[1], b.n[1]), lerp(a.n[2], b.n[2])];
+          const l = Math.hypot(nvec[0], nvec[1], nvec[2]) || 1;
+          out.push({
+            p: [lerp(a.p[0], b.p[0]), lerp(a.p[1], b.p[1]), lerp(a.p[2], b.p[2])],
+            n: [nvec[0] / l, nvec[1] / l, nvec[2] / l],
+          });
+        }
+      }
+      poly = out;
+      if (poly.length < 3) break;
+    }
+    if (poly.length < 3) continue;
+    for (let i = 1; i < poly.length - 1; i++) {           // fan-triangulate
+      for (const v of [poly[0], poly[i], poly[i + 1]]) {
+        P.push(v.p[0] + v.n[0] * inflate, v.p[1] + v.n[1] * inflate, v.p[2] + v.n[2] * inflate);
+        N.push(v.n[0], v.n[1], v.n[2]);
+      }
+    }
+  }
+  if (!P.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  return g;
+}
+
+// Measured radial profile of the body: max radius from the y-axis per (y-band, azimuth
+// sector). Lets draped accessories (the gold chain) sit exactly on the skin at any
+// height/direction instead of guessing control points. az: atan2(x, z), 0 = front.
+let radialTable = null;
+const RT_BANDS = 28, RT_SECS = 24, RT_YMAX = 2.0;
+export function duckRadiusAt(y, az) {
+  if (!radialTable) {
+    const src = shellSrc();
+    if (!src) return null;
+    const t = new Float32Array(RT_BANDS * RT_SECS);
+    const p = src.pos;
+    // Bin SURFACE samples, not vertices: the body is low-poly, so whole y-bands can
+    // fall inside one giant belly triangle with no vertex in them at all — sample a
+    // barycentric grid over every triangle so every band/sector the skin passes
+    // through gets its true radius.
+    const put = (x, vy, z) => {
+      const b = Math.min(RT_BANDS - 1, Math.max(0, Math.floor((vy / RT_YMAX) * RT_BANDS)));
+      const s = ((Math.round((Math.atan2(x, z) / (2 * Math.PI)) * RT_SECS) % RT_SECS) + RT_SECS) % RT_SECS;
+      const r = Math.hypot(x, z);
+      const k = b * RT_SECS + s;
+      if (r > t[k]) t[k] = r;
+    };
+    const G = 5;   // barycentric grid: (G+1)(G+2)/2 = 21 samples per triangle
+    for (let f = 0; f < p.length; f += 9) {
+      for (let i = 0; i <= G; i++) {
+        for (let j = 0; j <= G - i; j++) {
+          const a = i / G, b2 = j / G, c = 1 - a - b2;
+          put(
+            a * p[f] + b2 * p[f + 3] + c * p[f + 6],
+            a * p[f + 1] + b2 * p[f + 4] + c * p[f + 7],
+            a * p[f + 2] + b2 * p[f + 5] + c * p[f + 8]);
+        }
+      }
+    }
+    // fill empty cells from angular neighbours so queries in sparse bands still resolve
+    for (let b = 0; b < RT_BANDS; b++) {
+      for (let pass = 0; pass < RT_SECS; pass++) {
+        let changed = false;
+        for (let s = 0; s < RT_SECS; s++) {
+          const k = b * RT_SECS + s;
+          if (t[k]) continue;
+          const l = t[b * RT_SECS + ((s + RT_SECS - 1) % RT_SECS)], r = t[b * RT_SECS + ((s + 1) % RT_SECS)];
+          if (l || r) { t[k] = l && r ? (l + r) / 2 : (l || r); changed = true; }
+        }
+        if (!changed) break;
+      }
+    }
+    radialTable = t;
+  }
+  const fb = Math.min(RT_BANDS - 1, Math.max(0, (y / RT_YMAX) * RT_BANDS - 0.5));
+  const b0 = Math.floor(fb), b1 = Math.min(RT_BANDS - 1, b0 + 1), bt = fb - b0;
+  const fs = (((Math.atan2(Math.sin(az), Math.cos(az)) / (2 * Math.PI)) * RT_SECS) + RT_SECS) % RT_SECS;
+  const s0 = Math.floor(fs) % RT_SECS, s1 = (s0 + 1) % RT_SECS, st = fs - Math.floor(fs);
+  const at = (b, s) => radialTable[b * RT_SECS + s];
+  const r0 = at(b0, s0) * (1 - st) + at(b0, s1) * st;
+  const r1 = at(b1, s0) * (1 - st) + at(b1, s1) * st;
+  const r = r0 * (1 - bt) + r1 * bt;
+  return r || null;
 }
 
 function firstMap(material) {
