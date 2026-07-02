@@ -86,14 +86,16 @@ export function preloadDuck() {
 // tail spike (far -z). Everything is expressed as fractions of H so a model swap re-measures.
 function computeMounts(geo) {
   const pos = geo.attributes.position, n = pos.count, H = TARGET_H;
-  const mk = () => ({ sx: 0, sy: 0, sz: 0, c: 0, xMax: 0, yMin: 1e9, yMax: -1e9, zMin: 1e9, zMax: -1e9 });
+  const mk = () => ({ sy: 0, sz: 0, c: 0, xMax: 0, zMin: 1e9 });
   const add = (a, x, y, z) => {
-    a.sx += x; a.sy += y; a.sz += z; a.c++;
+    a.sy += y; a.sz += z; a.c++;
     a.xMax = Math.max(a.xMax, Math.abs(x));
-    a.yMin = Math.min(a.yMin, y); a.yMax = Math.max(a.yMax, y);
-    a.zMin = Math.min(a.zMin, z); a.zMax = Math.max(a.zMax, z);
+    a.zMin = Math.min(a.zMin, z);
   };
   const skull = mk(), torso = mk();
+  // NOTE: the torso band deliberately includes the tops of the legs (they start below
+  // 0.42H); the SLOT_FIT nudges in petFactory were tuned against exactly this measurement,
+  // so a model swap with very different legs may need those nudges re-tuned.
   for (let i = 0; i < n; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     if (y > 0.675 * H && z <= 0.31 * H) add(skull, x, y, z);                       // head minus bill
@@ -103,8 +105,8 @@ function computeMounts(geo) {
   const tc = [0, torso.sy / torso.c, torso.sz / torso.c];
   return {
     head: { pos: [0, skull.sy / skull.c, skull.sz / skull.c], radius: skull.xMax },
-    torso: { pos: tc, radius: torso.xMax, height: torso.yMax - torso.yMin, zMin: torso.zMin, zMax: torso.zMax },
-    back: { pos: [0, tc[1], torso.zMin] },
+    torso: { pos: tc, radius: torso.xMax },
+    back: { pos: [0, tc[1], torso.zMin] },   // rear-most torso z (for future back-mounted items)
   };
 }
 

@@ -1043,7 +1043,7 @@ const BODY_SLOTS = { top: 1, bottom: 1, back: 1 };
 // Nudge fields (duck local space): dx/dy/dz offset, rx lean (radians), s extra uniform
 // scale, sx/sy/sz per-axis multipliers (the egg-shaped duck is deeper than it is wide, so
 // body garments need a slightly stretched depth and a squashed height to hug it).
-const REF_HEAD_R = 0.52, REF_TORSO_Y = 0.60, REF_TORSO_R = 0.37;
+const REF_HEAD_R = 0.52, REF_TORSO_Y = TORSO_Y, REF_TORSO_R = TORSO_R;   // stay in lock-step with the builders' tuning
 const SLOT_FIT = {
   hat:    { s: 1.12 },
   face:   { s: 1.55, dy: -0.06, dz: -0.10 },
@@ -1091,7 +1091,8 @@ function buildFitted(pet, slot, id) {
     body.add(wrap);
   } else {
     // head items: the head group already sits at the measured skull centre.
-    wrap.scale.setScalar((m.head.radius / REF_HEAD_R) * s);
+    const k = (m.head.radius / REF_HEAD_R) * s;
+    wrap.scale.set(k * fitNudge(slot, id, 'sx'), k * fitNudge(slot, id, 'sy'), k * fitNudge(slot, id, 'sz'));
     wrap.position.set(fitNudge(slot, id, 'dx'), fitNudge(slot, id, 'dy'), fitNudge(slot, id, 'dz'));
     WEARABLES[id](wrap);
     head.add(wrap);
