@@ -28,14 +28,14 @@ function init() {
 }
 
 // auto-frame a group from a friendly 3/4 angle and capture a PNG
-function snapshot(group, lift = 0, dir = new THREE.Vector3(0.55, 0.42, 1)) {
+function snapshot(group, lift = 0, dir = new THREE.Vector3(0.55, 0.42, 1), zoom = 1) {
   init();
   scene.add(group);
   const box = new THREE.Box3().setFromObject(group);
   const c = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const radius = Math.max(size.x, size.y, size.z, 0.6) * 0.5;
-  const dist = radius / Math.tan((camera.fov * Math.PI / 180) / 2) * 1.45;
+  const dist = radius / Math.tan((camera.fov * Math.PI / 180) / 2) * 1.45 * zoom;
   c.y += lift;
   camera.position.copy(c).add(dir.clone().normalize().multiplyScalar(dist));
   camera.lookAt(c);
@@ -53,15 +53,19 @@ const SLOT_CAM = {
   bottom: { lift: -0.55, dir: new THREE.Vector3(0.35, 0.3, 1) },
   back:   { lift: -0.1,  dir: new THREE.Vector3(-0.55, 0.5, -1) },
   feet:   { lift: -0.72, dir: new THREE.Vector3(0.5, 0.28, 1) },
+  // near-frontal + tighter: neck items (bowtie especially) are small and front-facing
+  neck:   { lift: 0.02,  dir: new THREE.Vector3(0.18, 0.3, 1), zoom: 0.66 },
 };
 export function wearablePreview(id) {
   const slot = slotOf(id);
-  const k = 'w2:' + id;
+  // v4: caps rebuilt in duck space, shoes remodelled, bowtie/scarf remodelled,
+  // neck-slot preview camera added
+  const k = 'w4:' + id;
   if (cache.has(k)) return cache.get(k);
   const pet = createPet('creature', { equipped: { [slot]: id } });
   if (pet.userData.animate) pet.userData.animate(0, false);
   const c = SLOT_CAM[slot] || { lift: 0.15, dir: new THREE.Vector3(0.55, 0.42, 1) };
-  const url = snapshot(pet, c.lift, c.dir);
+  const url = snapshot(pet, c.lift, c.dir, c.zoom || 1);
   cache.set(k, url);
   return url;
 }

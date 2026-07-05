@@ -83,6 +83,19 @@ only rendered pixels count.
 6. Regression shots: previously-approved items in the same slot family, plus
    `node --check` on every changed file.
 
+## Additional proven techniques (added as the wardrobe grew)
+
+- `surfaceLoop` drapes a closed tube on the measured body surface via
+  `duckRadiusAt` — use it for collars, bands, wraps (bowtie band, scarf wraps).
+- Caps/brimmed hats: don't translate with ITEM_FIT — rebuild in duck space
+  seated on `mounts.crown` with a backward tilt (rx ≈ -0.17) so the brim
+  projects forward and UP, above the measured eye line.
+- Walk-frame verification must hit the exact gait extremes: probe the phase
+  (legLen + GAIT give phase = π/2 at a computable distance) instead of
+  screenshotting at arbitrary times — mid-swing frames hide heel/cuff bleed.
+- Shoes: measure toe fan and heel separately per foot and seat each shoe part
+  on its own centroid; a single-centroid shoe reads off-center.
+
 ## Known traps (each of these shipped as a bug once — don't repeat them)
 
 - Skull-centroid hat anchoring → hats float behind the head. Use `crown`.

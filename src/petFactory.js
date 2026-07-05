@@ -512,7 +512,9 @@ function shellMesh(opts, color) {
 // the hip pivots (same -hip offset as the leg meshes), so they swing with the walk.
 // Sleeve band: above the webbed-foot flare (feet stay bare, flare tops out ~y0.11),
 // up under the belly so the hip end stays tucked behind the pants shell mid-swing.
-const SLEEVE = { y0: 0.135, y1: 0.345, cuffY: 0.19, inflate: 0.02, cuffInflate: 0.036 };
+// y1 0.42 (was 0.345): at full swing (±0.5 rad) the leg surface near the hip rotates
+// past the fixed shell hem, and the shorter sleeve exposed a bare wedge of leg there.
+const SLEEVE = { y0: 0.135, y1: 0.42, cuffY: 0.19, inflate: 0.02, cuffInflate: 0.036 };
 function duckPants(pet, color) {
   const g = new THREE.Group();
   const main = shellMesh({ yMin: 0.26, yMax: 0.78, inflate: 0.028 }, color);
@@ -709,6 +711,104 @@ function duckChain(pet) {
   return g;
 }
 
+// Closed tube that follows the duck's MEASURED surface: yAt(az) gives the loop height
+// per azimuth (az 0 = front), the radius at each sample comes from duckRadiusAt + proud,
+// so the loop hugs the neck/chest exactly (same trick as the gold chain's drape).
+// Keep nape heights ≤ ~1.30: above that the head leans so far forward that the body no
+// longer wraps the y-axis and the radial table has no truthful back-sector data.
+function surfaceLoop(yAt, proud, tubeR, color, segs = 64) {
+  const pts = [];
+  for (let i = 0; i < segs; i++) {
+    const az = (i / segs) * Math.PI * 2 - Math.PI;       // start at the nape
+    const y = yAt(az);
+    const r = (duckRadiusAt(y, az) || 0.5) + proud;
+    pts.push(new THREE.Vector3(Math.sin(az) * r, y, Math.cos(az) * r));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 96, tubeR, 10, true),
+    toonMat(color, { noCache: true }));
+  m.castShadow = true;
+  return m;
+}
+// z of the measured body surface at (x, y) on the front, +proud (for chest-draped parts)
+function chestZ(x, y, proud) {
+  const r = duckRadiusAt(y, Math.atan2(x, 0.65)) || 0.68;
+  return Math.sqrt(Math.max(r * r - x * x, 0.02)) + proud;
+}
+
+// Bow tie: a thin band following the measured neck surface — an almost-HORIZONTAL
+// collar line (nape y1.255 → front y1.24; a deeper dip read as a pendant necklace,
+// not a collar) whose front run hides behind the knot/lobes (band z ≤ surface+0.027
+// < knot face z surface+0.032) — with a crisp two-lobe bow at the front neck/chest
+// junction: flattened pinched cones whose tips meet a square centre knot, tilted to
+// lie along the up-forward chin/chest slope (z0.62 @ y1.20 → z0.56 @ y1.30).
+function duckBowtie(pet, color) {
+  const g = new THREE.Group();
+  const dark = tintHex(color, -0.28);
+  g.add(surfaceLoop((az) => 1.255 - 0.015 * (0.5 + 0.5 * Math.cos(az)), 0.006, 0.021, dark, 48));
+  const fy = 1.235;
+  const fz = (duckRadiusAt(fy, 0) || 0.60) + 0.032;      // knot rests on the measured surface
+  const bow = new THREE.Group();
+  bow.position.set(0, fy, fz);
+  bow.rotation.x = -0.30;                                // follow the chest/chin slope
+  for (const s of [-1, 1]) {
+    const lobe = new THREE.Mesh(new THREE.ConeGeometry(0.082, 0.20, 12), toonMat(color, { noCache: true }));
+    lobe.scale.set(1, 1, 0.42);                          // flatten into a ribbon triangle
+    lobe.rotation.z = s * Math.PI / 2;                   // tip points into the knot
+    lobe.position.set(s * 0.122, 0, 0);
+    lobe.castShadow = true;
+    bow.add(lobe);
+  }
+  const knot = box(0.082, 0.084, 0.052, dark);
+  knot.position.z = 0.004;
+  bow.add(knot);
+  g.add(bow);
+  pet.userData.body.add(g);
+  return g;
+}
+
+// Scarf: a chunky double-wrapped band hugging the measured neck base — two stacked
+// surface-following tubes (the upper turn a lighter shade, overlapping the lower) so it
+// reads as real wrapped turns with thickness, not a plain torus — plus two draped tail
+// panels of different lengths lying on the measured chest surface, each with a slight
+// wave and fringe notches at the end.
+function duckScarf(pet, color) {
+  const g = new THREE.Group();
+  const shade = tintHex(color, -0.14);
+  const fringeC = 0xe8e0d0;
+  // lower turn dips to the chest at the front; upper turn rides higher on the nape.
+  // Proud enough (0.036+) that the wrap also clears jacket shells and their buttons.
+  g.add(surfaceLoop((az) => 1.27 - 0.17 * ((0.5 + 0.5 * Math.cos(az)) ** 2), 0.042, 0.064, shade));
+  g.add(surfaceLoop((az) => 1.30 - 0.115 * ((0.5 + 0.5 * Math.cos(az)) ** 2), 0.036, 0.058, color));
+  // draped tails: segmented panels seated on the measured chest (z from chestZ), the
+  // drape never tucks back in (z clamped monotonic) so it hangs like fabric
+  const mkTail = (x0, topY, len, w, lean) => {
+    const segs = 3, segH = len / segs;
+    let prevZ = -1e9;
+    let y = topY, z = 0;
+    for (let i = 0; i < segs; i++) {
+      const yc = y - segH / 2;
+      z = Math.max(chestZ(x0, yc, 0.048), prevZ);
+      prevZ = z;
+      const seg = box(w, segH + 0.03, 0.046, color);
+      seg.position.set(x0 + lean * i * 0.018, yc, z);
+      seg.rotation.z = lean * (i % 2 ? -0.10 : 0.06);    // slight fold/wave
+      seg.rotation.x = i ? 0 : -0.10;                    // top leans back under the wrap
+      g.add(seg);
+      y -= segH;
+    }
+    for (let k = 0; k < 4; k++) {                        // fringe notches
+      const f = box(w * 0.17, 0.075, 0.042, fringeC);
+      f.position.set(x0 + lean * 2 * 0.018 + (k - 1.5) * w * 0.26, y - 0.022, z);
+      g.add(f);
+    }
+  };
+  mkTail(-0.145, 1.10, 0.46, 0.17, 1);   // long tail, folds outward-left
+  mkTail(0.155, 1.10, 0.30, 0.15, -1);   // short tail
+  pet.userData.body.add(g);
+  return g;
+}
+
 // Glasses, fitted to the MEASURED painted-eye centroids (mounts.eyes): each lens is
 // centred on an eye and faces along the local outward normal (duck eyes look
 // outward-forward ~45°), the bridge bows over the bill base, and thin temple arms
@@ -791,31 +891,66 @@ function duckHeadphones(pet) {
   return g;
 }
 
-// ---- shoes ('feet' slot) -------------------------------------------------------------------
-// Built per-foot from that leg's own MEASURED geometry (webbed-foot extents + shin column),
-// parented to the hip pivots so they swing with the walk. The shoe volume fully contains the
-// webbed fan (sole slightly larger than the foot outline), so the foot can never poke out.
-function roundedRectShape(w, d, r) {
-  const s = new THREE.Shape(), hw = w / 2, hd = d / 2;
-  s.moveTo(-hw + r, -hd);
-  s.lineTo(hw - r, -hd); s.quadraticCurveTo(hw, -hd, hw, -hd + r);
-  s.lineTo(hw, hd - r); s.quadraticCurveTo(hw, hd, hw - r, hd);
-  s.lineTo(-hw + r, hd); s.quadraticCurveTo(-hw, hd, -hw, hd - r);
-  s.lineTo(-hw, -hd + r); s.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
-  return s;
+// Baseball cap — duck-space, seated against the MEASURED crown. A cap on this round,
+// forward-leaning head sits TILTED BACK: the dome rests over the crown point (shell
+// ~0.04 proud of it, sides hugging the skull: head half-width ≈0.29 @ y1.70–1.78),
+// and the rim rises at the front so the brim projects forward ABOVE the eye line
+// (eyes y≈1.68) with visible air to the brow (forehead surface z≈0.67 @ y1.8).
+function duckCap(pet, color) {
+  const cp = pet.userData.mounts.crown.pos;         // (0, 2.00, 0.36) measured
+  const g = new THREE.Group();
+  g.position.set(cp[0], cp[1] - 0.225, cp[2] + 0.025);   // dome centre under/behind the crown
+  g.rotation.x = -0.17;                             // tilt back → brim angles up, off the face
+  const mat = toonMat(color, { noCache: true });
+  // dome: squashed hemisphere + a short skirt below the rim plane (kills see-through
+  // at the back rim, where a tilted-back cap hangs slightly off the nape)
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2 + 0.15), mat);
+  dome.scale.set(0.325, 0.27, 0.335);
+  dome.castShadow = true;
+  g.add(dome);
+  // brim: flattened ellipse rooted inside the dome front, projecting forward in the
+  // tilted rim plane — front tip ≈ (y1.90, z1.05) world, well above the bill (z0.82 @ y≤1.62)
+  const brim = ball(0.19, color, 1.5, 0.16, 1.35);
+  brim.position.set(0, 0.012, 0.42);
+  g.add(brim);
+  const button = ball(0.045, color);
+  button.position.y = 0.268;
+  g.add(button);
+  pet.userData.body.add(g);
+  return g;
 }
-// a soft rounded slab lying flat (footprint w × d in x/z), bottom face at y0
-function shoeSlab(w, d, thick, y0, color, r = 0.13) {
-  const bev = Math.min(0.03, thick * 0.3);
-  const geo = new THREE.ExtrudeGeometry(roundedRectShape(w, d, Math.min(r, w / 2 - 0.01, d / 2 - 0.01)), {
-    depth: thick - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 3, curveSegments: 12,
+
+// ---- shoes ('feet' slot) -------------------------------------------------------------------
+// Built per-foot from that leg's own MEASURED geometry, parented to the hip pivots so they
+// swing with the walk. Each part is centred on its own measured anchor (toe-fan centre,
+// heel centre, shin centre — they differ: the webbed toes fan outward while the heel sits
+// under the shin), the sole is an elliptical footprint wider at the toe than the heel, and
+// the upper is rounded sphere segments — no boxy slabs. The heel cup rises to y≈0.22 so the
+// webbed heel AND the pant cuff (y0.135–0.19 around the shin) tuck inside the shoe back.
+//
+// Elliptical sole footprint: heel arc (half-width heelHW centred at hx) blending into a
+// wider toe arc (toeHW at tx), drawn in duck-space x/z. NOTE the shape is drawn with
+// shapeY = −z: ExtrudeGeometry + rotateX(-π/2) maps shape (x, sy, depth) → (x, depth, −sy).
+function soleGeo(tx, hx, toeHW, heelHW, zBack, zFront, thick) {
+  const s = new THREE.Shape();
+  const zMid = zBack + (zFront - zBack) * 0.52;
+  const pt = (x, z) => [x, -z];
+  s.moveTo(...pt(hx + heelHW, zBack + 0.075));                                  // inner heel
+  s.quadraticCurveTo(...pt(tx + toeHW + 0.01, zMid), ...pt(tx + toeHW, zFront - 0.11)); // inner side
+  s.quadraticCurveTo(...pt(tx + toeHW, zFront), ...pt(tx, zFront));             // inner toe corner
+  s.quadraticCurveTo(...pt(tx - toeHW, zFront), ...pt(tx - toeHW, zFront - 0.11)); // outer toe
+  s.quadraticCurveTo(...pt(tx - toeHW - 0.01, zMid), ...pt(hx - heelHW, zBack + 0.075)); // outer side
+  s.quadraticCurveTo(...pt(hx - heelHW, zBack), ...pt(hx, zBack));              // outer heel corner
+  s.quadraticCurveTo(...pt(hx + heelHW, zBack), ...pt(hx + heelHW, zBack + 0.075)); // inner heel corner
+  const bev = 0.016;
+  const geo = new THREE.ExtrudeGeometry(s, {
+    depth: thick - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev,
+    bevelSegments: 2, curveSegments: 14,
   });
   geo.rotateX(-Math.PI / 2);
   geo.computeBoundingBox();
-  geo.translate(0, y0 - geo.boundingBox.min.y, 0);
-  const m = new THREE.Mesh(geo, toonMat(color, { noCache: true }));
-  m.castShadow = true; m.receiveShadow = true;
-  return m;
+  geo.translate(0, -geo.boundingBox.min.y - 0.006, 0);   // sole bottom just under the foot
+  return geo;
 }
 const SHOE_STYLES = {
   sneaker_white: { body: 0xf2f1ee, sole: 0xd7d2c4, trim: 0xd6584f, lace: 0xb9b3a4, boot: false },
@@ -829,43 +964,69 @@ function duckShoes(pet, styleId) {
   (pet.userData.legs || []).forEach((piv) => {
     const wrap = new THREE.Group();
     wrap.position.copy(piv.position).negate(); // duck-space build inside the hip pivot
-    // measure THIS leg: webbed-foot extents (below the flare top) + shin centre
+    // measure THIS leg: webbed-foot fan split into toe half (z>0.2) and heel half
+    // (z<0.08) — their centres differ, that asymmetry is what centres each part —
+    // plus the shin column the ankle collar wraps
     const pos = piv.children[0].geometry.attributes.position;
-    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, sx = 0, sz = 0, sc = 0;
+    let z0 = 1e9, z1 = -1e9, tx0 = 1e9, tx1 = -1e9, hx0 = 1e9, hx1 = -1e9, sx = 0, sz = 0, sc = 0;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       if (y < 0.12) {
-        x0 = Math.min(x0, x); x1 = Math.max(x1, x);
         z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+        if (z > 0.20) { tx0 = Math.min(tx0, x); tx1 = Math.max(tx1, x); }
+        if (z < 0.08) { hx0 = Math.min(hx0, x); hx1 = Math.max(hx1, x); }
       } else if (y < 0.3) { sx += x; sz += z; sc++; }
     }
-    const fx = (x0 + x1) / 2, fz = (z0 + z1) / 2;
-    const shinX = sc ? sx / sc : fx, shinZ = sc ? sz / sc : fz - 0.12;
-    const W = (x1 - x0), D = (z1 - z0);
-    // sole slab: a touch larger than the foot outline all round
-    const sole = shoeSlab(W + 0.10, D + 0.14, 0.06, -0.008, S.sole, 0.15);
-    sole.position.set(fx, 0, fz);
+    if (tx0 > tx1) { tx0 = hx0; tx1 = hx1; }               // degenerate-fan fallbacks
+    if (hx0 > hx1) { hx0 = tx0; hx1 = tx1; }
+    const tx = (tx0 + tx1) / 2, hx = (hx0 + hx1) / 2;      // measured toe/heel centres
+    const toeHW = (tx1 - tx0) / 2 + 0.032;                 // modest margin past the fan
+    const heelHW = (hx1 - hx0) / 2 + 0.030;
+    const shinX = sc ? sx / sc : hx, shinZ = sc ? sz / sc : z0 + 0.10;
+    const mat = (c) => toonMat(c, { noCache: true });
+    // sole: elliptical footprint, toe wider than heel, snug margins (no chunky slab)
+    const sole = new THREE.Mesh(soleGeo(tx, hx, toeHW, heelHW, z0 - 0.055, z1 + 0.045, 0.055), mat(S.sole));
+    sole.castShadow = true; sole.receiveShadow = true;
     wrap.add(sole);
-    // upper: chunky rounded body over the whole fan (toe box + heel in one)
-    const upper = shoeSlab(W + 0.05, D + 0.08, 0.13, 0.04, S.body, 0.14);
-    upper.position.set(fx, 0, fz);
-    wrap.add(upper);
+    // upper: three overlapping rounded segments — toe box (widest), vamp, heel cup.
+    // Each ellipsoid's bottom sits at y≈0 (inside the sole) so nothing pokes under
+    // the sole when the swinging shoe tips up at the backswing.
+    const toeBox = ball(0.16, S.body, toeHW / 0.16, 0.49, 1.18);
+    toeBox.position.set(tx, 0.078, 0.24);
+    wrap.add(toeBox);
+    const vamp = ball(0.15, S.body, 1.12, 0.57, 1.05);
+    vamp.position.set((tx + shinX) / 2, 0.085, 0.135);
+    wrap.add(vamp);
+    // heel cup: wraps the webbed heel and rises to y≈0.23 — covers the heel AND the
+    // pant cuff hem from behind (the old build left both visible at the shoe back)
+    const heel = ball(0.12, S.body, (heelHW + 0.005) / 0.12, S.boot ? 1.04 : 0.875, 0.94);
+    heel.position.set(hx, S.boot ? 0.125 : 0.105, 0.018);
+    wrap.add(heel);
+    // dark "sock" liner around the bare shin at the shoe mouth: at walk extremes the
+    // camera can look into the opening (the pant sleeve leaves the lower shin bare),
+    // and this ring hides the orange leg there for both bare and pants outfits
+    const liner = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.063, 0.063, S.boot ? 0.16 : 0.13, 12), mat(0x33312d));
+    liner.position.set(shinX, S.boot ? 0.27 : 0.26, shinZ);
+    wrap.add(liner);
     if (S.boot) {
       // boots: ankle shaft around the shin with a folded contrast cuff on top
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.12, 0.18, 12), toonMat(S.body, { noCache: true }));
-      shaft.position.set(shinX, 0.215, shinZ); shaft.castShadow = true; wrap.add(shaft);
-      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.108, 0.07, 12), toonMat(S.trim, { noCache: true }));
-      cuff.position.set(shinX, 0.30, shinZ); cuff.castShadow = true; wrap.add(cuff);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.108, 0.124, 0.19, 14), mat(S.body));
+      shaft.position.set(shinX, 0.235, shinZ); shaft.castShadow = true; wrap.add(shaft);
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.128, 0.114, 0.062, 14), mat(S.trim));
+      cuff.position.set(shinX, 0.322, shinZ); cuff.castShadow = true; wrap.add(cuff);
     } else {
       // sneakers: padded ankle collar + two lace bars across the instep + heel tab
-      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 0.09, 12), toonMat(S.body, { noCache: true }));
-      collar.position.set(shinX, 0.20, shinZ); collar.castShadow = true; wrap.add(collar);
-      for (const [y, z] of [[0.19, 0.10], [0.168, 0.17]]) {
-        const lace = box(W * 0.52, 0.022, 0.04, S.lace);
-        lace.position.set(fx, y, shinZ + z); lace.rotation.x = 0.35; wrap.add(lace);
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.101, 0.105, 14), mat(S.body));
+      collar.position.set(shinX * 0.9 + hx * 0.1, 0.205, shinZ - 0.004);
+      collar.castShadow = true; wrap.add(collar);
+      const midX = (tx + shinX) / 2;
+      for (const [y, z] of [[0.152, 0.152], [0.122, 0.212]]) {
+        const lace = box(0.15, 0.02, 0.042, S.lace);
+        lace.position.set(midX, y, z); lace.rotation.x = 0.55; wrap.add(lace);
       }
-      const tab = box(0.07, 0.06, 0.03, S.trim);
-      tab.position.set(shinX, 0.175, shinZ - 0.09); wrap.add(tab);
+      const tab = box(0.05, 0.05, 0.024, S.trim);
+      tab.position.set(hx, 0.185, -0.072); tab.rotation.x = -0.10; wrap.add(tab);
     }
     piv.add(wrap);
     g.userData.coParts.push(wrap);
@@ -878,6 +1039,10 @@ function duckShoes(pet, styleId) {
 // generic reference-space builders above; the procedural fallback keeps those)
 const DUCK_WEAR = {
   headphones: (pet) => duckHeadphones(pet),
+  cap_red:  (pet) => duckCap(pet, 0xd64541),
+  cap_blue: (pet) => duckCap(pet, 0x3a6ea8),
+  bowtie: (pet) => duckBowtie(pet, 0xd6584f),
+  scarf:  (pet) => duckScarf(pet, 0xc0392b),
   sneaker_white: (pet) => duckShoes(pet, 'sneaker_white'),
   sneaker_red:   (pet) => duckShoes(pet, 'sneaker_red'),
   boots_brown:   (pet) => duckShoes(pet, 'boots_brown'),
@@ -1180,8 +1345,7 @@ const SLOT_FIT = {
 };
 const ITEM_FIT = {
   // duck units, applied after the crown-seat mapping. Tuned visually per hat.
-  cap_red:   { dz: 0.06 },               // brim forward, over (not behind) the eye line
-  cap_blue:  { dz: 0.06 },
+  // (cap_red/cap_blue are duck-space builders now — see duckCap — no nudges here.)
   beanie:    { dz: 0.05 },               // band forward so it hugs the forehead
   party_hat: { dy: 0.17 },               // cone base ON the crown, not sunk into the skull
 };
