@@ -52,6 +52,7 @@ const SLOT_CAM = {
   top:    { lift: -0.28, dir: new THREE.Vector3(0.3, 0.25, 1) },
   bottom: { lift: -0.55, dir: new THREE.Vector3(0.35, 0.3, 1) },
   back:   { lift: -0.1,  dir: new THREE.Vector3(-0.55, 0.5, -1) },
+  feet:   { lift: -0.72, dir: new THREE.Vector3(0.5, 0.28, 1) },
 };
 export function wearablePreview(id) {
   const slot = slotOf(id);

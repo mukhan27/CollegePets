@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import { toonMat, toonGradient } from './textures.js';
-import { isDuckReady, buildGlbDuck, duckShellGeo, duckRadiusAt } from './glbDuck.js';
+import { isDuckReady, buildGlbDuck, duckShellGeo, legShellGeo, duckRadiusAt } from './glbDuck.js';
 
 function ball(r, color, sx = 1, sy = 1, sz = 1) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), toonMat(color));
@@ -507,13 +507,31 @@ function shellMesh(opts, color) {
 }
 
 // Pants: a shell over the lower belly (its own skin, inflated), with a thicker,
-// darker waistband ring standing a little prouder at the top edge.
+// darker waistband ring standing a little prouder at the top edge, plus a small
+// trouser-leg sleeve cut from EACH LEG's own geometry. The sleeves are parented to
+// the hip pivots (same -hip offset as the leg meshes), so they swing with the walk.
+// Sleeve band: above the webbed-foot flare (feet stay bare, flare tops out ~y0.11),
+// up under the belly so the hip end stays tucked behind the pants shell mid-swing.
+const SLEEVE = { y0: 0.135, y1: 0.345, cuffY: 0.19, inflate: 0.02, cuffInflate: 0.036 };
 function duckPants(pet, color) {
   const g = new THREE.Group();
   const main = shellMesh({ yMin: 0.26, yMax: 0.78, inflate: 0.028 }, color);
   if (main) g.add(main);
   const waist = shellMesh({ yMin: 0.70, yMax: 0.82, inflate: 0.048 }, tintHex(color, -0.32));
   if (waist) g.add(waist);
+  g.userData.coParts = [];
+  (pet.userData.legs || []).forEach((piv, i) => {
+    const sleeve = legShellGeo(i, { yMin: SLEEVE.y0, yMax: SLEEVE.y1, inflate: SLEEVE.inflate });
+    const cuff = legShellGeo(i, { yMin: SLEEVE.y0, yMax: SLEEVE.cuffY, inflate: SLEEVE.cuffInflate });
+    for (const [geo, c] of [[sleeve, color], [cuff, tintHex(color, -0.32)]]) {
+      if (!geo) continue;
+      const m = new THREE.Mesh(geo, toonMat(c, { noCache: true, side: THREE.DoubleSide }));
+      m.castShadow = true; m.frustumCulled = false;
+      m.position.copy(piv.position).negate();   // duck-space geometry inside the hip pivot
+      piv.add(m);
+      g.userData.coParts.push(m);
+    }
+  });
   pet.userData.body.add(g);
   return g;
 }
@@ -744,9 +762,125 @@ function duckSpecs(pet, style) {
   return g;
 }
 
+// Headphones, fitted to the MEASURED head: the band is an arc whose top rests ON the
+// crown point and whose ends land on the ear cups; the cups' pads are placed just
+// inside the skull's measured half-width so they visibly press the head sides.
+function duckHeadphones(pet) {
+  const m = pet.userData.mounts;
+  const g = new THREE.Group();
+  const R = m.head.radius;                     // skull half-width (~0.30)
+  const cupY = m.head.pos[1] - 0.02;           // ear height: just below the skull centre
+  const cupZ = m.head.pos[2];                  // ear depth: the skull centre line
+  const bandR = (m.crown.pos[1] + 0.025) - cupY;   // arc top = crown + tube sink
+  // band: half-torus in the x/y plane, squashed in x so its ends meet the cup tops
+  const band = new THREE.Mesh(new THREE.TorusGeometry(bandR, 0.048, 10, 24, Math.PI), toonMat(0x2a2d34));
+  band.position.set(0, cupY, cupZ);
+  band.scale.x = (R + 0.085) / bandR;
+  band.castShadow = true; g.add(band);
+  for (const s of [-1, 1]) {
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.07, 14), toonMat(0xff5fa2));
+    pad.rotation.z = Math.PI / 2;
+    pad.position.set(s * R, cupY, cupZ);       // inner face sinks ~0.035 into the head: contact
+    g.add(pad);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.145, 0.11, 16), toonMat(0x33353b));
+    cup.rotation.z = s * Math.PI / 2;
+    cup.position.set(s * (R + 0.085), cupY, cupZ);
+    cup.castShadow = true; g.add(cup);
+  }
+  pet.userData.body.add(g);
+  return g;
+}
+
+// ---- shoes ('feet' slot) -------------------------------------------------------------------
+// Built per-foot from that leg's own MEASURED geometry (webbed-foot extents + shin column),
+// parented to the hip pivots so they swing with the walk. The shoe volume fully contains the
+// webbed fan (sole slightly larger than the foot outline), so the foot can never poke out.
+function roundedRectShape(w, d, r) {
+  const s = new THREE.Shape(), hw = w / 2, hd = d / 2;
+  s.moveTo(-hw + r, -hd);
+  s.lineTo(hw - r, -hd); s.quadraticCurveTo(hw, -hd, hw, -hd + r);
+  s.lineTo(hw, hd - r); s.quadraticCurveTo(hw, hd, hw - r, hd);
+  s.lineTo(-hw + r, hd); s.quadraticCurveTo(-hw, hd, -hw, hd - r);
+  s.lineTo(-hw, -hd + r); s.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+  return s;
+}
+// a soft rounded slab lying flat (footprint w × d in x/z), bottom face at y0
+function shoeSlab(w, d, thick, y0, color, r = 0.13) {
+  const bev = Math.min(0.03, thick * 0.3);
+  const geo = new THREE.ExtrudeGeometry(roundedRectShape(w, d, Math.min(r, w / 2 - 0.01, d / 2 - 0.01)), {
+    depth: thick - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 3, curveSegments: 12,
+  });
+  geo.rotateX(-Math.PI / 2);
+  geo.computeBoundingBox();
+  geo.translate(0, y0 - geo.boundingBox.min.y, 0);
+  const m = new THREE.Mesh(geo, toonMat(color, { noCache: true }));
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+const SHOE_STYLES = {
+  sneaker_white: { body: 0xf2f1ee, sole: 0xd7d2c4, trim: 0xd6584f, lace: 0xb9b3a4, boot: false },
+  sneaker_red:   { body: 0xd6453c, sole: 0xf2f1ee, trim: 0xf2f1ee, lace: 0x33353b, boot: false },
+  boots_brown:   { body: 0x7a5230, sole: 0x40301e, trim: 0xa5804e, lace: 0x4a3826, boot: true },
+};
+function duckShoes(pet, styleId) {
+  const S = SHOE_STYLES[styleId];
+  const g = new THREE.Group();                 // bookkeeping handle (parts live on the pivots)
+  g.userData.coParts = [];
+  (pet.userData.legs || []).forEach((piv) => {
+    const wrap = new THREE.Group();
+    wrap.position.copy(piv.position).negate(); // duck-space build inside the hip pivot
+    // measure THIS leg: webbed-foot extents (below the flare top) + shin centre
+    const pos = piv.children[0].geometry.attributes.position;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, sx = 0, sz = 0, sc = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      if (y < 0.12) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+        z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+      } else if (y < 0.3) { sx += x; sz += z; sc++; }
+    }
+    const fx = (x0 + x1) / 2, fz = (z0 + z1) / 2;
+    const shinX = sc ? sx / sc : fx, shinZ = sc ? sz / sc : fz - 0.12;
+    const W = (x1 - x0), D = (z1 - z0);
+    // sole slab: a touch larger than the foot outline all round
+    const sole = shoeSlab(W + 0.10, D + 0.14, 0.06, -0.008, S.sole, 0.15);
+    sole.position.set(fx, 0, fz);
+    wrap.add(sole);
+    // upper: chunky rounded body over the whole fan (toe box + heel in one)
+    const upper = shoeSlab(W + 0.05, D + 0.08, 0.13, 0.04, S.body, 0.14);
+    upper.position.set(fx, 0, fz);
+    wrap.add(upper);
+    if (S.boot) {
+      // boots: ankle shaft around the shin with a folded contrast cuff on top
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.12, 0.18, 12), toonMat(S.body, { noCache: true }));
+      shaft.position.set(shinX, 0.215, shinZ); shaft.castShadow = true; wrap.add(shaft);
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.108, 0.07, 12), toonMat(S.trim, { noCache: true }));
+      cuff.position.set(shinX, 0.30, shinZ); cuff.castShadow = true; wrap.add(cuff);
+    } else {
+      // sneakers: padded ankle collar + two lace bars across the instep + heel tab
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 0.09, 12), toonMat(S.body, { noCache: true }));
+      collar.position.set(shinX, 0.20, shinZ); collar.castShadow = true; wrap.add(collar);
+      for (const [y, z] of [[0.19, 0.10], [0.168, 0.17]]) {
+        const lace = box(W * 0.52, 0.022, 0.04, S.lace);
+        lace.position.set(fx, y, shinZ + z); lace.rotation.x = 0.35; wrap.add(lace);
+      }
+      const tab = box(0.07, 0.06, 0.03, S.trim);
+      tab.position.set(shinX, 0.175, shinZ - 0.09); wrap.add(tab);
+    }
+    piv.add(wrap);
+    g.userData.coParts.push(wrap);
+  });
+  pet.userData.body.add(g);
+  return g;
+}
+
 // registry: item id -> duck-space builder (used on the GLB duck instead of the
 // generic reference-space builders above; the procedural fallback keeps those)
 const DUCK_WEAR = {
+  headphones: (pet) => duckHeadphones(pet),
+  sneaker_white: (pet) => duckShoes(pet, 'sneaker_white'),
+  sneaker_red:   (pet) => duckShoes(pet, 'sneaker_red'),
+  boots_brown:   (pet) => duckShoes(pet, 'boots_brown'),
   pants_blue:  (pet) => duckPants(pet, 0x3f567f),
   pants_khaki: (pet) => duckPants(pet, 0xc2a172),
   pants_grey:  (pet) => duckPants(pet, 0x5b6068),
@@ -992,6 +1126,7 @@ export function createPet(type, { equipped = {}, appearance = null } = {}) {
     : buildDuck(inner, a);       // procedural toon fallback
   g.userData.head = parts.head;
   g.userData.body = inner;          // torso anchor for body wearables (shirt/pants/bag)
+  g.userData.legs = parts.legs || [];   // hip pivots (pant sleeves / shoes swing with these)
   g.userData.mounts = parts.mounts || null;   // measured attach points (GLB duck only)
   g.userData.setShirtColor = parts.setShirtColor || null;   // live shirt-zone repaint (GLB duck only)
   g.userData.skin = parts.skin || null;   // {skeleton, bindMatrix, root} for skinned clothing
@@ -1045,7 +1180,10 @@ const SLOT_FIT = {
 };
 const ITEM_FIT = {
   // duck units, applied after the crown-seat mapping. Tuned visually per hat.
-  headphones: { dz: -0.20, dy: 0.03 },   // cups over the ear region, not the eyes
+  cap_red:   { dz: 0.06 },               // brim forward, over (not behind) the eye line
+  cap_blue:  { dz: 0.06 },
+  beanie:    { dz: 0.05 },               // band forward so it hugs the forehead
+  party_hat: { dy: 0.17 },               // cone base ON the crown, not sunk into the skull
 };
 function fitNudge(slot, id, key) {
   const a = SLOT_FIT[slot], b = ITEM_FIT[id];
@@ -1069,7 +1207,8 @@ function buildFitted(pet, slot, id) {
   // GLB duck: garments/accessories authored directly in the duck's own space from
   // measured geometry (mesh-derived shells, measured eye/back/tail mounts).
   if (m && DUCK_WEAR[id]) return DUCK_WEAR[id](pet);
-  if (!m) return WEARABLES[id](BODY_SLOTS[slot] ? body : head);
+  // procedural fallback: no duck-space builder and no legacy builder (e.g. shoes) → skip
+  if (!m) return WEARABLES[id] ? WEARABLES[id](BODY_SLOTS[slot] ? body : head) : new THREE.Group();
   const s = fitNudge(slot, id, 's');
   const wrap = new THREE.Group();
   wrap.rotation.x = fitNudge(slot, id, 'rx');
@@ -1113,7 +1252,11 @@ function buildFitted(pet, slot, id) {
 export function setWearables(pet, equipped) {
   // The duck's feather/back/beak colours come from its appearance, not wearables.
   // Only genuine add-on accessories (e.g. backpack) are built here.
-  for (const w of pet.userData.wearables) if (w.parent) w.parent.remove(w);
+  for (const w of pet.userData.wearables) {
+    // co-parts live on OTHER anchors (leg pivots) — remove them alongside the main group
+    if (w.userData && w.userData.coParts) for (const p of w.userData.coParts) if (p.parent) p.parent.remove(p);
+    if (w.parent) w.parent.remove(w);
+  }
   pet.userData.wearables = [];
   // GLB duck: reset the shirt zone to the player's own colour first, so an unequipped /
   // un-previewed top always reverts; an equipped shirt re-applies below via buildFitted.

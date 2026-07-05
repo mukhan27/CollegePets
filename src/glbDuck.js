@@ -141,10 +141,11 @@ function computeMounts(geo, prep) {
 // drift, gap or clip. Legs are separate geometries, so shells never cover them.
 // filter(cx, cy, cz) is evaluated on the triangle centroid.
 let shellSource = null;   // { pos: Float32Array (non-indexed), normals: Float32Array (smoothed) }
-function shellSrc() {
-  if (shellSource) return shellSource;
-  if (!cache) return null;
-  let g = cache.rig.bodyGeo || cache.rig.fullGeo;
+const legShellSources = [null, null];   // per-leg smoothed sources (L, R)
+// Build a smoothed shell source from any duck-space geometry. `radialDir(x,y,z)` supplies
+// the fallback push direction for thin-fin vertices whose averaged normals cancel.
+function smoothSource(g0, radialDir) {
+  let g = g0;
   if (g.index) g = g.toNonIndexed();
   const p = g.attributes.position.array;
   const nVerts = p.length / 3;
@@ -175,15 +176,21 @@ function shellSrc() {
     // the shell. Detect the cancellation (|Σn| ≪ Σ|n|) and push those vertices radially
     // away from the body axis instead — fins stick out radially, so this always clears.
     if (l < 0.35 * a[3] || l < 1e-8) {
-      const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
-      const rx = x, ry = (y - 1.0) * 0.25, rz = z;
+      const [rx, ry, rz] = radialDir(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
       const rl = Math.hypot(rx, ry, rz) || 1;
       normals[i * 3] = rx / rl; normals[i * 3 + 1] = ry / rl; normals[i * 3 + 2] = rz / rl;
     } else {
       normals[i * 3] = a[0] / l; normals[i * 3 + 1] = a[1] / l; normals[i * 3 + 2] = a[2] / l;
     }
   }
-  shellSource = { pos: p, normals };
+  return { pos: p, normals };
+}
+function shellSrc() {
+  if (shellSource) return shellSource;
+  if (!cache) return null;
+  // fins stick out radially from the body axis, so the fallback pushes away from it
+  shellSource = smoothSource(cache.rig.bodyGeo || cache.rig.fullGeo,
+    (x, y, z) => [x, (y - 1.0) * 0.25, z]);
   return shellSource;
 }
 
@@ -191,9 +198,27 @@ function shellSrc() {
 // SPLITTING triangles that straddle the plane (Sutherland-Hodgman), so garment hems
 // are clean straight lines instead of the source mesh's huge jagged triangles.
 // yMin/yMax are shorthand for the two horizontal clips.
-export function duckShellGeo({ yMin, yMax, inflate = 0.03, filter = null, clips = [] } = {}) {
+export function duckShellGeo(opts = {}) {
   const src = shellSrc();
-  if (!src) return null;
+  return src ? shellFromSource(src, opts) : null;
+}
+
+// Same shell cut, but sourced from ONE LEG's own geometry (side 0 = left, 1 = right).
+// The result is in duck space, so a mesh built from it must be parented to that leg's
+// hip pivot with the same -hip offset the leg mesh uses — then it swings with the leg.
+export function legShellGeo(side, opts = {}) {
+  if (!cache || !cache.rig.legLGeo) return null;
+  const i = side ? 1 : 0;
+  if (!legShellSources[i]) {
+    const hip = i ? cache.rig.hipR : cache.rig.hipL;
+    // thin webbed-foot rims: push radially away from the leg's own shin axis
+    legShellSources[i] = smoothSource(i ? cache.rig.legRGeo : cache.rig.legLGeo,
+      (x, y, z) => [x - hip.x, (y - 0.12) * 0.3, z - hip.z]);
+  }
+  return shellFromSource(legShellSources[i], opts);
+}
+
+function shellFromSource(src, { yMin, yMax, inflate = 0.03, filter = null, clips = [] } = {}) {
   const planes = clips.slice();
   if (yMin != null) planes.push({ n: [0, 1, 0], d: yMin });
   if (yMax != null) planes.push({ n: [0, -1, 0], d: -yMax });

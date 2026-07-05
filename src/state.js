@@ -41,6 +41,10 @@ export const CATALOG = {
     { id: 'bag_navy',    icon: '🎒', name: 'Navy Backpack',price: 0, slot: 'back',   starter: true },
     { id: 'bag_red',     icon: '🎒', name: 'Red Backpack', price: 0, slot: 'back',   starter: true },
     { id: 'bag_green',   icon: '🎒', name: 'Green Backpack',price: 0,slot: 'back',   starter: true },
+    // shoes — built per-foot around the measured webbed feet, swing with the walk
+    { id: 'sneaker_white', icon: '👟', name: 'White Sneakers', price: 60, slot: 'feet' },
+    { id: 'sneaker_red',   icon: '👟', name: 'Red Sneakers',   price: 65, slot: 'feet' },
+    { id: 'boots_brown',   icon: '🥾', name: 'Brown Boots',    price: 80, slot: 'feet' },
   ],
   decor: [
     { id: 'rug_blue',    icon: '🟦', name: 'Blue Rug',     price: 40,  slot: 'rug' },
@@ -112,7 +116,7 @@ function defaults() {
     creature: defaultCreature(), // custom "Birchling" appearance (used when petType === 'creature')
     coins: 100,
     owned: [],                 // item ids
-    equipped: { hat: null, face: null, neck: null, top: null, bottom: null, back: null },
+    equipped: { hat: null, face: null, neck: null, top: null, bottom: null, back: null, feet: null },
     room: { rug: null, poster: null, plant: false, lamp: false, beanbag: false, bed: 'bed_red', layout: null },
     furniture: { bed: 1, desk: 1, nightstand: 1, bookshelf: 1, rug: 1, plant: 1, lamp: 1, beanbag: 1 }, // owned counts
     stats: { focusMinutes: 0, pomodorosDone: 0, hoopsScored: 0, cupsSunk: 0, mealsEaten: 0, gamesWon: 0, daysActive: 1, fishCaught: 0 },
