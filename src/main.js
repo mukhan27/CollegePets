@@ -2,7 +2,7 @@
 // location switching, and the contextual interaction system.
 
 import * as THREE from 'three';
-import { state, save, furnitureCount, takeFromPantry } from './state.js';
+import { state, save, furnitureCount, takeFromPantry, findConsumable, toolUses, spendToolUse } from './state.js';
 import { initInput, input } from './input.js';
 import { createPet, setWearables } from './petFactory.js';
 import { preloadDuck } from './glbDuck.js';
@@ -23,8 +23,10 @@ import { createComposer } from './postfx.js';
 import { createBasketball } from './basketball.js';
 import { openTryOn, isTryOnOpen } from './tryon.js';
 import { initSystems, tickSystems, track, openCampus, applyNeeds, newDayCheck, toast, eat } from './systems.js';
-import { initInventory, closeInventory, renderInventory } from './inventory.js';
+import { initInventory, closeInventory, renderInventory, SPRAY_COLORS } from './inventory.js';
 import { FOOD_MODELS } from './foodModels.js';
+import { initDecals, tickDecals, placeDecalFromPlayer, spawnDecal, clearAll as clearAllDecals, decalCount, DECAL_LIFETIMES } from './decals.js';
+import { initEffects, tickEffects, spawnConfetti, spawnBubbles, spawnFireworks, spawnSprayPuff, effectCount } from './effects.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -152,6 +154,11 @@ for (const loc of Object.values(LOCATIONS)) {
   loc.def.root.visible = false;
   scene.add(loc.def.root);
 }
+
+// decals (spray/chalk) live inside each location's root so visibility follows
+// location switches for free; restore any still-alive saved decals now.
+initDecals((key) => (LOCATIONS[key] ? LOCATIONS[key].def.root : null));
+initEffects(scene);
 
 const basketball = createBasketball({ parent: campus.root, court: campus.court });
 let bballActive = false;
@@ -394,6 +401,57 @@ function eatFromInventory(id) {
   }
   eat(id, { fromPantry: false }); // needs/stats/toast (already removed from bag)
   renderInventory();
+}
+
+// ----------------------------------------------------------- fun tools
+// Location rules for consumables (inventory disables the Use button + shows
+// the hint; useTool re-checks in case state changed underneath the panel).
+function canUseTool(id) {
+  if (id === 'fireworks' && currentLoc !== 'campus') {
+    return { ok: false, hint: '🎆 Outdoors only — set these off on campus!' };
+  }
+  return { ok: true };
+}
+
+function useTool(id) {
+  if (!player || !currentLoc) return;
+  const item = findConsumable(id);
+  if (!item || toolUses(id) <= 0) return;
+  const chk = canUseTool(id);
+  if (!chk.ok) { toast(chk.hint, '🚫'); return; }
+  closeInventory(); // so the effect is visible immediately
+
+  const fwd = { x: Math.sin(player.rotation.y), z: Math.cos(player.rotation.y) };
+  const p = player.position;
+  switch (id) {
+    case 'spray_paint': {
+      const color = state.flags.sprayColor || SPRAY_COLORS[0];
+      const d = placeDecalFromPlayer(player, currentLoc, { kind: 'spray', color });
+      const at = d ? d.mesh.position : { x: p.x + fwd.x, y: p.y + 1, z: p.z + fwd.z };
+      spawnSprayPuff(at, color);
+      applyNeeds({ fun: 2 });
+      break;
+    }
+    case 'chalk':
+      placeDecalFromPlayer(player, currentLoc, { kind: 'chalk' });
+      applyNeeds({ fun: 2 });
+      break;
+    case 'confetti_popper':
+      spawnConfetti({ x: p.x, y: p.y + 1.4, z: p.z }, 32);
+      applyNeeds({ fun: 6 });
+      break;
+    case 'bubble_wand':
+      spawnBubbles({ x: p.x + fwd.x * 0.8, y: p.y + 1.2, z: p.z + fwd.z * 0.8 });
+      applyNeeds({ fun: 3 });
+      break;
+    case 'fireworks':
+      spawnFireworks({ x: p.x, y: p.y, z: p.z });
+      applyNeeds({ fun: 8 });
+      break;
+  }
+  const left = spendToolUse(id);
+  toast(left > 0 ? `${item.icon} ${left} use${left === 1 ? '' : 's'} left` : `${item.name} all used up!`, item.icon);
+  renderInventory(); // keep counts fresh for the next open
 }
 
 function doSleep() {
@@ -662,6 +720,8 @@ function frame(dt, t) {
   if (!player || !currentLoc) { fx.composer.render(dt); return; }
 
   tickSystems(dt); // needs decay, buff expiry, HUD bars
+  tickEffects(dt); // one-shot particles (confetti/bubbles/fireworks/spray puffs)
+  tickDecals();    // spray/chalk fade + expiry disposal
 
   const loc = LOCATIONS[currentLoc].def;
   const uiOpen = isModalOpen() || isTryOnOpen();
@@ -750,7 +810,7 @@ initInput();
 initChatUI();
 initMinigameUI();
 initDiningUI();
-initInventory(eatFromInventory);
+initInventory(eatFromInventory, { onUse: useTool, canUse: canUseTool });
 initFishingUI();
 bootOrCreate();
 renderer.setAnimationLoop(tick);
@@ -775,4 +835,7 @@ window.__cp = {
   resume: () => renderer.setAnimationLoop(tick),
   step: (dt = 0.05, n = 1) => { for (let i = 0; i < n; i++) frame(dt, performance.now() / 1000); },
   redress: () => setWearables(player, state.equipped),
+  useTool,
+  decals: { count: decalCount, spawn: spawnDecal, clearAll: clearAllDecals, LIFETIMES: DECAL_LIFETIMES, tick: tickDecals },
+  effects: { count: effectCount },
 };

@@ -46,6 +46,15 @@ export const CATALOG = {
     { id: 'sneaker_red',   icon: '👟', name: 'Red Sneakers',   price: 65, slot: 'feet' },
     { id: 'boots_brown',   icon: '🥾', name: 'Brown Boots',    price: 80, slot: 'feet' },
   ],
+  // Fun consumable tools — bought in packs of `uses`; stored in state.tools as
+  // a remaining-uses counter (buying again stacks/refills).
+  consumables: [
+    { id: 'spray_paint',     icon: '🎨', name: 'Spray Paint',     price: 45, uses: 10, blurb: 'Tag walls & paths with colorful splats' },
+    { id: 'chalk',           icon: '✏️', name: 'Chalk',           price: 25, uses: 5,  blurb: 'Doodle stars & hearts on the ground' },
+    { id: 'confetti_popper', icon: '🎉', name: 'Confetti Popper', price: 15, uses: 1,  blurb: 'One glorious burst of confetti' },
+    { id: 'bubble_wand',     icon: '🫧', name: 'Bubble Wand',     price: 20, uses: 10, blurb: 'Blow a drift of shimmering bubbles' },
+    { id: 'fireworks',       icon: '🎆', name: 'Fireworks',       price: 60, uses: 1,  blurb: 'Light up the campus sky (outdoors only)', campusOnly: true },
+  ],
   decor: [
     { id: 'rug_blue',    icon: '🟦', name: 'Blue Rug',     price: 40,  slot: 'rug' },
     { id: 'rug_pink',    icon: '🟪', name: 'Pink Rug',     price: 40,  slot: 'rug' },
@@ -109,6 +118,8 @@ export const FOOD_CATALOG = [
 
 export function findFood(id) { return FOOD_CATALOG.find(f => f.id === id) || null; }
 
+export function findConsumable(id) { return CATALOG.consumables.find(c => c.id === id) || null; }
+
 function defaults() {
   return {
     petType: null,
@@ -130,6 +141,8 @@ function defaults() {
     friends: {},               // student name -> friendship points
     achievements: {},          // unlocked achievement ids
     pantry: {},                // owned food/gift items: id -> count
+    tools: {},                 // fun consumables: id -> remaining uses
+    decals: [],                // live spray/chalk decals [{locKey,pos,normal,color,kind,createdAt,seed}]
     pet2: null,                // a second adopted pet (companion), future use
     buffs: {},                 // name -> expiry timestamp
     flags: {},                 // one-shot flags (e.g. bballHelp: seen the basketball tutorial)
@@ -140,10 +153,11 @@ function defaults() {
 function ensureShape(s) {
   const d = defaults();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['stats', 'needs', 'friends', 'pantry', 'buffs', 'room', 'furniture', 'equipped', 'creature', 'flags']) {
+  for (const k of ['stats', 'needs', 'friends', 'pantry', 'tools', 'buffs', 'room', 'furniture', 'equipped', 'creature', 'flags']) {
     if (typeof s[k] !== 'object' || s[k] === null) s[k] = d[k];
     else if (d[k] && !Array.isArray(d[k])) for (const f of Object.keys(d[k])) if (s[k][f] === undefined) s[k][f] = d[k][f];
   }
+  if (!Array.isArray(s.decals)) s.decals = [];
   delete s.needs.energy;       // energy meter retired
   delete s.quests; delete s.questStamp; delete s.daily; // quest system retired
   // legacy animal pets (cat/dog/bear/duck/hamster) retired — everyone's a duck now.
@@ -219,4 +233,25 @@ export function buyFood(id) {
   addToPantry(id, 1);
   refreshCoins();
   return true;
+}
+
+// fun consumable tools: buying adds a pack of uses (stacking refills)
+export function toolUses(id) { return (state.tools && state.tools[id]) || 0; }
+export function buyTool(id) {
+  const item = findConsumable(id);
+  if (!item || state.coins < item.price) return false;
+  state.coins -= item.price;
+  state.tools[id] = toolUses(id) + item.uses;
+  save();
+  refreshCoins();
+  return true;
+}
+// spend one charge; returns uses left (entry removed at 0), or -1 if none owned
+export function spendToolUse(id) {
+  if (toolUses(id) <= 0) return -1;
+  state.tools[id] -= 1;
+  const left = state.tools[id];
+  if (left <= 0) delete state.tools[id];
+  save();
+  return left;
 }

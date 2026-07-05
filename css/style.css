@@ -592,3 +592,21 @@ html, body {
 .inv-eat { margin-top: 4px; width: 100%; border: none; border-radius: 9px; padding: 6px;
   font-weight: 700; font-size: 12px; background: #ff9f43; color: #fff; cursor: pointer; }
 .inv-eat:active { transform: translateY(1px); }
+
+/* fun tools (spray / chalk / poppers / bubbles / fireworks) */
+.inv-section { font-weight: 800; color: #6b5b3e; font-size: 13px; margin: 10px 2px 2px; }
+.inv-section:first-child { margin-top: 0; }
+.fun-icon { font-size: 34px; line-height: 72px; height: 72px;
+  background: linear-gradient(160deg, #fbf6ec, #efe4d0); border-radius: 9px; }
+.inv-use { margin-top: 4px; width: 100%; border: none; border-radius: 9px; padding: 6px;
+  font-weight: 700; font-size: 12px; background: #7ec8e3; color: #fff; cursor: pointer; }
+.inv-use:active { transform: translateY(1px); }
+.inv-use:disabled { background: #d6cdbd; color: #8a8172; cursor: not-allowed; }
+.tool-hint { font-size: 10px; color: #b0553e; margin-top: 3px; line-height: 1.25; }
+.tool-chips { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
+.chip { width: 20px; height: 20px; min-width: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.15);
+  cursor: pointer; padding: 0; }
+.chip.sel { border-color: #2c3e50; box-shadow: 0 0 0 2px #fff inset; transform: scale(1.12); }
+.buy-emoji { display: flex; align-items: center; justify-content: center; font-size: 46px;
+  width: 84px; height: 84px; min-width: 84px; background: linear-gradient(160deg, #fbf6ec, #efe4d0);
+  border-radius: 12px; border: 2px solid #eadfcb; }

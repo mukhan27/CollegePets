@@ -1,6 +1,6 @@
 // DOM UI: modal dialogs, chat panel, shop, room decorator, pomodoro lock.
 
-import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, clothesSlot } from './state.js';
+import { state, save, addCoins, buy, owns, CATALOG, FURNITURE_CATALOG, furnitureCount, buyFurniture, clothesSlot, toolUses, buyTool } from './state.js';
 import { npcReply } from './npcs.js';
 import { wearablePreview, furniturePreview } from './itemPreview.js';
 import { track, applyNeeds, hasBuff, addFriendship } from './systems.js';
@@ -96,8 +96,17 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
     let html = `<div class="shop-tabs">
       <button class="shop-tab ${tab === 'clothes' ? 'active' : ''}" data-tab="clothes">👕 Clothes</button>
       <button class="shop-tab ${tab === 'furniture' ? 'active' : ''}" data-tab="furniture">🛋️ Furniture</button>
+      <button class="shop-tab ${tab === 'fun' ? 'active' : ''}" data-tab="fun">🎉 Fun</button>
     </div><div class="item-grid">`;
-    if (tab === 'clothes') {
+    if (tab === 'fun') {
+      for (const item of CATALOG.consumables) {
+        const uses = toolUses(item.id);
+        html += `<div class="item-card ${uses > 0 ? 'owned' : ''}" data-id="${item.id}">
+          <div class="item-icon fun-icon">${item.icon}</div><div class="item-name">${item.name}</div>
+          <div class="item-status">${uses > 0 ? `In bag: ${uses} use${uses === 1 ? '' : 's'} · ` : ''}${item.uses} use${item.uses === 1 ? '' : 's'}/pack</div>
+          <div class="item-price">🪙 ${item.price}</div></div>`;
+      }
+    } else if (tab === 'clothes') {
       for (const item of CATALOG.clothes) {
         const owned = owns(item.id);
         const equipped = state.equipped[clothesSlot(item.id)] === item.id;
@@ -135,15 +144,24 @@ export function openShop(onWearablesChanged, initialTab = 'clothes') {
 
   // Explicit purchase confirmation — clicking a card never silently spends coins.
   function confirmBuy(item, doBuy) {
+    const pic = item.preview
+      ? `<img class="item-img" src="${item.preview}" alt="">`
+      : `<div class="item-img buy-emoji">${item.icon}</div>`;
     showModal(`Buy ${item.name}?`,
-      `<div class="buy-confirm"><img class="item-img" src="${item.preview}" alt="">
-        <div class="buy-confirm-text"><b>${item.name}</b><br>Price: 🪙 ${item.price}<br>
+      `<div class="buy-confirm">${pic}
+        <div class="buy-confirm-text"><b>${item.name}</b><br>${item.blurb ? item.blurb + '<br>' : ''}Price: 🪙 ${item.price}${item.uses ? ` · ${item.uses} use${item.uses === 1 ? '' : 's'}` : ''}<br>
         <span class="buy-confirm-sub">You have 🪙 ${state.coins}</span></div></div>`,
       [{ label: `Buy 🪙 ${item.price}`, onClick: () => { doBuy(); track('spend', item.price); render(); } },
        { label: 'Cancel', primary: false, onClick: render }]);
   }
 
   function handleItem(id) {
+    if (tab === 'fun') {
+      const item = CATALOG.consumables.find(c => c.id === id);
+      if (state.coins < item.price) { notEnough(item.price); return; }
+      confirmBuy(item, () => buyTool(id));
+      return;
+    }
     if (tab === 'furniture') {
       const item = FURNITURE_CATALOG.find(f => f.id === id);
       if (state.coins < item.price) { notEnough(item.price); return; }
