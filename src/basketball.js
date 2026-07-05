@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { input } from './input.js';
-import { addCoins, state } from './state.js';
+import { addCoins, state, save } from './state.js';
 import { showModal } from './ui.js';
 import { track, applyNeeds } from './systems.js';
 import { toonMat } from './textures.js';
@@ -58,6 +58,22 @@ export function createBasketball({ parent, court }) {
     s.rotation.set(rx, ry, 0); ball.add(s);
   }
   group.add(ball);
+
+  // ---- painted 3-point arcs (purely visual) ----
+  // One ring segment per hoop at the exact mid/three boundary used by the shot
+  // sim (6.8u from the rim, see computeShot). Court-paint cream like the other
+  // painted lines from courtTexture(), slightly translucent so it reads as paint.
+  {
+    const arcMat = new THREE.MeshBasicMaterial({ color: 0xf5f0e0, transparent: true, opacity: 0.5 });
+    for (const [hoop, theta] of [[LEFT, -Math.PI / 2], [RIGHT, Math.PI / 2]]) {
+      // RingGeometry lies in xy; rotated flat, theta 0 points +x and theta π/2 points -z,
+      // so these half-rings open toward the court from each baseline.
+      const arc = new THREE.Mesh(new THREE.RingGeometry(6.72, 6.88, 64, 1, theta, Math.PI), arcMat);
+      arc.rotation.x = -Math.PI / 2;
+      arc.position.set(hoop.x, 0.06, hoop.z); // above the court plane (0.04) and line paint (0.05)
+      group.add(arc);
+    }
+  }
 
   // confetti pool (reused) for made baskets + dunks
   const CONF_COLORS = [0xff5fa2, 0x5fd0ff, 0xffd166, 0x6be0a0, 0xff8b3a, 0xb98bff, 0xffffff];
@@ -115,8 +131,11 @@ export function createBasketball({ parent, court }) {
   let scoreA = 0, scoreB = 0, makes = 0, timeLeft = 90;
   let msgT = 0, pStealCool = 0;
   let onExit = null, active = false;
+  let helpOpen = false, helpCard = 0;   // how-to overlay (pauses the clock while open)
+  let wasDunkReady = false;             // edge-detect for the DUNK READY flash
 
-  const setMsg = (t, d = 1.1) => { $('bball-msg').textContent = t; msgT = t ? d : 0; };
+  // cls: '' (neutral gold) | 'bb-good' | 'bb-ok' | 'bb-bad' — grades & results are colour-coded
+  const setMsg = (t, d = 1.1, cls = '') => { const el = $('bball-msg'); el.textContent = t; el.className = cls; msgT = t ? d : 0; };
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const teamHas = (team) => holder && holder.team === team && phase === 'play';
   const matesOf = (a) => (a.team === 'A' ? teamA : teamB).filter(x => x !== a);
@@ -132,11 +151,32 @@ export function createBasketball({ parent, court }) {
     dribbled = false; locked = false; stopT = 0;
     if (msg) setMsg(msg, 0.8);
   }
-  // ---- shot resolution (the heart of the skill) ----
-  function resolveShot(shooter, isDunk = false) {
+  // ======================= PURE SIMULATION (net-ready seam) =======================
+  // Everything between here and the END PURE SIMULATION mark is presentation-free
+  // game logic: the functions read the explicit agent/ball state they're handed and
+  // return plain data — no DOM reads/writes, no HUD, no messages. The HUD/message
+  // code further down only *renders* their outputs. A future PvP mode can drive
+  // these same rules from network inputs (remote agents' pos/rot/meter) and stay
+  // in lockstep with the local game.
+
+  // shot zone from live distance to the attacked hoop (matches computeShot's bands)
+  const shotZone = (d) => d < 2.0 ? 'rim' : d < 6.8 ? 'mid' : 'three';
+
+  // defensive pressure on a would-be shot: 1.0 = wide open, ~0.36 = smothered
+  function contestOf(shooter, def) {
+    const dd = dist(def.pos, shooter.pos);
+    const elevated = shooter.kind === 'human' && shooter.jy > 0.25; // shooting out of your own jump
+    let contest = dd > 3.2 ? 1.0 : dd > 2.2 ? 0.82 : dd > 1.4 ? 0.58 : 0.36;
+    if (def.jumping && dd < 2.2) contest *= 0.6;          // hand in the face
+    if (elevated) contest = Math.min(1, contest + 0.12);  // a jump shot rises over the closeout
+    return { contest, dd, elevated };
+  }
+
+  // the heart of the skill: make-% = base(type) × timing × contest × facing × movement
+  function computeShot(shooter, meterVal, isDunk) {
     const hoop = shooter.attack;
     const d = dist(shooter.pos, hoop);
-    const type = (isDunk || d < 2.0) ? 'rim' : d < 6.8 ? 'mid' : 'three';
+    const type = isDunk ? 'rim' : shotZone(d);
     const base = type === 'rim' ? (isDunk ? 0.93 : 0.7) : type === 'mid' ? 0.45 : 0.33;
     const points = type === 'three' ? 3 : 2;
     // release timing
@@ -144,19 +184,16 @@ export function createBasketball({ parent, court }) {
     if (shooter.kind === 'human') {
       if (isDunk) { timing = 0.95; label = 'DUNK'; } // dunks are about getting to the rim, not meter timing
       else {
-        const e = Math.abs(meter - SWEET);
+        const e = Math.abs(meterVal - SWEET);
         timing = e < 0.035 ? 1.0 : e < 0.09 ? 0.82 : e < 0.16 ? 0.5 : 0.2;
-        label = e < 0.035 ? 'GREEN!' : (meter > SWEET ? 'Late' : 'Early');
+        label = e < 0.035 ? 'GREEN!' : (meterVal > SWEET ? 'Late' : 'Early');
       }
     } else {
       timing = 0.66 + Math.random() * 0.34;
     }
     // contest from the nearest defender
-    const def = nearestOpp(shooter), dd = dist(def.pos, shooter.pos);
-    const elevated = shooter.kind === 'human' && shooter.jy > 0.25; // shooting out of your own jump
-    let contest = dd > 3.2 ? 1.0 : dd > 2.2 ? 0.82 : dd > 1.4 ? 0.58 : 0.36;
-    if (def.jumping && dd < 2.2) contest *= 0.6;          // hand in the face
-    if (elevated) contest = Math.min(1, contest + 0.12);  // a jump shot rises over the closeout
+    const def = nearestOpp(shooter);
+    const { contest, dd, elevated } = contestOf(shooter, def);
     // facing the rim (turnaround/fadeaway penalty) + shooting on the move
     const toH = Math.atan2(hoop.z - shooter.pos.z, hoop.x - shooter.pos.x);
     const face = clamp(1 - Math.abs(angDiff(rotOf(shooter), toH)) / 2.4, 0.55, 1);
@@ -168,18 +205,61 @@ export function createBasketball({ parent, court }) {
     let blocked = dd < 1.3 && def.jumping && timing < 0.55 && Math.random() < 0.55;
     if (blocked && elevated && Math.random() < 0.6) blocked = false;
     const make = !blocked && Math.random() < pct;
+    return { hoop, type, points, timing, label, contest, elevated, pct, blocked, make };
+  }
+
+  // would a ball at ballPos be picked off? (shared by live passes AND the lane telegraph)
+  function passIntercept(passer, ballPos) {
+    for (const o of oppsOf(passer)) {
+      if (dist(o.pos, ballPos) < 0.85 && Math.abs(o.jy + 1.2 - ballPos.y) < 1.4) return o;
+    }
+    return null;
+  }
+  // sample the straight pass lane from → to with the exact intercept corridor above
+  const _lanePt = new THREE.Vector3();
+  function laneCovered(from, to) {
+    const a = handPoint(from), b = handPoint(to), steps = 14;
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      _lanePt.set(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+      if (passIntercept(from, _lanePt)) return true;
+    }
+    return false;
+  }
+
+  // steal odds: close + squared-up to the handler; 0 when out of reach
+  function stealChance(stealer, handler, facing) {
+    const d = dist(stealer.pos, handler.pos);
+    if (d > 2.0) return 0;
+    const toBall = Math.atan2(handler.pos.z - stealer.pos.z, handler.pos.x - stealer.pos.x);
+    const face = clamp(1 - Math.abs(angDiff(facing, toBall)) / 1.5, 0, 1);
+    return clamp(0.5 * face * (1 - d / 2.4), 0.05, 0.62);
+  }
+
+  // scoring state transition (no DOM — the HUD reads scoreA/scoreB each frame)
+  function addPoints(team, points) {
+    if (team === 'A') { scoreA += points; makes++; } else scoreB += points;
+  }
+  // ===================== END PURE SIMULATION (net-ready seam) =====================
+
+  const gradeClass = (timing) => timing >= 1 ? 'bb-good' : timing >= 0.82 ? 'bb-ok' : 'bb-bad';
+
+  // ---- shot resolution: run the pure sim, then present the outcome ----
+  function resolveShot(shooter, isDunk = false) {
+    const out = computeShot(shooter, meter, isDunk);
+    const { hoop, points } = out;
 
     const from = handPoint(shooter);
     holder = null; charging = false; $('bball-meter').classList.add('hidden'); dribbled = false; locked = false;
-    if (blocked) { setMsg('BLOCKED! 🚫', 1.1); knockLoose(from); return; }
+    if (out.blocked) { setMsg('BLOCKED! 🚫', 1.1, 'bb-bad'); knockLoose(from); return; }
     if (isDunk && shooter.kind === 'human') {  // big slam with a cinematic zoom
       dunkT = 1.3; dunkFocus.set(hoop.x, hoop.y - 0.2, hoop.z);
-      if (make) { startDunk(shooter, hoop, points); return; }
-      setMsg('Rejected at the rim!', 0.9); phase = 'shot'; knockLoose(from); return;
+      if (out.make) { startDunk(shooter, hoop, points); return; }
+      setMsg('Rejected — contested at the rim!', 0.9, 'bb-bad'); phase = 'shot'; knockLoose(from); return;
     }
     phase = 'shot';
-    shot = { team: shooter.team, hoop, points, willScore: make, type };
-    const target = make
+    shot = { team: shooter.team, hoop, points, willScore: out.make, type: out.type };
+    const target = out.make
       ? new THREE.Vector3(hoop.x, hoop.y, hoop.z)
       : new THREE.Vector3(hoop.x + (Math.random() - 0.5) * 1.2, hoop.y + 0.05, hoop.z + (Math.random() - 0.5) * 1.2);
     // pick a launch angle that always reaches the rim (steep for close layups,
@@ -188,7 +268,10 @@ export function createBasketball({ parent, court }) {
     const ang = clamp(Math.atan2(dv + Math.hypot(dh, dv), dh) * 180 / Math.PI + 3, 40, 84);
     const v = launchVel(from, target, ang) || launchVel(from, target, 60) || new THREE.Vector3(target.x - from.x, 9, target.z - from.z);
     bs.pos.copy(from); bs.vel.copy(v);
-    if (shooter.kind === 'human') setMsg(`${label}${make ? ' ✓' : ''}${contest < 0.6 ? ' · contested' : ''}`, 0.9);
+    // release feedback = the timing grade ONLY (the make/miss result lands as its
+    // own message when the ball resolves at the rim). '· smothered' matches the
+    // red live badge threshold so the two never disagree.
+    if (shooter.kind === 'human') setMsg(`${out.label}${out.contest < 0.58 ? ' · smothered' : ''}`, 0.9, gradeClass(out.timing));
   }
 
   // ---- dunk slam animation: rise to the rim, hammer it down, confetti ----
@@ -215,8 +298,8 @@ export function createBasketball({ parent, court }) {
     } else if (!a.scored) {
       a.scored = true;                                       // SLAM
       ball.position.set(a.rim.x, a.rim.y, a.rim.z);
-      if (a.team === 'A') { scoreA += a.points; makes++; } else scoreB += a.points;
-      setMsg('💥 SLAM DUNK! +' + a.points, 1.5);
+      addPoints(a.team, a.points);
+      setMsg('💥 SLAM DUNK! +' + a.points, 1.5, 'bb-good');
       burstConfetti({ x: a.rim.x, y: a.rim.y + 0.25, z: a.rim.z }, 32);
     } else {
       ball.position.set(a.rim.x, a.rim.y - down * 2.2, a.rim.z); // through the net
@@ -243,13 +326,22 @@ export function createBasketball({ parent, court }) {
       if (bs.vel.y < 0 && prevY >= h.y && bs.pos.y < h.y) {
         const dxz = (bs.pos.x - h.x) ** 2 + (bs.pos.z - h.z) ** 2;
         if (shot.willScore && dxz < 0.5 * 0.5) { onScore(); return; }
-        // brick off the rim → live rebound
+        // brick off the rim → live rebound (the explicit MISS result message —
+        // the release message only ever showed the timing grade)
+        const ours = shot.team === 'A';
         bs.vel.x = (bs.pos.x - h.x) * 2 + (Math.random() - 0.5) * 2.5;
         bs.vel.z = (bs.pos.z - h.z) * 2 + (Math.random() - 0.5) * 2.5;
-        bs.vel.y = 3.0; phase = 'loose'; looseT = 0; shot = null; setMsg('Off the rim!', 0.7);
+        bs.vel.y = 3.0; phase = 'loose'; looseT = 0; shot = null;
+        setMsg(ours ? 'MISS — off the rim!' : 'Off the rim!', 0.8, 'bb-bad');
       }
     }
-    if (bs.pos.y <= 0.24) { bs.pos.y = 0.24; bs.vel.y = Math.abs(bs.vel.y) * 0.5; bs.vel.x *= 0.7; bs.vel.z *= 0.7; if (phase === 'shot') { phase = 'loose'; looseT = 0; shot = null; } }
+    if (bs.pos.y <= 0.24) {
+      bs.pos.y = 0.24; bs.vel.y = Math.abs(bs.vel.y) * 0.5; bs.vel.x *= 0.7; bs.vel.z *= 0.7;
+      if (phase === 'shot') { // never touched iron: an airball is still an explicit miss
+        if (shot) setMsg(shot.team === 'A' ? 'MISS — airball!' : 'Airball!', 0.8, 'bb-bad');
+        phase = 'loose'; looseT = 0; shot = null;
+      }
+    }
     if (bs.pos.x < B.minX || bs.pos.x > B.maxX) { bs.vel.x *= -0.6; bs.pos.x = clamp(bs.pos.x, B.minX, B.maxX); }
     if (bs.pos.z < B.minZ || bs.pos.z > B.maxZ) { bs.vel.z *= -0.6; bs.pos.z = clamp(bs.pos.z, B.minZ, B.maxZ); }
     ball.position.copy(bs.pos); ball.rotation.x -= dt * 7; ball.rotation.y += dt * 3; // backspin
@@ -268,13 +360,15 @@ export function createBasketball({ parent, court }) {
     const step = Math.min(d, 17 * dt);
     if (d > 0.001) { bs.pos.x += dx / d * step; bs.pos.y += dy / d * step; bs.pos.z += dz / d * step; }
     ball.position.copy(bs.pos);
-    for (const o of oppsOf(passData.from)) if (dist(o.pos, bs.pos) < 0.85 && Math.abs(o.jy + 1.2 - bs.pos.y) < 1.4) { giveBall(o, 'Intercepted!'); return; }
+    const thief = passIntercept(passData.from, bs.pos); // same corridor the Pass-button telegraph samples
+    if (thief) { giveBall(thief, 'Intercepted!'); return; }
     if (d < 0.4) giveBall(passData.to);
   }
   function onScore() {
     const s = shot;
-    if (s.team === 'A') { scoreA += s.points; makes++; setMsg('SWISH! +' + s.points, 1.4); }
-    else { scoreB += s.points; setMsg('They score +' + s.points, 1.2); }
+    addPoints(s.team, s.points);
+    if (s.team === 'A') setMsg('SWISH! +' + s.points, 1.4, 'bb-good');
+    else setMsg('They score +' + s.points, 1.2, 'bb-bad');
     burstConfetti({ x: s.hoop.x, y: s.hoop.y + 0.25, z: s.hoop.z }, 22);
     const a = (s.team === 'A' ? teamB : teamA).reduce((b, c) => dist(c.pos, s.hoop) < dist(b.pos, s.hoop) ? c : b);
     shot = null; giveBall(a); // conceding team inbounds — nobody teleports
@@ -380,7 +474,7 @@ export function createBasketball({ parent, court }) {
     a.stealCd -= dt;
     if (man === holder && dist(a.pos, man.pos) < 1.55) {
       if (man.shootGather > 0 && !a.jumping && Math.random() < 0.10) { a.jumping = true; a.vy = 6.0; } // contest
-      if (dist(a.pos, man.pos) < 1.25 && a.stealCd <= 0) { a.stealCd = 1.3; if (Math.random() < 0.18) giveBall(a, a.team === 'A' ? 'Steal!' : 'They steal'); }
+      if (dist(a.pos, man.pos) < 1.25 && a.stealCd <= 0) { a.stealCd = 1.0; if (Math.random() < 0.18) giveBall(a, a.team === 'A' ? 'Steal!' : 'They steal'); } // 1.0s ≈ parity with the player's 0.8s
     }
   }
 
@@ -412,21 +506,25 @@ export function createBasketball({ parent, court }) {
   }
   function playerSteal() {
     if (phase !== 'play' || !holder || holder.team !== 'B' || pStealCool > 0) return;
-    pStealCool = 0.7;
-    const bh = holder, d = dist(A0.pos, bh.pos);
-    if (d > 2.0) { setMsg('Too far to steal', 0.6); return; }
-    const toBall = Math.atan2(bh.pos.z - A0.pos.z, bh.pos.x - A0.pos.x);
-    const face = clamp(1 - Math.abs(angDiff(pl.rotation.y, toBall)) / 1.5, 0, 1);
-    if (Math.random() < clamp(0.5 * face * (1 - d / 2.4), 0.05, 0.62)) giveBall(A0, 'STEAL! 🤚');
+    pStealCool = 0.8; // near-parity with the AI's 1.0s
+    const chance = stealChance(A0, holder, pl.rotation.y);
+    if (chance === 0) { setMsg('Too far to steal', 0.6); return; }
+    if (Math.random() < chance) giveBall(A0, 'STEAL! 🤚');
     else setMsg('Missed the steal', 0.6);
   }
 
   // ---- main update ----
   function update(dt, t) {
-    if (phase === 'over') return;
+    if (phase === 'over' || helpOpen) return; // the how-to overlay freezes the game & clock
     timeLeft -= dt; if (timeLeft <= 0) return endGame();
     if (charging && !(phase === 'play' && holder === A0)) { charging = false; $('bball-meter').classList.add('hidden'); }
-    if (charging) { const rate = airborne() ? 2.7 : 1.3; meter += meterDir * dt * rate; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; } $('bball-fill').style.width = (meter * 100) + '%'; }
+    if (charging) {
+      const air = airborne(), rate = air ? 2.7 : 1.3; // airborne = 2× meter — cue it in blue
+      meter += meterDir * dt * rate; if (meter > 1) { meter = 1; meterDir = -1; } if (meter < 0) { meter = 0; meterDir = 1; }
+      $('bball-fill').style.width = (meter * 100) + '%';
+      $('bball-fill').classList.toggle('bb-air', air);
+      $('bball-fast').classList.toggle('hidden', !air);
+    }
     if (dunkT > 0) dunkT -= dt;
     if (pStealCool > 0) pStealCool -= dt;
 
@@ -445,6 +543,30 @@ export function createBasketball({ parent, court }) {
     $('bball-pass').style.display = haveBall ? '' : 'none';
     $('bball-steal').style.display = defending ? '' : 'none';
     $('bball-block').style.display = defending ? '' : 'none';
+    // ---- live shot context while you hold the ball (renders pure-sim readouts) ----
+    if (haveBall) {
+      const d = dist(A0.pos, RIGHT);
+      const zone = shotZone(d);
+      $('bball-zone').textContent = zone === 'rim' ? 'LAYUP' : zone === 'mid' ? 'MID' : '3PT';
+      const { contest } = contestOf(A0, nearestOpp(A0));
+      const defEl = $('bball-def');
+      defEl.textContent = contest >= 0.82 ? 'OPEN' : contest >= 0.58 ? 'GUARDED' : 'SMOTHERED';
+      defEl.className = 'bb-badge ' + (contest >= 0.82 ? 'bb-open' : contest >= 0.58 ? 'bb-guard' : 'bb-smother');
+      $('bball-ctx').classList.remove('hidden');
+      // pass-lane telegraph: same corridor math simPass uses, so 'Intercepted!' is predictable
+      const covered = laneCovered(A0, A1);
+      $('bball-pass').classList.toggle('bb-danger', covered);
+      $('bball-lane').classList.toggle('hidden', !covered);
+      // entering dunk range mid-air → one-shot DUNK READY flash
+      const dunkReady = airborne() && d < 2.6;
+      if (dunkReady && !wasDunkReady) setMsg('DUNK READY!', 0.6, 'bb-good');
+      wasDunkReady = dunkReady;
+    } else {
+      $('bball-ctx').classList.add('hidden');
+      $('bball-lane').classList.add('hidden');
+      $('bball-pass').classList.remove('bb-danger');
+      wasDunkReady = false;
+    }
     $('bball-score').textContent = `You ${scoreA} · Opp ${scoreB}`;
     $('bball-time').textContent = '⏱ ' + Math.max(0, Math.ceil(timeLeft));
     if (msgT > 0) { msgT -= dt; if (msgT <= 0) setMsg(''); }
@@ -477,6 +599,19 @@ export function createBasketball({ parent, court }) {
   press('bball-block', onBlock);
   $('bball-quit').addEventListener('click', () => endGame());
 
+  // ---- how-to overlay: 3 cards, pauses the game clock while open ----
+  function renderHelp() {
+    document.querySelectorAll('#bball-help .bb-card').forEach((c, i) => c.classList.toggle('hidden', i !== helpCard));
+    document.querySelectorAll('#bball-help .bb-dots i').forEach((d, i) => d.classList.toggle('on', i === helpCard));
+    $('bball-help-back').style.visibility = helpCard === 0 ? 'hidden' : 'visible';
+    $('bball-help-next').textContent = helpCard === 2 ? "Let's play!" : 'Next';
+  }
+  function openHelp() { helpOpen = true; helpCard = 0; renderHelp(); $('bball-help').classList.remove('hidden'); }
+  function closeHelp() { helpOpen = false; $('bball-help').classList.add('hidden'); }
+  $('bball-helpbtn').addEventListener('click', openHelp);
+  $('bball-help-back').addEventListener('click', () => { if (helpCard > 0) { helpCard--; renderHelp(); } });
+  $('bball-help-next').addEventListener('click', () => { if (helpCard < 2) { helpCard++; renderHelp(); } else closeHelp(); });
+
   function enter(player, cb) {
     pl = player; onExit = cb; active = true;
     A0.mesh = pl; A0.pos = pl.position;
@@ -492,10 +627,16 @@ export function createBasketball({ parent, court }) {
     input.camYaw = -Math.PI / 2; input.camPitch = 0;
     giveBall(A0, 'Your ball — go!');
     $('bball-meter').classList.add('hidden');
+    // prime the scoreboard right away (update() may not run yet if the how-to opens)
+    $('bball-score').textContent = `You ${scoreA} · Opp ${scoreB}`;
+    $('bball-time').textContent = '⏱ ' + Math.ceil(timeLeft);
     $('bball-hud').classList.remove('hidden');
     $('hud').classList.add('playing-bball');
+    // first court entry ever → walk through the how-to (reopen any time with ?)
+    closeHelp();
+    if (!(state.flags && state.flags.bballHelp)) { state.flags = { ...(state.flags || {}), bballHelp: true }; save(); openHelp(); }
   }
-  function exit() { active = false; group.visible = false; dunkT = 0; dunkAnim = null; if (pl) { pl.position.y = 0; pl.rotation.x = 0; } input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
+  function exit() { active = false; group.visible = false; dunkT = 0; dunkAnim = null; closeHelp(); if (pl) { pl.position.y = 0; pl.rotation.x = 0; } input.camYaw = 0; $('bball-hud').classList.add('hidden'); $('hud').classList.remove('playing-bball'); }
 
   // camera hint for main.js: during a dunk, returns a 0→1→0 zoom strength + focus
   function dunkCam() {
@@ -504,5 +645,6 @@ export function createBasketball({ parent, court }) {
   }
 
   return { enter, exit, update, group, dunkCam, isActive: () => active,
-    setEnemiesPaused: (v) => { enemiesPaused = v; } };
+    setEnemiesPaused: (v) => { enemiesPaused = v; },
+    agents };            // playtest/debug access (__cp) — A0..B1 live sim state
 }

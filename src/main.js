@@ -764,6 +764,7 @@ window.__cp = {
   warp: (x, z) => { if (player) player.position.set(x, player.position.y, z); },
   interact: (it) => runInteract(it),
   bballEnemies: (on = true) => basketball.setEnemiesPaused(!on), // __cp.bballEnemies(false) freezes them
+  bballAgents: () => basketball.agents,                          // [A0(human), A1, B0, B1] for scripted playtests
 
   state,
   LOCATIONS,

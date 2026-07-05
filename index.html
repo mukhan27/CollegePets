@@ -215,16 +215,51 @@
   <div id="bball-top">
     <span id="bball-score">You 0 · Opp 0</span>
     <span id="bball-time">⏱ 60</span>
+    <button id="bball-helpbtn" class="bb-btn" title="How to play">?</button>
     <button id="bball-quit" class="bb-btn">Quit</button>
   </div>
   <div id="bball-msg"></div>
-  <div id="bball-meter" class="hidden"><div id="bball-sweet"></div><div id="bball-fill"></div></div>
+  <!-- live shot context while you hold the ball: zone + defensive pressure -->
+  <div id="bball-ctx" class="hidden">
+    <span id="bball-zone" class="bb-badge">MID</span>
+    <span id="bball-def" class="bb-badge bb-open">OPEN</span>
+  </div>
+  <div id="bball-meter" class="hidden"><div id="bball-sweet"></div><div id="bball-fill"></div><div id="bball-fast" class="hidden">⚡ FAST</div></div>
   <div id="bball-actions">
+    <div id="bball-lane" class="hidden">⚠ lane covered</div>
     <button id="bball-pass" class="bb-btn">Pass</button>
     <button id="bball-steal" class="bb-btn">Steal</button>
     <button id="bball-block" class="bb-btn">Block</button>
     <button id="bball-jump" class="bb-btn">Jump</button>
     <button id="bball-shoot" class="bb-btn bb-shoot">Shoot</button>
+  </div>
+</div>
+
+<!-- basketball how-to: 3 cards, shown on first court entry and via the ? button (game clock pauses) -->
+<div id="bball-help" class="overlay hidden">
+  <div class="panel bb-help-panel">
+    <h2>🏀 How to Hoop</h2>
+    <div class="bb-card" data-card="0">
+      <p><b>Move</b> with the joystick. <b>Hold Shoot</b> to raise the meter, release inside the <b>green band</b> for a <b class="bb-t-good">GREEN!</b> release — the best shot you can take.</p>
+      <div class="bb-demo-meter"><div class="bb-demo-sweet"></div><div class="bb-demo-fill"></div><div class="bb-demo-mark"></div></div>
+      <p class="bb-help-sub"><b class="bb-t-ok">Early / Late</b> releases still drop sometimes; way off almost never. <b>Jump first</b> and the meter turns <b class="bb-t-air">blue &amp; ⚡ fast</b> — harder to time, but a jump shot rises over defenders.</p>
+    </div>
+    <div class="bb-card hidden" data-card="1">
+      <p><b>Where you shoot from matters.</b> While you hold the ball, badges above the meter read the floor live:</p>
+      <p class="bb-help-badges"><span class="bb-badge">LAYUP</span> at the rim · <span class="bb-badge">MID</span> inside the arc · <span class="bb-badge">3PT</span> beyond the <b>painted 3-point line</b> — worth 3</p>
+      <p class="bb-help-badges"><span class="bb-badge bb-open">OPEN</span> <span class="bb-badge bb-guard">GUARDED</span> <span class="bb-badge bb-smother">SMOTHERED</span> — defensive pressure. Smothered shots rarely fall; move or pass.</p>
+      <p class="bb-help-sub"><b>Dunk:</b> jump right at the rim with the ball and tap Shoot when <b class="bb-t-good">DUNK READY!</b> flashes — no meter needed.</p>
+    </div>
+    <div class="bb-card hidden" data-card="2">
+      <p><b>On defense:</b> get close and face the ball-handler, then <b>Steal</b>. <b>Block / Jump</b> puts a hand up — a jumping defender wrecks badly-timed shots.</p>
+      <p><b>Passing:</b> if a defender sits in the passing lane, the Pass button turns <b class="bb-t-bad">red — ⚠ lane covered</b>. Passes thrown through a covered lane get intercepted.</p>
+      <p class="bb-help-sub"><b>Dribble-lock:</b> stop moving after a dribble and you pick the ball up — from there you can only shoot, jump or pass.</p>
+    </div>
+    <div class="bb-help-nav">
+      <span class="bb-dots"><i class="on"></i><i></i><i></i></span>
+      <button id="bball-help-back" class="btn">Back</button>
+      <button id="bball-help-next" class="btn btn-primary">Next</button>
+    </div>
   </div>
 </div>
 

@@ -274,6 +274,10 @@ html, body {
   font-size: clamp(28px, 7vw, 54px); font-weight: 800; color: #ffd166;
   text-shadow: 0 3px 16px rgba(0,0,0,.6); pointer-events: none;
 }
+/* shot-grade / result colouring for the big centre message */
+#bball-msg.bb-good { color: #6be0a0; }
+#bball-msg.bb-ok   { color: #ffd166; }
+#bball-msg.bb-bad  { color: #ff8a7a; }
 #bball-meter {
   position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%);
   width: min(60vw, 320px); height: 18px; border-radius: 999px; pointer-events: none;
@@ -281,7 +285,33 @@ html, body {
 }
 #bball-sweet { position: absolute; left: 74%; width: 14%; top: 0; bottom: 0; background: rgba(107,224,160,.55); }
 #bball-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #ffd166; }
+#bball-fill.bb-air { background: #5fd0ff; }               /* airborne: meter runs 2× — cue it */
+#bball-fast {
+  position: absolute; inset: 0; text-align: center; line-height: 15px;
+  font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #eafaff;
+  text-shadow: 0 1px 3px rgba(0,20,40,.85); pointer-events: none;
+}
+/* live shot context (zone + defensive pressure) just above the meter */
+#bball-ctx {
+  position: absolute; left: 50%; bottom: 156px; transform: translateX(-50%);
+  display: flex; gap: 8px; pointer-events: none;
+}
+.bb-badge {
+  padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 800;
+  letter-spacing: .05em; color: #fff; background: rgba(12,20,30,.65);
+  text-shadow: 0 1px 3px rgba(0,0,0,.5); white-space: nowrap;
+}
+.bb-badge.bb-open    { background: rgba(46,160,90,.9); }
+.bb-badge.bb-guard   { background: rgba(222,152,32,.92); }
+.bb-badge.bb-smother { background: rgba(214,69,65,.92); }
 #bball-actions { position: absolute; right: 22px; bottom: 28px; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
+/* pass-lane telegraph: hint text + red Pass button while the lane is covered */
+#bball-lane {
+  font-size: 12px; font-weight: 800; color: #ffc4bb; text-align: right;
+  background: rgba(40,14,10,.78); border-radius: 999px; padding: 4px 12px;
+  pointer-events: none; margin-bottom: -6px; white-space: nowrap;
+}
+#bball-pass.bb-danger { background: rgba(214,69,65,.62); border-color: rgba(255,190,180,.85); }
 .bb-btn {
   border: 1.5px solid rgba(255,255,255,.5); border-radius: 18px; padding: 16px 22px; min-width: 100px;
   font-size: 16px; font-weight: 700; text-align: center; color: #fff; cursor: pointer;
@@ -293,7 +323,34 @@ html, body {
 .bb-shoot { background: rgba(224,122,51,.6); border-color: rgba(255,235,210,.6); font-size: 20px; padding: 22px 30px; min-width: 124px; }
 .bb-shoot:active { background: rgba(224,122,51,.78); }
 #bball-top .bb-btn { padding: 6px 14px; min-width: 0; font-size: 13px; color: #20303f; background: rgba(255,255,255,.85); border-color: transparent; }
+#bball-helpbtn { font-weight: 900; }
 #hud.playing-bball #interact-btn, #hud.playing-bball #edit-room-btn { display: none; }
+
+/* basketball how-to overlay (3 cards) — sits above the bball HUD, pauses the clock */
+#bball-help { z-index: 60; }
+.bb-help-panel { width: min(540px, 94vw); }
+.bb-card p { color: #44505e; font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
+.bb-card .bb-help-sub { font-size: 13.5px; color: #5d6b7a; }
+.bb-help-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.bb-help-badges .bb-badge { background: #3a4a5a; text-shadow: none; }
+.bb-help-badges .bb-badge.bb-open { background: #2ea05a; }
+.bb-help-badges .bb-badge.bb-guard { background: #de9820; }
+.bb-help-badges .bb-badge.bb-smother { background: #d64541; }
+.bb-t-good { color: #1e9e60; }
+.bb-t-ok   { color: #d99a1c; }
+.bb-t-bad  { color: #d64541; }
+.bb-t-air  { color: #1e8ec2; }
+.bb-demo-meter {
+  position: relative; height: 20px; border-radius: 999px; margin: 12px 2px;
+  background: #22303c; border: 2px solid #b0c4d4; overflow: hidden;
+}
+.bb-demo-sweet { position: absolute; left: 74%; width: 14%; top: 0; bottom: 0; background: rgba(107,224,160,.6); }
+.bb-demo-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 81%; background: #ffd166; }
+.bb-demo-mark { position: absolute; left: 81%; top: -2px; bottom: -2px; width: 2px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,.5); }
+.bb-help-nav { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.bb-dots { flex: 1; display: flex; gap: 6px; }
+.bb-dots i { width: 9px; height: 9px; border-radius: 50%; background: #c9d5df; }
+.bb-dots i.on { background: #ff9f43; }
 
 /* ---------- First-person table dining ---------- */
 #table-hud { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
