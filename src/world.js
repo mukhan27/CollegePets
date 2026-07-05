@@ -282,6 +282,290 @@ function makeBuilding(b) {
   return { group: g, doorWorld, collider };
 }
 
+// ------------------------------------------------- campus-family exterior kit
+// Shared architectural language matching the library (the quality reference):
+// stone plinths, warm ivory trim, arched windows, low-pitched shingle gables.
+const FAM = { stone: 0xccbd9c, ivory: 0xf2ece0, lanternMetal: 0x3e4a5c };
+
+// small local canvas texture helper (textures.js is read-only; signage &
+// clock faces are baked here). All canvases stay well under 1024px.
+function localTex(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+// an arched window in the library's style (faces +z; ry rotates onto side walls)
+function addArchWindow(g, trimMat, glassMat, px, py, pz, ry, ww = 2.6, wh = 4.2) {
+  const grp = new THREE.Group();
+  grp.add(mesh(new THREE.BoxGeometry(ww + 0.5, wh + 0.4, 0.18), trimMat, 0, 0, 0, false));
+  grp.add(mesh(new THREE.BoxGeometry(ww, wh, 0.24), glassMat, 0, 0, 0.05, false));
+  const top = new THREE.Mesh(new THREE.CircleGeometry(ww / 2, 16, 0, Math.PI), glassMat);
+  top.position.set(0, wh / 2, 0.06); grp.add(top);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(ww / 2, ww / 2 + 0.26, 16, 1, 0, Math.PI), trimMat);
+  ring.position.set(0, wh / 2, 0.05); grp.add(ring);
+  grp.add(mesh(new THREE.BoxGeometry(0.12, wh, 0.26), trimMat, 0, 0, 0.07, false));
+  grp.add(mesh(new THREE.BoxGeometry(ww, 0.12, 0.26), trimMat, 0, 0, 0.07, false));
+  grp.add(mesh(new THREE.BoxGeometry(ww + 0.6, 0.18, 0.34), trimMat, 0, -wh / 2 - 0.16, 0.04, false)); // sill
+  grp.position.set(px, py, pz); grp.rotation.y = ry; g.add(grp);
+}
+
+// warm wall lantern + baked glow sprite (no real light)
+let lanternGlow = null;
+function addWallLantern(g, px, py, pz, ry = 0) {
+  lanternGlow = lanternGlow || glowTexture();
+  const grp = new THREE.Group();
+  grp.add(mesh(new THREE.BoxGeometry(0.1, 0.4, 0.26), toonMat(FAM.lanternMetal), 0, 0.22, -0.14, false));
+  grp.add(mesh(new THREE.BoxGeometry(0.3, 0.44, 0.3),
+    new THREE.MeshToonMaterial({ color: 0xfff2c0, emissive: 0xc8a850 }), 0, -0.1, 0, false));
+  grp.add(mesh(new THREE.ConeGeometry(0.29, 0.24, 4), toonMat(FAM.lanternMetal), 0, 0.22, 0, false));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: lanternGlow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  glow.scale.setScalar(1.9); glow.position.set(0, -0.08, 0.35); grp.add(glow);
+  grp.position.set(px, py, pz); grp.rotation.y = ry; g.add(grp);
+}
+
+// the standard cottage door from makeBuilding — geometry kept byte-identical so
+// door positions/sizes on campus do not move.
+function classicDoor(d) {
+  const doorG = new THREE.Group();
+  doorG.add(mesh(new THREE.BoxGeometry(2.7, 3.6, 0.14), toonMat(P.white), 0, 1.8, 0, false));
+  doorG.add(mesh(new THREE.BoxGeometry(2.2, 3.2, 0.2), toonMat(P.woodDark), 0, 1.6, 0.02, false));
+  doorG.add(mesh(new THREE.SphereGeometry(0.09, 8, 6), toonMat(0xf2c14e), 0.7, 1.5, 0.16, false));
+  doorG.add(mesh(new THREE.BoxGeometry(3.2, 0.24, 1.5), toonMat(P.sandDark), 0, 0.12, 0.75, false));
+  doorG.position.set(0, 0, d / 2 + 0.04);
+  return doorG;
+}
+
+function clockFaceTexture() {
+  return localTex(128, 128, (ctx, W, H) => {
+    const cx = W / 2, cy = H / 2;
+    ctx.fillStyle = '#f6efdd';
+    ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#5a4a34'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(cx, cy, 57, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#5a4a34';
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6;
+      ctx.save(); ctx.translate(cx + Math.sin(a) * 46, cy - Math.cos(a) * 46);
+      ctx.beginPath(); ctx.arc(0, 0, i % 3 === 0 ? 4 : 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.strokeStyle = '#3c3122'; ctx.lineCap = 'round';
+    ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(cx, cy); // hour hand → 10 o'clock
+    ctx.lineTo(cx + Math.sin(-Math.PI / 3) * 26, cy - Math.cos(-Math.PI / 3) * 26); ctx.stroke();
+    ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(cx, cy); // minute hand → 2
+    ctx.lineTo(cx + Math.sin(Math.PI / 3) * 40, cy - Math.cos(Math.PI / 3) * 40); ctx.stroke();
+    ctx.fillStyle = '#c99a3b'; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+// climbing ivy — one InstancedMesh of flattened leaf-blob spheres per building
+function addIvy(g, patches, seed = 1) {
+  let total = 0;
+  for (const p of patches) total += p.n;
+  const im = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.3, 7, 5), toonMat(0xffffff, { noCache: true }), total);
+  im.castShadow = false;
+  let s = (seed * 2654435761) >>> 0;
+  const rand = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  const dummy = new THREE.Object3D();
+  const col = new THREE.Color();
+  const leafCols = [P.leaf1, P.leaf2, P.leaf3];
+  let i = 0;
+  for (const p of patches) {
+    for (let k = 0; k < p.n; k++, i++) {
+      // taper the patch: denser + wider at the bottom, thinning as it climbs
+      const t = Math.pow(rand(), 1.6); // 0 bottom … 1 top
+      const lx = (rand() - 0.5) * p.w * (1 - t * 0.55);
+      const ly = p.h * t + rand() * 0.4;
+      dummy.position.set(p.x + (p.ry ? 0 : lx), p.y + ly, p.z + (p.ry ? lx : 0));
+      dummy.rotation.set(rand() * 0.6, rand() * Math.PI, rand() * 0.6);
+      const sc = 0.65 + rand() * 0.75;
+      // flatten against the wall (z for front walls, x for side walls)
+      dummy.scale.set(p.ry ? sc * 0.4 : sc, sc * 0.85, p.ry ? sc : sc * 0.4);
+      dummy.updateMatrix();
+      im.setMatrixAt(i, dummy.matrix);
+      im.setColorAt(i, col.setHex(leafCols[(k + seed) % 3]).offsetHSL(0, 0, (rand() - 0.5) * 0.1));
+    }
+  }
+  g.add(im);
+}
+
+// A collegiate academic hall: stone base course + brick above, shallow pilasters
+// between tall arched windows, an entablature + pediment entrance aedicule with
+// a clock in the gable zone, and wide shallow entrance steps.
+function makeLectureHallExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const stoneMat = toonMat(FAM.stone);
+  const trimMat = toonMat(FAM.ivory);
+  const glassMat = new THREE.MeshToonMaterial({ color: P.glass, emissive: 0x2a4a55 });
+  const brickTex = brickTexture();
+  brickTex.repeat.set(Math.max(1, w / 7), Math.max(1, h / 7));
+  const wallMat = new THREE.MeshToonMaterial({ color: 0xf5e2d2, map: brickTex });
+  const BASE = 2.4; // stone base course height
+
+  g.add(mesh(new THREE.BoxGeometry(w + 0.24, BASE, d + 0.24), stoneMat, 0, BASE / 2, 0));
+  const body = mesh(new THREE.BoxGeometry(w, h - BASE, d), wallMat, 0, BASE + (h - BASE) / 2, 0);
+  body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.34, d + 0.4), stoneMat, 0, BASE + 0.17, 0, false)); // belt course
+  g.add(mesh(new THREE.BoxGeometry(w + 0.7, 0.85, d + 0.7), trimMat, 0, h - 0.42, 0)); // entablature
+  const roof = gableRoof(w, d, b.roofColor, { pitch: 0.42 });
+  roof.position.y = h; g.add(roof);
+
+  // front bays: pilasters + tall arched windows, centre reserved for the entrance
+  const fz = d / 2;
+  for (const wx of [-13.5, -7.8, 7.8, 13.5]) {
+    addArchWindow(g, trimMat, glassMat, wx, 6.3, fz + 0.05, 0, 2.7, 5.6);
+    g.add(mesh(new THREE.BoxGeometry(1.7, 1.3, 0.16), trimMat, wx, 12.1, fz + 0.05, false)); // attic frame
+    g.add(mesh(new THREE.BoxGeometry(1.35, 1.0, 0.2), glassMat, wx, 12.1, fz + 0.07, false));
+  }
+  for (const px of [-16.9, -10.65, -4.95, 4.95, 10.65, 16.9]) { // shallow stone pilasters
+    g.add(mesh(new THREE.BoxGeometry(1.1, h - BASE - 0.85, 0.26), stoneMat, px, BASE + (h - BASE - 0.85) / 2, fz + 0.1, false));
+    g.add(mesh(new THREE.BoxGeometry(1.34, 0.5, 0.34), trimMat, px, h - 1.1, fz + 0.1, false)); // capital
+    g.add(mesh(new THREE.BoxGeometry(1.34, 0.5, 0.34), trimMat, px, BASE + 0.6, fz + 0.1, false)); // base
+  }
+  // side walls: two arched windows each
+  for (const s of [-1, 1]) for (const bz of [-5.5, 5.5]) {
+    addArchWindow(g, trimMat, glassMat, s * (w / 2 + 0.05), 6.3, bz, s * Math.PI / 2, 2.7, 5.6);
+  }
+
+  // ---- entrance aedicule: pilasters, entablature, pediment, clock ----
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.BoxGeometry(0.85, 4.5, 0.4), trimMat, s * 2.35, 2.25, fz + 0.2));
+  }
+  g.add(mesh(new THREE.BoxGeometry(6.2, 0.75, 0.85), trimMat, 0, 4.85, fz + 0.22));
+  const pedW = 6.8, pedRise = 1.6;
+  const pedShape = new THREE.Shape();
+  pedShape.moveTo(-pedW / 2, 0); pedShape.lineTo(pedW / 2, 0); pedShape.lineTo(0, pedRise); pedShape.closePath();
+  const ped = new THREE.Mesh(new THREE.ExtrudeGeometry(pedShape, { depth: 0.8, bevelEnabled: false }), trimMat);
+  ped.position.set(0, 5.22, fz - 0.35); ped.castShadow = true; g.add(ped);
+  // clock high on the brick, over the entrance
+  const clock = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24),
+    new THREE.MeshBasicMaterial({ map: clockFaceTexture() }));
+  clock.position.set(0, 11.6, fz + 0.13); g.add(clock);
+  const clockRing = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.44, 24), trimMat);
+  clockRing.position.set(0, 11.6, fz + 0.12); g.add(clockRing);
+  addWallLantern(g, -3.6, 3.3, fz + 0.2);
+  addWallLantern(g, 3.6, 3.3, fz + 0.2);
+
+  // wide shallow entrance steps (visual only — same low profile as door steps)
+  g.add(mesh(new THREE.BoxGeometry(10, 0.26, 1.7), stoneMat, 0, 0.13, fz + 0.85, false));
+  g.add(mesh(new THREE.BoxGeometry(12, 0.13, 2.5), stoneMat, 0, 0.065, fz + 1.25, false));
+
+  g.add(classicDoor(d)); // identical door, same position
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, h + (roof.userData.rise || 3) + 1.4, 0);
+  g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const collider = { x, z, w: w + 0.6, d: d + 0.6 };
+  return { group: g, doorWorld, collider };
+}
+
+// A cozy residential dorm: warm brick, second-storey bay windows, ground-floor
+// windows with shutters + flower boxes, a small covered porch, a wall lantern,
+// climbing ivy and a proper chimney.
+function makeDormExterior(b) {
+  const { x, z, w, h, d } = b;
+  const g = new THREE.Group();
+  const stoneMat = toonMat(FAM.stone);
+  const trimMat = toonMat(FAM.ivory);
+  const glassMat = new THREE.MeshToonMaterial({ color: P.glass, emissive: 0x2a4a55 });
+  const warmGlass = new THREE.MeshToonMaterial({ color: 0xffe6b0, emissive: 0xdf9c3f, emissiveIntensity: 0.45 });
+  const brickTex = brickTexture('#d9a583', '#f2e3d0');
+  brickTex.repeat.set(Math.max(1, w / 7), Math.max(1, h / 7));
+  const wallMat = new THREE.MeshToonMaterial({ color: 0xf7d9c0, map: brickTex }); // warmer than the academic brick
+  const woodM = toonMat(0x8a5a36);
+  const fz = d / 2;
+
+  g.add(mesh(new THREE.BoxGeometry(w + 0.24, 1.0, d + 0.24), stoneMat, 0, 0.5, 0));
+  const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, h / 2, 0);
+  body.receiveShadow = true; g.add(body);
+  g.add(mesh(new THREE.BoxGeometry(w + 0.5, 0.6, d + 0.5), trimMat, 0, h - 0.3, 0)); // cornice
+  const roof = gableRoof(w, d, b.roofColor, { pitch: 0.5 });
+  roof.position.y = h; g.add(roof);
+
+  // chimney on the front slope (visible, properly poking through the shingles)
+  const chimX = w * 0.28, chimZ = d * 0.19;
+  g.add(mesh(new THREE.BoxGeometry(1.2, 4.4, 1.2),
+    new THREE.MeshToonMaterial({ color: 0xc88a70, map: brickTexture() }), chimX, h + 2.0, chimZ));
+  g.add(mesh(new THREE.BoxGeometry(1.5, 0.3, 1.5), toonMat(0x9a6a55), chimX, h + 4.35, chimZ, false));
+  g.add(mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.4, 8), toonMat(0x8a5a48), chimX + 0.3, h + 4.7, chimZ, false));
+
+  // ---- two bay windows on the second storey ----
+  for (const s of [-1, 1]) {
+    const bx = s * 6.4;
+    g.add(mesh(new THREE.BoxGeometry(2.9, 0.55, 0.55), trimMat, bx, 6.4, fz + 0.24, false)); // bracket
+    g.add(mesh(new THREE.BoxGeometry(3.1, 3.3, 0.62), trimMat, bx, 8.35, fz + 0.31));
+    g.add(mesh(new THREE.BoxGeometry(2.3, 2.5, 0.1), warmGlass, bx, 8.4, fz + 0.63, false));
+    g.add(mesh(new THREE.BoxGeometry(0.1, 2.5, 0.14), trimMat, bx, 8.4, fz + 0.64, false));
+    g.add(mesh(new THREE.BoxGeometry(2.3, 0.1, 0.14), trimMat, bx, 8.4, fz + 0.64, false));
+    const hood = mesh(new THREE.BoxGeometry(3.5, 0.16, 1.15), toonMat(b.roofColor, { noCache: true }), bx, 10.25, fz + 0.42);
+    hood.rotation.x = 0.5; g.add(hood);
+  }
+
+  // ---- ground-floor windows: shutters + flower boxes ----
+  for (const s of [-1, 1]) {
+    const wx = s * 6.4;
+    addWindow(g, wx, 3.5, fz + 0.04, 1.7, 1.9);
+    for (const sh of [-1, 1]) {
+      g.add(mesh(new THREE.BoxGeometry(0.55, 2.14, 0.1), toonMat(0x4f7a52), wx + sh * 1.37, 3.5, fz + 0.07, false));
+    }
+    g.add(mesh(new THREE.BoxGeometry(2.1, 0.42, 0.5), woodM, wx, 2.28, fz + 0.28, false));
+    for (let i = 0; i < 4; i++) {
+      g.add(mesh(new THREE.SphereGeometry(0.16, 8, 6),
+        toonMat(P.flowerColors[(i + (s > 0 ? 2 : 0)) % P.flowerColors.length], { noCache: true }),
+        wx - 0.75 + i * 0.5, 2.62, fz + 0.3, false));
+    }
+    g.add(mesh(new THREE.SphereGeometry(0.2, 8, 6), toonMat(P.leaf2), wx - 1.0, 2.5, fz + 0.32, false));
+    g.add(mesh(new THREE.SphereGeometry(0.2, 8, 6), toonMat(P.leaf1), wx + 1.0, 2.5, fz + 0.32, false));
+  }
+
+  // round attic window over the porch
+  const attic = new THREE.Mesh(new THREE.CircleGeometry(0.55, 18), glassMat);
+  attic.position.set(0, 9.6, fz + 0.06); g.add(attic);
+  const atticRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.78, 18), trimMat);
+  atticRing.position.set(0, 9.6, fz + 0.05); g.add(atticRing);
+
+  // ---- small covered porch: low stone floor, posts, shingled canopy ----
+  g.add(mesh(new THREE.BoxGeometry(5.2, 0.24, 1.7), stoneMat, 0, 0.12, fz + 0.62, false));
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.BoxGeometry(0.22, 4.1, 0.22), toonMat(P.woodDark), s * 2.25, 2.05, fz + 1.15));
+    g.add(mesh(new THREE.BoxGeometry(0.34, 0.22, 0.34), stoneMat, s * 2.25, 0.28, fz + 1.15, false));
+  }
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.15, 2.1),
+    new THREE.MeshToonMaterial({ color: b.roofColor, map: (() => { const t = shingleTexture('#ffffff'); t.repeat.set(0.6, 0.5); return t; })() }));
+  canopy.rotation.x = 0.4; canopy.position.set(0, 4.55, fz + 0.85); canopy.castShadow = true; g.add(canopy);
+  g.add(mesh(new THREE.BoxGeometry(5.6, 0.2, 0.12), trimMat, 0, 4.12, fz + 1.86, false)); // fascia
+  addWallLantern(g, 3.35, 3.3, fz + 0.2);
+
+  // ivy climbing the left corner + left side wall
+  addIvy(g, [
+    { x: -w / 2 + 0.9, y: 0.6, z: fz + 0.1, w: 2.2, h: 6.5, n: 26 },
+    { x: -w / 2 - 0.1, y: 0.5, z: fz - 1.6, w: 2.6, h: 5.0, ry: 1, n: 18 },
+  ], 3);
+
+  g.add(classicDoor(d)); // identical door, same position
+
+  const sign = textSprite(b.label);
+  sign.position.set(0, h + (roof.userData.rise || 3) + 1.4, 0);
+  g.add(sign);
+
+  g.position.set(x, 0, z);
+  const doorWorld = new THREE.Vector3(x, 0, z + d / 2 + 1.6);
+  const collider = { x, z, w: w + 0.6, d: d + 0.6 };
+  return { group: g, doorWorld, collider };
+}
+
 // A grand library exterior that matches the interior: warm plaster hall, tall
 // arched windows in two storeys, a columned portico with a pediment, and a
 // stone plinth + steps. Big enough to read as the cavernous interior's shell.
@@ -377,7 +661,13 @@ function makeLibraryExterior(b) {
 function makeShopExterior(b) {
   const { x, z, w, h, d } = b;
   const g = new THREE.Group();
-  const wallMat = new THREE.MeshToonMaterial({ color: 0xf6e7cc, map: plaster() });
+  // north-facing storefront lives in ambient shade — big soft plaster repeat +
+  // a small same-hue emissive lift keep the wall bright instead of mottled
+  const shopPlaster = plaster();
+  shopPlaster.repeat.set(1.6, 1);
+  const wallMat = new THREE.MeshToonMaterial({
+    color: 0xfdf2dd, map: shopPlaster, emissive: 0xfdf2dd, emissiveIntensity: 0.18,
+  });
   const trimMat = toonMat(0x2f9c93);  // teal
   const cream = toonMat(0xfff1dd);
   const glassMat = new THREE.MeshToonMaterial({ color: 0xbfe0ea, emissive: 0x3a6e7a, emissiveIntensity: 0.4 });
@@ -385,10 +675,7 @@ function makeShopExterior(b) {
   const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, h / 2, 0); body.receiveShadow = true; g.add(body);
   g.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.6, d + 0.3), trimMat, 0, 0.3, 0, false));   // base trim
   g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.5, d + 0.4), cream, 0, h - 0.25, 0, false)); // cornice
-  const roof = gableRoof(w, d, 0x2f9c93); roof.position.y = h; g.add(roof);
-
-  // side & back windows so the building reads as glassy all around
-  for (const s of [-1, 1]) addWindow(g, s * w * 0.3, h * 0.55, d / 2 + 0.04); // (extra small windows up high, flank the awning)
+  const roof = gableRoof(w, d, 0x2f9c93, { pitch: 0.5 }); roof.position.y = h; g.add(roof);
 
   // ---- storefront display windows flanking the door ----
   const fz = d / 2 + 0.06;
@@ -433,6 +720,56 @@ function makeShopExterior(b) {
     for (let i = 0; i < 3; i++) g.add(mesh(new THREE.SphereGeometry(0.28, 10, 8), toonMat([0xe85b6a, 0xffd166, 0x8e6bbf][i % 3], { noCache: true }), s * w * 0.28 - 1.4 + i * 1.4, h * 0.26 + 0.45, d / 2 + 0.55, false));
   }
 
+  // ---- hanging shop sign on a bracket at the corner ----
+  const signTex = localTex(128, 128, (ctx, W, H) => {
+    ctx.fillStyle = '#fff1dd';
+    ctx.beginPath(); ctx.roundRect(6, 14, W - 12, H - 28, 14); ctx.fill();
+    ctx.strokeStyle = '#2f9c93'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.roundRect(10, 18, W - 20, H - 36, 11); ctx.stroke();
+    // tote bag icon
+    ctx.fillStyle = '#d95b4a';
+    ctx.beginPath(); ctx.roundRect(44, 48, 40, 34, 5); ctx.fill();
+    ctx.strokeStyle = '#8a4a3e'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(64, 50, 12, Math.PI, 0); ctx.stroke();
+    ctx.fillStyle = '#20655f'; ctx.font = 'bold 19px Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('STORE', 64, 104);
+  });
+  const brk = new THREE.Group();
+  brk.add(mesh(new THREE.BoxGeometry(0.09, 0.09, 1.15), toonMat(FAM.lanternMetal), 0, 0, 0.45, false)); // arm
+  brk.add(mesh(new THREE.BoxGeometry(0.09, 0.5, 0.09), toonMat(FAM.lanternMetal), 0, -0.25, -0.08, false)); // wall strap
+  for (const lz of [0.35, 0.85]) brk.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 6), toonMat(FAM.lanternMetal), 0, -0.18, lz, false));
+  brk.add(mesh(new THREE.BoxGeometry(0.1, 1.15, 1.3), cream, 0, -0.9, 0.6, false)); // board
+  const sPlate = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 1.05),
+    new THREE.MeshBasicMaterial({ map: signTex }));
+  sPlate.rotation.y = Math.PI / 2; sPlate.position.set(0.06, -0.9, 0.6); brk.add(sPlate);
+  const sPlate2 = sPlate.clone(); sPlate2.rotation.y = -Math.PI / 2; sPlate2.position.x = -0.06; brk.add(sPlate2);
+  brk.position.set(-7.9, 5.2, d / 2); g.add(brk);
+
+  // ---- produce crates + barrel by the door (visual, hugging the wall) ----
+  const crateTex = woodPlanks('#d8b183', '#c09468');
+  const crateMat = new THREE.MeshToonMaterial({ color: 0xd8ab7a, map: crateTex });
+  const crate = (cx, cy, cz, s2, ry) => {
+    const c = mesh(new THREE.BoxGeometry(s2, s2 * 0.72, s2), crateMat, cx, cy, cz);
+    c.rotation.y = ry;
+    g.add(c);
+    g.add(mesh(new THREE.BoxGeometry(s2 + 0.06, 0.07, s2 + 0.06), toonMat(0x9a7146), cx, cy + s2 * 0.36 - 0.02, cz, false));
+    return c;
+  };
+  crate(-2.6, 0.28, d / 2 + 0.14, 0.78, 0.08);
+  crate(-2.55, 0.9, d / 2 + 0.12, 0.66, -0.14);
+  for (let i = 0; i < 4; i++) { // oranges heaped in the top crate
+    g.add(mesh(new THREE.SphereGeometry(0.14, 8, 6), toonMat(0xe8923a),
+      -2.72 + (i % 2) * 0.32, 1.22 + (i > 1 ? 0.16 : 0), d / 2 + (i > 1 ? 0.1 : 0.26), false));
+  }
+  crate(2.55, 0.28, d / 2 + 0.14, 0.78, -0.1);
+  for (let i = 0; i < 4; i++) { // apples in the right crate
+    g.add(mesh(new THREE.SphereGeometry(0.13, 8, 6), toonMat(0xd94f3d),
+      2.4 + (i % 2) * 0.3, 0.62, d / 2 + 0.02 + Math.floor(i / 2) * 0.3, false));
+  }
+  const barrel = mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.85, 10), toonMat(0x8a5a36), 3.5, 0.42, d / 2 + 0.1);
+  g.add(barrel);
+  g.add(mesh(new THREE.SphereGeometry(0.3, 8, 6), toonMat(P.leaf2), 3.5, 0.92, d / 2 + 0.1, false));
+
   const sign = textSprite(b.label);
   sign.position.set(0, h + (roof.userData.rise || 3) + 1.2, 0);
   g.add(sign);
@@ -451,37 +788,80 @@ function makeShopExterior(b) {
 function makeDiningExterior(b) {
   const { x, z, w, h, d } = b;
   const g = new THREE.Group();
-  const wallMat = new THREE.MeshToonMaterial({ color: 0xf0c79a, map: plaster() });
+  // bright warm cream plaster; soft repeat + slight emissive lift (this facade
+  // faces away from the sun and otherwise reads blotchy in the ambient shade)
+  const dinePlaster = plaster();
+  dinePlaster.repeat.set(1.8, 1);
+  const wallMat = new THREE.MeshToonMaterial({
+    color: 0xffe9cf, map: dinePlaster, emissive: 0xffe9cf, emissiveIntensity: 0.18,
+  });
   const trimMat = toonMat(0xb5462f);   // terracotta
   const cream = toonMat(0xfff1dd);
+  const ivory = toonMat(FAM.ivory);
+  const stoneMat = toonMat(FAM.stone);
   const glassMat = new THREE.MeshToonMaterial({ color: 0xffe6b0, emissive: 0xffb84a, emissiveIntensity: 0.5 }); // warm interior glow
 
+  g.add(mesh(new THREE.BoxGeometry(w + 0.24, 0.9, d + 0.24), stoneMat, 0, 0.45, 0)); // family stone plinth
   const body = mesh(new THREE.BoxGeometry(w, h, d), wallMat, 0, h / 2, 0); body.receiveShadow = true; g.add(body);
-  g.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.6, d + 0.3), trimMat, 0, 0.3, 0, false));   // base
-  g.add(mesh(new THREE.BoxGeometry(w + 0.4, 0.55, d + 0.4), cream, 0, h - 0.27, 0, false)); // cornice
-  const roof = gableRoof(w, d, 0xb5462f); roof.position.y = h; g.add(roof);
-  g.add(mesh(new THREE.BoxGeometry(1.1, 2.2, 1.1), new THREE.MeshToonMaterial({ color: 0xc88a70, map: brickTexture() }), w * 0.3, h + 1.5, -d * 0.2)); // vent stack
-  g.add(mesh(new THREE.BoxGeometry(1.4, 0.3, 1.4), toonMat(0x9a6a55), w * 0.3, h + 2.7, -d * 0.2, false));
+  g.add(mesh(new THREE.BoxGeometry(w + 0.5, 0.6, d + 0.5), ivory, 0, h - 0.3, 0)); // family ivory cornice
+  const roof = gableRoof(w, d, 0xb5462f, { pitch: 0.48 }); roof.position.y = h; g.add(roof);
+  g.add(mesh(new THREE.BoxGeometry(1.1, 2.6, 1.1), new THREE.MeshToonMaterial({ color: 0xc88a70, map: brickTexture() }), w * 0.3, h + 1.7, -d * 0.2)); // vent stack
+  g.add(mesh(new THREE.BoxGeometry(1.4, 0.3, 1.4), toonMat(0x9a6a55), w * 0.3, h + 3.15, -d * 0.2, false));
 
-  // big glowing storefront windows flanking the door
-  const fz = d / 2 + 0.06;
-  function bigWindow(cx, ww = 4.4, wh = 3.6) {
-    const grp = new THREE.Group();
-    grp.add(mesh(new THREE.BoxGeometry(ww + 0.5, wh + 0.6, 0.3), cream, 0, 0, 0, false));
-    grp.add(mesh(new THREE.BoxGeometry(ww, wh, 0.16), glassMat, 0, 0, 0.1, false));
-    grp.add(mesh(new THREE.BoxGeometry(0.14, wh, 0.22), cream, 0, 0, 0.15, false));
-    grp.add(mesh(new THREE.BoxGeometry(ww, 0.14, 0.22), cream, 0, 0, 0.15, false));
-    grp.add(mesh(new THREE.BoxGeometry(ww + 0.7, 0.3, 0.7), toonMat(0xb98a5e), 0, -wh / 2 - 0.35, 0.22, false)); // sill
-    grp.position.set(cx, h * 0.52, fz); g.add(grp);
+  // ---- cupola / roof lantern on the ridge (offset so the name sign stays clear) ----
+  const rise = roof.userData.rise || 3.3;
+  const cupX = -w * 0.24, cupY = h + rise;
+  g.add(mesh(new THREE.BoxGeometry(2.1, 0.3, 2.1), ivory, cupX, cupY + 0.1, 0, false));
+  g.add(mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.5, 8), ivory, cupX, cupY + 0.5, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.75, 8), glassMat, cupX, cupY + 1.1, 0, false));
+  g.add(mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.18, 8), ivory, cupX, cupY + 1.55, 0, false));
+  const cupRoof = mesh(new THREE.ConeGeometry(1.25, 0.95, 8), trimMat, cupX, cupY + 2.1, 0);
+  g.add(cupRoof);
+  g.add(mesh(new THREE.SphereGeometry(0.14, 8, 6), toonMat(P.brass), cupX, cupY + 2.72, 0, false));
+
+  // ---- tall paired arched windows with warm glow (great-hall rhythm) ----
+  const fz = d / 2;
+  for (const s of [-1, 1]) {
+    for (const off of [-1.05, 1.05]) {
+      addArchWindow(g, ivory, glassMat, s * 5.9 + off, 3.6, fz + 0.05, 0, 1.5, 3.2);
+    }
   }
-  bigWindow(-w * 0.28); bigWindow(w * 0.28);
+  for (const s of [-1, 1]) for (const bz of [-3.2, 3.2]) { // side walls glow too
+    addArchWindow(g, ivory, glassMat, s * (w / 2 + 0.05), 3.6, bz, s * Math.PI / 2, 1.5, 3.2);
+  }
 
-  // striped awning across the storefront + scalloped valance
-  const awn = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.16, 2.2), new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }));
-  awn.rotation.x = 0.44; awn.position.set(0, h * 0.82, d / 2 + 1.05); awn.castShadow = true; g.add(awn);
-  for (let i = 0; i < 11; i++) {
-    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.55, 3), toonMat(i % 2 ? 0xb5462f : 0xfff1dd, { noCache: true }));
-    tri.rotation.x = Math.PI; tri.position.set(-w / 2 + (i + 0.5) * (w / 11), h * 0.82 - 0.5, d / 2 + 1.9); g.add(tri);
+  // striped awning over the entrance + scalloped valance
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.15, 1.9), new THREE.MeshToonMaterial({ map: awningTexture(), color: 0xffffff }));
+  awn.rotation.x = 0.44; awn.position.set(0, 5.15, d / 2 + 0.9) ; awn.castShadow = true; g.add(awn);
+  for (let i = 0; i < 6; i++) {
+    const tri = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.52, 3), toonMat(i % 2 ? 0xb5462f : 0xfff1dd, { noCache: true }));
+    tri.rotation.x = Math.PI; tri.position.set(-3.1 + (i + 0.5) * (6.2 / 6), 4.4, d / 2 + 1.62); g.add(tri);
+  }
+
+  // ---- menu board + lantern + planters by the door ----
+  const menuTex = localTex(96, 128, (ctx, W, H) => {
+    ctx.fillStyle = '#2e3b33'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#c8a24a'; ctx.lineWidth = 4; ctx.strokeRect(4, 4, W - 8, H - 8);
+    ctx.fillStyle = '#f6e7c4'; ctx.font = 'bold 20px Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('MENU', W / 2, 30);
+    ctx.strokeStyle = 'rgba(246,231,196,0.75)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath(); ctx.moveTo(14, 50 + i * 18); ctx.lineTo(W - 14 - (i % 2) * 16, 50 + i * 18); ctx.stroke();
+    }
+    ctx.fillStyle = '#e8923a'; ctx.beginPath(); ctx.arc(W / 2, 116, 6, 0, Math.PI * 2); ctx.fill();
+  });
+  g.add(mesh(new THREE.BoxGeometry(1.25, 1.65, 0.12), toonMat(P.woodDark), 2.75, 2.3, fz + 0.1, false));
+  const menu = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 1.45), new THREE.MeshBasicMaterial({ map: menuTex }));
+  menu.position.set(2.75, 2.3, fz + 0.17); g.add(menu);
+  addWallLantern(g, -2.75, 3.1, fz + 0.2);
+  for (const s of [-1, 1]) { // stone planters under the paired windows
+    g.add(mesh(new THREE.BoxGeometry(2.6, 0.6, 0.5), stoneMat, s * 5.9, 0.9, fz + 0.26, false));
+    for (let i = 0; i < 3; i++) {
+      g.add(mesh(new THREE.SphereGeometry(0.3, 8, 6), toonMat([P.leaf2, P.leaf1, P.leaf3][i], { noCache: true }),
+        s * 5.9 - 0.8 + i * 0.8, 1.32, fz + 0.26, false));
+    }
+    g.add(mesh(new THREE.SphereGeometry(0.14, 8, 6), toonMat(0xe85b6a, { noCache: true }), s * 5.9 - 0.4, 1.5, fz + 0.32, false));
+    g.add(mesh(new THREE.SphereGeometry(0.14, 8, 6), toonMat(0xffd166, { noCache: true }), s * 5.9 + 0.45, 1.48, fz + 0.34, false));
   }
 
   // central glass double door
@@ -518,33 +898,69 @@ function makeStudentUnionExterior(b) {
   const glassMat = (cols, rows, opts) => toonMat(0xffffff, { map: glassCurtain(cols, rows, opts), emissive: 0x16221f, emissiveIntensity: 0.1 });
   const GT = '#a6c9bd'; // soft green curtain-wall tint (muted to fit the toon map)
 
-  const gB = 0.7, gH = h - gB;        // glazed band sits on a low plinth
-  const colsW = Math.max(6, Math.round(w / 3.0));
-  const colsD = Math.max(3, Math.round(d / 3.0));
-  const rows = Math.max(3, Math.round(gH / 3.0));
+  const gB = 0.7;                      // glazed bands sit on a low plinth
+  const gH = h - gB;
 
-  // plinth + dark core (so seams behind the glass read dark, never washed out)
+  // full-footprint plinth
   g.add(mesh(new THREE.BoxGeometry(w + 0.4, gB + 0.1, d + 0.4), stone, 0, (gB + 0.1) / 2, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(w - 0.2, gH, d - 0.2), struct, 0, gB + gH / 2, 0, false));
 
-  // glass curtain wall on all four faces
-  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 3, tint: GT }), 0, gB + gH / 2, d / 2 + 0.12, false));
-  g.add(mesh(new THREE.BoxGeometry(w, gH, 0.3), glassMat(colsW, rows, { seed: 8, tint: GT }), 0, gB + gH / 2, -d / 2 - 0.12, false));
-  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 5, tint: GT }), w / 2 + 0.12, gB + gH / 2, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(0.3, gH, d), glassMat(colsD, rows, { seed: 9, tint: GT }), -w / 2 - 0.12, gB + gH / 2, 0, false));
+  // ---- playful stepped massing: three glass volumes of different heights ----
+  // (all inside the original w × d footprint; the centre block carries the door)
+  const blocks = [
+    { cx: -8.2, bw: 9.6, bh: h * 0.78, dd: d - 1.3, lit: 0.14, seed: 8 },  // left mid step
+    { cx: 0.6, bw: 13.2, bh: h, dd: d, lit: 0.24, seed: 3 },               // centre tall block
+    { cx: 8.9, bw: 8.2, bh: h * 0.63, dd: d - 1.8, lit: 0.18, seed: 5 },   // right low block (roof deck)
+  ];
+  for (const bl of blocks) {
+    const bgH = bl.bh - gB;
+    g.add(mesh(new THREE.BoxGeometry(bl.bw - 0.15, bgH, bl.dd - 0.2), struct, bl.cx, gB + bgH / 2, 0, false)); // dark core
+    const cols = Math.max(3, Math.round(bl.bw / 3.0));
+    const rows = Math.max(2, Math.round(bgH / 3.0));
+    g.add(mesh(new THREE.BoxGeometry(bl.bw, bgH, 0.3),
+      glassMat(cols, rows, { seed: bl.seed, tint: GT, lit: bl.lit }), bl.cx, gB + bgH / 2, bl.dd / 2 + 0.12, false));
+    g.add(mesh(new THREE.BoxGeometry(bl.bw, bgH, 0.3),
+      glassMat(cols, rows, { seed: bl.seed + 4, tint: GT, lit: 0.08 }), bl.cx, gB + bgH / 2, -bl.dd / 2 - 0.12, false));
+    g.add(mesh(new THREE.BoxGeometry(bl.bw + 0.3, 0.45, bl.dd + 0.3), struct, bl.cx, bl.bh + 0.22, 0, false)); // roof slab
+    g.add(mesh(new THREE.BoxGeometry(bl.bw + 0.5, 0.16, bl.dd + 0.5), cap, bl.cx, bl.bh + 0.53, 0, false));    // parapet cap
+  }
+  // side curtain walls on the outer faces of the end blocks
+  const rowsL = Math.max(2, Math.round((blocks[0].bh - gB) / 3.0));
+  const rowsR = Math.max(2, Math.round((blocks[2].bh - gB) / 3.0));
+  g.add(mesh(new THREE.BoxGeometry(0.3, blocks[0].bh - gB, blocks[0].dd),
+    glassMat(Math.round(d / 3), rowsL, { seed: 9, tint: GT }), -w / 2 + 0.12, gB + (blocks[0].bh - gB) / 2, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(0.3, blocks[2].bh - gB, blocks[2].dd),
+    glassMat(Math.round(d / 3), rowsR, { seed: 6, tint: GT }), w / 2 - 0.12, gB + (blocks[2].bh - gB) / 2, 0, false));
+  // …and on the tall centre block's flanks, which rise above the end blocks
+  const cb = blocks[1];
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.BoxGeometry(0.3, cb.bh - gB, cb.dd - 0.4),
+      glassMat(Math.round(d / 3), Math.max(2, Math.round((cb.bh - gB) / 3.0)), { seed: s > 0 ? 11 : 12, tint: GT }),
+      cb.cx + s * (cb.bw / 2 + 0.12), gB + (cb.bh - gB) / 2, 0, false));
+  }
 
-  // corner columns frame the curtain wall
-  for (const sx of [-1, 1]) for (const sz of [-1, 1])
-    g.add(mesh(new THREE.BoxGeometry(0.6, h + 0.1, 0.6), bronze, sx * (w / 2 + 0.05), (h + 0.1) / 2, sz * (d / 2 + 0.05), false));
+  // bronze fins frame the tall block + hide the step seams
+  for (const px of [-6.0, 7.2]) {
+    g.add(mesh(new THREE.BoxGeometry(0.5, h - gB, 0.55), bronze, px, gB + (h - gB) / 2, d / 2 - 0.1, false));
+  }
 
-  // bold horizontal spandrel banding (the reference's strong horizontals)
-  for (const t of [1 / 3, 2 / 3])
-    g.add(mesh(new THREE.BoxGeometry(w + 0.34, 0.34, d + 0.34), cap, 0, gB + gH * t, 0, false));
+  // rooftop mechanical unit on the tall block
+  g.add(mesh(new THREE.BoxGeometry(w * 0.24, 1.2, d * 0.36), toonMat(0x44494f), -2.2, h + 1.05, -d * 0.08));
 
-  // flat roof slab + parapet cap + rooftop mechanical unit
-  g.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.5, d + 0.3), struct, 0, h + 0.25, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(w + 0.5, 0.18, d + 0.5), cap, 0, h + 0.6, 0, false));
-  g.add(mesh(new THREE.BoxGeometry(w * 0.32, 1.3, d * 0.4), toonMat(0x44494f), -w * 0.16, h + 1.15, -d * 0.06));
+  // ---- roof-deck hint on the right low block: rail + planter ----
+  const deck = blocks[2];
+  const railY = deck.bh + 0.6;
+  const railM = cap;
+  for (let i = 0; i < 5; i++) {
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.85, 0.07), railM, deck.cx - deck.bw / 2 + 0.5 + i * (deck.bw - 1) / 4, railY + 0.42, deck.dd / 2 - 0.15, false));
+  }
+  g.add(mesh(new THREE.BoxGeometry(deck.bw - 0.8, 0.09, 0.09), railM, deck.cx, railY + 0.85, deck.dd / 2 - 0.15, false));
+  for (let i = 0; i < 4; i++) {
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.85, 0.07), railM, deck.cx + deck.bw / 2 - 0.35, railY + 0.42, -deck.dd / 2 + 0.7 + i * (deck.dd - 1.4) / 3, false));
+  }
+  g.add(mesh(new THREE.BoxGeometry(0.09, 0.09, deck.dd - 1.2), railM, deck.cx + deck.bw / 2 - 0.35, railY + 0.85, 0, false));
+  g.add(mesh(new THREE.BoxGeometry(1.7, 0.5, 0.6), toonMat(0x6b4a32), deck.cx - 1.2, railY + 0.25, deck.dd / 2 - 0.75, false));
+  g.add(mesh(new THREE.SphereGeometry(0.32, 8, 6), toonMat(P.leaf2), deck.cx - 1.6, railY + 0.62, deck.dd / 2 - 0.75, false));
+  g.add(mesh(new THREE.SphereGeometry(0.3, 8, 6), toonMat(P.leaf1), deck.cx - 0.8, railY + 0.6, deck.dd / 2 - 0.75, false));
 
   // ---- entrance: warm two-storey lobby + cantilevered canopy + glass doors ----
   const fz = d / 2 + 0.16, canopyY = gB + gH * 0.5;
@@ -555,6 +971,72 @@ function makeStudentUnionExterior(b) {
   g.add(mesh(new THREE.BoxGeometry(5.6, 4.0, 0.22), glassMat(3, 2, { lit: 1, tint: '#ffe2b0' }), 0, 2.0, fz + 0.18, false)); // doors
   for (const dx of [-1.85, 0, 1.85]) g.add(mesh(new THREE.BoxGeometry(0.16, 4.0, 0.34), bronze, dx, 2.0, fz + 0.26, false));
   g.add(mesh(new THREE.BoxGeometry(6.6, 0.26, 1.9), stone, 0, 0.13, fz + 0.75, false));          // entry step
+
+  // ---- "UNION" marquee above the canopy (baked-bright, bulb border) ----
+  const marqueeTex = localTex(384, 96, (ctx, W, H) => {
+    ctx.fillStyle = '#23304a';
+    ctx.beginPath(); ctx.roundRect(2, 2, W - 4, H - 4, 14); ctx.fill();
+    ctx.strokeStyle = '#3a4a6b'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(6, 6, W - 12, H - 12, 11); ctx.stroke();
+    ctx.fillStyle = '#ffd166';
+    for (let i = 0; i < 14; i++) { // bulbs top & bottom
+      const bx = 22 + i * (W - 44) / 13;
+      ctx.beginPath(); ctx.arc(bx, 13, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(bx, H - 13, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.font = 'bold 44px Trebuchet MS, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffb84a'; ctx.fillText('UNION', W / 2 + 2, H / 2 + 4);
+    ctx.fillStyle = '#ffe9b0'; ctx.fillText('UNION', W / 2, H / 2 + 1);
+  });
+  g.add(mesh(new THREE.BoxGeometry(7.4, 1.75, 0.4), struct, 0, 9.2, fz + 0.3, false));
+  const marquee = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 1.5),
+    new THREE.MeshBasicMaterial({ map: marqueeTex }));
+  marquee.position.set(0, 9.2, fz + 0.52); g.add(marquee);
+
+  // ---- pennant string across the tall block (one transparent baked plane) ----
+  const penTex = localTex(512, 80, (ctx, W, H) => {
+    ctx.strokeStyle = 'rgba(250,246,235,0.95)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 6);
+    ctx.quadraticCurveTo(W / 2, 34, W, 6); ctx.stroke();
+    const colors = ['#e85b6a', '#ffd166', '#5ab0a2', '#8e6bbf', '#ff9f6b'];
+    for (let i = 0; i < 11; i++) {
+      const t = (i + 0.5) / 11, px = t * W;
+      const sy = 6 + 28 * (1 - Math.pow(2 * t - 1, 2)); // hang from the sagging string
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.beginPath(); ctx.moveTo(px - 12, sy); ctx.lineTo(px + 12, sy); ctx.lineTo(px, sy + 30); ctx.closePath(); ctx.fill();
+    }
+  });
+  const pen = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 2.0),
+    new THREE.MeshBasicMaterial({ map: penTex, transparent: true, side: THREE.DoubleSide }));
+  pen.position.set(0.6, 12.5, fz + 0.24); g.add(pen);
+
+  // ---- poster board by the door ----
+  const posterTex = localTex(160, 120, (ctx, W, H) => {
+    ctx.fillStyle = '#b98d5e'; ctx.fillRect(0, 0, W, H); // cork
+    ctx.strokeStyle = '#6b4a32'; ctx.lineWidth = 8; ctx.strokeRect(0, 0, W, H);
+    const posters = [
+      [16, 16, 42, 54, '#e85b6a', 0.06], [66, 22, 40, 50, '#5ab0a2', -0.05],
+      [112, 14, 36, 48, '#ffd166', 0.08], [40, 66, 44, 40, '#8e6bbf', -0.04],
+      [96, 70, 46, 36, '#f6f0e2', 0.05],
+    ];
+    for (const [px, py, pw, ph, c, rot] of posters) {
+      ctx.save(); ctx.translate(px + pw / 2, py + ph / 2); ctx.rotate(rot);
+      ctx.fillStyle = c; ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
+      ctx.strokeStyle = 'rgba(40,30,20,0.35)'; ctx.lineWidth = 2;
+      for (let l = 0; l < 3; l++) {
+        ctx.beginPath(); ctx.moveTo(-pw / 2 + 5, -ph / 2 + 12 + l * 9);
+        ctx.lineTo(pw / 2 - 5 - (l % 2) * 8, -ph / 2 + 12 + l * 9); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  });
+  g.add(mesh(new THREE.BoxGeometry(0.1, 2.0, 0.1), bronze, -7.6, 1.0, fz - 0.02, false));
+  g.add(mesh(new THREE.BoxGeometry(0.1, 2.0, 0.1), bronze, -5.4, 1.0, fz - 0.02, false));
+  g.add(mesh(new THREE.BoxGeometry(2.5, 1.7, 0.1), toonMat(0x6b4a32), -6.5, 1.85, fz - 0.02, false));
+  const poster = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.5),
+    new THREE.MeshBasicMaterial({ map: posterTex }));
+  poster.position.set(-6.5, 1.85, fz + 0.04); g.add(poster);
 
   const sign = textSprite(b.label);
   sign.position.set(0, h + 1.6, 0); g.add(sign);
@@ -642,6 +1124,8 @@ export function buildCampus() {
       : b.id === 'shop' ? makeShopExterior(b)
       : b.id === 'cafeteria' ? makeDiningExterior(b)
       : b.id === 'lecture' ? makeStudentUnionExterior(b)
+      : b.id === 'lecturehall' ? makeLectureHallExterior(b)
+      : b.id === 'dorm' ? makeDormExterior(b)
       : makeBuilding(b);
     root.add(built.group);
     colliders.push(built.collider);
