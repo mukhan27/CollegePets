@@ -140,10 +140,12 @@ const LOCATIONS = {
     mood: { exposure: 0.95, vignette: 0.55, warmth: 0.045, saturation: 1.06 } },
   lectureLobby: { def: lectureLobby, name: '🏛️ Lecture Building', sky: 0x2a3340 },
   lectureRoom: { def: lectureRoom, name: '🏛️ Lecture Hall', sky: 0x1e2630 },
-  dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a },
+  dormCommon: { def: dormCommon, name: '🏠 Maple Dorm', sky: 0x40364a,
+    mood: { exposure: 0.98, vignette: 0.5, warmth: 0.05, saturation: 1.05 } },   // hearth-warm
   shopInterior: { def: shopInterior, name: '🛍️ Campus Store', sky: 0x3a2a20 },
   diningHall: { def: diningHall, name: '🍽️ Dining Hall', sky: 0x2e2620 },
-  studentUnion: { def: studentUnion, name: '🎮 Student Union', sky: 0x241f33 },
+  studentUnion: { def: studentUnion, name: '🎮 Student Union', sky: 0x241f33,
+    mood: { exposure: 1.0, vignette: 0.5, warmth: -0.01, saturation: 1.12 } },   // lean into the neon
   bedroom: { def: bedroom, name: '🛏️ My Room', sky: 0x2e3a4a },
 };
 for (const loc of Object.values(LOCATIONS)) {
